@@ -1,9 +1,10 @@
 import { View } from "react-native";
 import { Link } from "expo-router";
+import ThemedView from "@/components/ThemedView";
 
 const Home = () => {
   return (
-    <View
+    <ThemedView
       style={{
         flex: 1,
         justifyContent: "center",
@@ -11,7 +12,7 @@ const Home = () => {
       }}
     >
       <Link href="/(auth)/login">Login</Link>
-    </View>
+    </ThemedView>
   );
 };
 

@@ -170,6 +170,18 @@ const Login = () => {
                 Register
               </Link>
             </View>
+            <View style={styles.registerContainer}>
+              <Text style={{ color: colors.muted }}>
+                Don't have an account?
+              </Text>
+
+              <Link
+                href="/(customer)"
+                style={[styles.registerText, { color: "#007A53" }]}
+              >
+                Dashboard
+              </Link>
+            </View>
 
             {/* Brand Accent */}
             <View style={styles.bottomAccent}>

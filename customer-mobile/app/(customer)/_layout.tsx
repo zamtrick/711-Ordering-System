@@ -22,6 +22,7 @@ const CustomerLayout = () => {
         tabBarStyle: {
           //attribute of the taskbar
           backgroundColor: theme.colors.background,
+          borderTopColor: theme.colors.border, //border of the tab nav
         },
       }}
     >

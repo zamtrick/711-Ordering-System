@@ -1,11 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
 import React from "react";
+import ThemedView from "@/components/ThemedView";
 
 const products = () => {
   return (
-    <View>
+    <ThemedView style={{ flex: 1 }}>
       <Text>products</Text>
-    </View>
+    </ThemedView>
   );
 };
 
