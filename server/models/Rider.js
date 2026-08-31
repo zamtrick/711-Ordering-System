@@ -2,11 +2,16 @@ import mongoose from "mongoose";
 
 const riderSchema = new mongoose.Schema(
   {
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       unique: true,
+    },
+    assignedBranch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
     },
     phone: {
       type: String,
@@ -23,7 +28,7 @@ const riderSchema = new mongoose.Schema(
       required: true,
     },
     vehicleType: {
-      type: string,
+      type: String,
       required: true,
     },
     vehiclePlateNumber: {
@@ -34,9 +39,8 @@ const riderSchema = new mongoose.Schema(
     },
     availabilityStatus: {
       type: String,
-      required: true,
       enum: ["available", "offline", "delivering"],
-      default: "available",
+      default: "offline",
     },
   },
   { timestamps: true },
