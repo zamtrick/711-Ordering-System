@@ -14,7 +14,7 @@ const router = express.Router();
 // GET    /api/admin/customers
 router.get("/", getCustomers);
 
-// POST   /api/admin/customers //note fallbacl
+// POST   /api/admin/customers //note fallback
 router.post("/", createCustomer);
 
 // GET    /api/admin/customers/:id

@@ -16,6 +16,8 @@ import manageProducts from "./routes/admin/product.routes.js";
 import manageCategories from "./routes/admin/category.routes.js";
 import manageRiders from "./routes/admin/rider.routes.js";
 import manageCustomer from "./routes/admin/customer.routes.js";
+import manageOrderItems from "./routes/customer/orderItem.routes.js";
+import manageOrders from "./routes/customer/order.routes.js";
 
 dotenv.config();
 const app = express();
@@ -42,6 +44,10 @@ app.use("/api/admin/riders", auth, authorize("admin"), manageRiders);
 app.use("/api/admin/products", auth, authorize("admin"), manageProducts);
 app.use("/api/admin/categories", auth, authorize("admin"), manageCategories);
 app.use("/api/admin/customers", auth, authorize("admin"), manageCustomer);
+
+//manage by customer
+app.use("/api/orders", auth, authorize("customer", "admin"), manageOrderItems);
+app.use("/api/orders", auth, authorize("customer", "admin"), manageOrders);
 
 app.get("/api/profile", auth, (req, res) => {
   res.status(200).json({ message: "WELCOME TO PROFILE PAGE" });

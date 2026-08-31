@@ -13,7 +13,6 @@ const auth = (req, res, next) => {
 
     req.user = decodedToken;
 
-    console.log(decodedToken);
     next();
   } catch (err) {
     return res.status(401).json({
