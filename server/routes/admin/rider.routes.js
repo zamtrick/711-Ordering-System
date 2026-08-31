@@ -5,14 +5,14 @@ import {
   createRider,
   updateRiderById,
   deleteRiderById,
-} from "../../controllers/admin/rider.controller";
+} from "../../controllers/admin/rider.controller.js";
 
 const router = express.Router();
 
-router.get("/riders", getRiders);
-router.get("/riders/:id", getRiderById);
-router.post("/riders", createRider);
-router.patch("/riders/:id", updateRiderById);
-router.delete("/riders/:id", deleteRiderById);
+router.get("/", getRiders);
+router.get("/:id", getRiderById);
+router.post("/", createRider);
+router.patch("/:id", updateRiderById);
+router.delete("/:id", deleteRiderById);
 
 export default router;
