@@ -5,6 +5,8 @@ import {
   ShoppingBag,
   ShoppingCart,
   ClipboardList,
+  SquareUser,
+  User,
 } from "lucide-react-native";
 import { LightTheme, DarkTheme } from "@/constants/theme";
 
@@ -61,6 +63,13 @@ const CustomerLayout = () => {
           tabBarIcon: ({ color, size }) => (
             <ClipboardList color={color} size={size} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
     </Tabs>
