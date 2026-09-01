@@ -8,12 +8,14 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   useColorScheme,
+  Image,
 } from "react-native";
 import { Link } from "expo-router";
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import logo from "@/assets/logos/711logo.png";
 
 const Register = () => {
   const colorScheme = useColorScheme();
@@ -21,12 +23,11 @@ const Register = () => {
   const { colors } = theme;
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [nameFocused, setNameFocused] = useState(false);
+  const [firstNameFocused, setFirstNameFocused] = useState(false);
+  const [lastNameFocused, setLastNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [confirmFocused, setConfirmFocused] = useState(false);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -50,7 +51,7 @@ const Register = () => {
             </View>
 
             <View style={styles.logo}>
-              <Text style={styles.logoText}>7</Text>
+              <Image style={{ width: 70, height: 70 }} source={logo} />
             </View>
 
             <Text style={styles.headerTitle}>Create Account</Text>
@@ -68,10 +69,10 @@ const Register = () => {
               Create your account to continue
             </Text>
 
-            {/* Name */}
+            {/* First Name */}
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.headline }]}>
-                Full Name
+                First Name
               </Text>
 
               <View
@@ -79,21 +80,52 @@ const Register = () => {
                   styles.inputContainer,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: nameFocused ? "#FF6720" : colors.border,
+                    borderColor: firstNameFocused ? "#FF6720" : colors.border,
                   },
                 ]}
               >
                 <User
                   size={20}
-                  color={nameFocused ? "#FF6720" : colors.muted}
+                  color={firstNameFocused ? "#FF6720" : colors.muted}
                 />
 
                 <TextInput
-                  placeholder="Enter your full name"
+                  placeholder="Enter your first name"
                   placeholderTextColor={colors.muted}
                   autoCapitalize="words"
-                  onFocus={() => setNameFocused(true)}
-                  onBlur={() => setNameFocused(false)}
+                  onFocus={() => setFirstNameFocused(true)}
+                  onBlur={() => setFirstNameFocused(false)}
+                  style={[styles.input, { color: colors.headline }]}
+                />
+              </View>
+            </View>
+
+            {/* Last Name */}
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.headline }]}>
+                Last Name
+              </Text>
+
+              <View
+                style={[
+                  styles.inputContainer,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: lastNameFocused ? "#FF6720" : colors.border,
+                  },
+                ]}
+              >
+                <User
+                  size={20}
+                  color={lastNameFocused ? "#FF6720" : colors.muted}
+                />
+
+                <TextInput
+                  placeholder="Enter your last name"
+                  placeholderTextColor={colors.muted}
+                  autoCapitalize="words"
+                  onFocus={() => setLastNameFocused(true)}
+                  onBlur={() => setLastNameFocused(false)}
                   style={[styles.input, { color: colors.headline }]}
                 />
               </View>
@@ -162,47 +194,6 @@ const Register = () => {
 
                 <Pressable onPress={() => setShowPassword(!showPassword)}>
                   {showPassword ? (
-                    <EyeOff size={20} color={colors.muted} />
-                  ) : (
-                    <Eye size={20} color={colors.muted} />
-                  )}
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Confirm Password */}
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.headline }]}>
-                Confirm Password
-              </Text>
-
-              <View
-                style={[
-                  styles.inputContainer,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: confirmFocused ? "#FF6720" : colors.border,
-                  },
-                ]}
-              >
-                <Lock
-                  size={20}
-                  color={confirmFocused ? "#FF6720" : colors.muted}
-                />
-
-                <TextInput
-                  placeholder="Confirm your password"
-                  placeholderTextColor={colors.muted}
-                  secureTextEntry={!showConfirmPassword}
-                  onFocus={() => setConfirmFocused(true)}
-                  onBlur={() => setConfirmFocused(false)}
-                  style={[styles.input, { color: colors.headline }]}
-                />
-
-                <Pressable
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? (
                     <EyeOff size={20} color={colors.muted} />
                   ) : (
                     <Eye size={20} color={colors.muted} />
@@ -295,12 +286,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
-  },
-
-  logoText: {
-    color: "#007A53",
-    fontSize: 31,
-    fontWeight: "900",
   },
 
   headerTitle: {

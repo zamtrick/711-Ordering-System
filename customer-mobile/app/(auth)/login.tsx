@@ -8,12 +8,14 @@ import {
   useColorScheme,
   TouchableWithoutFeedback, //use for remove keyboard
   Keyboard,
+  Image,
 } from "react-native";
 import { Link } from "expo-router";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import logo from "@/assets/logos/711logo.png";
 
 const Login = () => {
   const colorScheme = useColorScheme();
@@ -46,7 +48,7 @@ const Login = () => {
             </View>
 
             <View style={styles.logo}>
-              <Text style={styles.logoText}>7</Text>
+              <Image style={{ width: 70, height: 70 }} source={logo} />
             </View>
 
             <Text style={styles.headerTitle}>Welcome Back</Text>
