@@ -22,11 +22,27 @@ import {
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import { router } from "expo-router";
+import api from "@/api/axios";
 
 const Profile = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
+
+  const handleLogOut = async () => {
+    try {
+      await api.post("/auth/logout");
+
+      router.replace("/(auth)/login");
+    } catch (error: any) {
+      console.log("Logout error:", error);
+
+      // Even if the server returns an error,
+      // you can still send the user back to login.
+      router.replace("/(auth)/login");
+    }
+  };
 
   return (
     <ThemedView>
@@ -192,6 +208,7 @@ const Profile = () => {
 
         {/* Logout */}
         <Pressable
+          onPress={handleLogOut}
           style={[
             styles.logoutButton,
             {

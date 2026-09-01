@@ -9,19 +9,30 @@ import {
   TouchableWithoutFeedback,
   useColorScheme,
   Image,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
+import api from "@/api/axios";
 
 const Register = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
+  // Form states
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // UI states
   const [showPassword, setShowPassword] = useState(false);
 
   const [firstNameFocused, setFirstNameFocused] = useState(false);
@@ -29,10 +40,78 @@ const Register = () => {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    const cleanFirstName = firstName.trim();
+    const cleanLastName = lastName.trim();
+    const cleanEmail = email.trim();
+
+    // Basic validation
+    if (!cleanFirstName || !cleanLastName || !cleanEmail || !password) {
+      Alert.alert("Missing Information", "Please complete all fields.");
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(cleanEmail)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+
+    // Basic password validation
+    if (password.length < 6) {
+      Alert.alert(
+        "Invalid Password",
+        "Password must be at least 6 characters.",
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await api.post("/auth/register", {
+        firstName: cleanFirstName,
+        lastName: cleanLastName,
+        email: cleanEmail,
+        password,
+      });
+
+      console.log("Register response:", response.data);
+
+      Alert.alert("Registration Successful", "Your account has been created.", [
+        {
+          text: "Login",
+          onPress: () => router.replace("/(auth)/login"),
+        },
+      ]);
+    } catch (error: any) {
+      console.log("Register error:", error);
+
+      const message =
+        error?.response?.data?.message ||
+        "Unable to create your account. Please try again.";
+
+      Alert.alert("Registration Failed", message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ThemedView>
-        <View style={styles.container}>
+      <ThemedView style={styles.screen}>
+        <KeyboardAwareScrollView
+          contentContainerStyle={styles.container}
+          enableOnAndroid
+          enableAutomaticScroll
+          extraScrollHeight={30}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Header */}
           <View
             style={[
@@ -44,14 +123,27 @@ const Register = () => {
           >
             <View style={styles.decorations}>
               <View
-                style={[styles.orangeLine, { backgroundColor: "#FF6720" }]}
+                style={[
+                  styles.orangeLine,
+                  {
+                    backgroundColor: "#FF6720",
+                  },
+                ]}
               />
 
-              <View style={[styles.redLine, { backgroundColor: "#DA291C" }]} />
+              <View
+                style={[
+                  styles.redLine,
+                  {
+                    backgroundColor: "#DA291C",
+                  },
+                ]}
+              />
             </View>
 
+            {/* Logo */}
             <View style={styles.logo}>
-              <Image style={{ width: 70, height: 70 }} source={logo} />
+              <Image style={styles.logoImage} source={logo} />
             </View>
 
             <Text style={styles.headerTitle}>Create Account</Text>
@@ -61,17 +153,38 @@ const Register = () => {
 
           {/* Form */}
           <View style={styles.formContainer}>
-            <Text style={[styles.formTitle, { color: colors.headline }]}>
+            <Text
+              style={[
+                styles.formTitle,
+                {
+                  color: colors.headline,
+                },
+              ]}
+            >
               Sign up
             </Text>
 
-            <Text style={[styles.formSubtitle, { color: colors.muted }]}>
+            <Text
+              style={[
+                styles.formSubtitle,
+                {
+                  color: colors.muted,
+                },
+              ]}
+            >
               Create your account to continue
             </Text>
 
             {/* First Name */}
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.headline }]}>
+              <Text
+                style={[
+                  styles.label,
+                  {
+                    color: colors.headline,
+                  },
+                ]}
+              >
                 First Name
               </Text>
 
@@ -92,17 +205,33 @@ const Register = () => {
                 <TextInput
                   placeholder="Enter your first name"
                   placeholderTextColor={colors.muted}
+                  value={firstName}
+                  onChangeText={setFirstName}
                   autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
                   onFocus={() => setFirstNameFocused(true)}
                   onBlur={() => setFirstNameFocused(false)}
-                  style={[styles.input, { color: colors.headline }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.headline,
+                    },
+                  ]}
                 />
               </View>
             </View>
 
             {/* Last Name */}
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.headline }]}>
+              <Text
+                style={[
+                  styles.label,
+                  {
+                    color: colors.headline,
+                  },
+                ]}
+              >
                 Last Name
               </Text>
 
@@ -123,17 +252,33 @@ const Register = () => {
                 <TextInput
                   placeholder="Enter your last name"
                   placeholderTextColor={colors.muted}
+                  value={lastName}
+                  onChangeText={setLastName}
                   autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="next"
                   onFocus={() => setLastNameFocused(true)}
                   onBlur={() => setLastNameFocused(false)}
-                  style={[styles.input, { color: colors.headline }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.headline,
+                    },
+                  ]}
                 />
               </View>
             </View>
 
             {/* Email */}
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.headline }]}>
+              <Text
+                style={[
+                  styles.label,
+                  {
+                    color: colors.headline,
+                  },
+                ]}
+              >
                 Email
               </Text>
 
@@ -154,18 +299,34 @@ const Register = () => {
                 <TextInput
                   placeholder="Enter your email"
                   placeholderTextColor={colors.muted}
+                  value={email}
+                  onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
                   onFocus={() => setEmailFocused(true)}
                   onBlur={() => setEmailFocused(false)}
-                  style={[styles.input, { color: colors.headline }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.headline,
+                    },
+                  ]}
                 />
               </View>
             </View>
 
             {/* Password */}
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.headline }]}>
+              <Text
+                style={[
+                  styles.label,
+                  {
+                    color: colors.headline,
+                  },
+                ]}
+              >
                 Password
               </Text>
 
@@ -186,13 +347,26 @@ const Register = () => {
                 <TextInput
                   placeholder="Create a password"
                   placeholderTextColor={colors.muted}
+                  value={password}
+                  onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
-                  style={[styles.input, { color: colors.headline }]}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.headline,
+                    },
+                  ]}
                 />
 
-                <Pressable onPress={() => setShowPassword(!showPassword)}>
+                <Pressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={10}
+                >
                   {showPassword ? (
                     <EyeOff size={20} color={colors.muted} />
                   ) : (
@@ -202,52 +376,94 @@ const Register = () => {
               </View>
             </View>
 
-            {/* Register */}
+            {/* Register Button */}
             <Pressable
+              onPress={handleSubmit}
+              disabled={loading}
               style={[
                 styles.registerButton,
                 {
-                  backgroundColor: "#007A53",
+                  backgroundColor: loading ? "#6FAE98" : "#007A53",
                 },
               ]}
             >
-              <Text style={styles.registerButtonText}>Create Account</Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.registerButtonText}>Create Account</Text>
 
-              <ArrowRight size={20} color="#FFFFFF" />
+                  <ArrowRight size={20} color="#FFFFFF" />
+                </>
+              )}
             </Pressable>
 
             {/* Login */}
             <View style={styles.loginContainer}>
-              <Text style={{ color: colors.muted }}>
+              <Text
+                style={{
+                  color: colors.muted,
+                }}
+              >
                 Already have an account?
               </Text>
 
               <Link
                 href="/(auth)/login"
-                style={[styles.loginText, { color: "#007A53" }]}
+                style={[
+                  styles.loginText,
+                  {
+                    color: "#007A53",
+                  },
+                ]}
               >
                 Login
               </Link>
             </View>
 
-            {/* Accent */}
+            {/* Bottom Accent */}
             <View style={styles.bottomAccent}>
-              <View style={[styles.accent, { backgroundColor: "#007A53" }]} />
+              <View
+                style={[
+                  styles.accent,
+                  {
+                    backgroundColor: "#007A53",
+                  },
+                ]}
+              />
 
-              <View style={[styles.accent, { backgroundColor: "#FF6720" }]} />
+              <View
+                style={[
+                  styles.accent,
+                  {
+                    backgroundColor: "#FF6720",
+                  },
+                ]}
+              />
 
-              <View style={[styles.accent, { backgroundColor: "#DA291C" }]} />
+              <View
+                style={[
+                  styles.accent,
+                  {
+                    backgroundColor: "#DA291C",
+                  },
+                ]}
+              />
             </View>
           </View>
-        </View>
+        </KeyboardAwareScrollView>
       </ThemedView>
     </TouchableWithoutFeedback>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
+  },
+
+  container: {
+    flexGrow: 1,
   },
 
   header: {
@@ -286,6 +502,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
+    overflow: "hidden",
+  },
+
+  logoImage: {
+    width: 70,
+    height: 70,
   },
 
   headerTitle: {
@@ -301,9 +523,9 @@ const styles = StyleSheet.create({
   },
 
   formContainer: {
-    flex: 1,
     paddingHorizontal: 24,
     paddingTop: 23,
+    paddingBottom: 30,
   },
 
   formTitle: {

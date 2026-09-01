@@ -6,30 +6,89 @@ import {
   Pressable,
   StyleSheet,
   useColorScheme,
-  TouchableWithoutFeedback, //use for remove keyboard
+  TouchableWithoutFeedback,
   Keyboard,
   Image,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
+import api from "@/api/axios";
 
 const Login = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
+  // Form states
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // UI states
   const [showPassword, setShowPassword] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    // Remove unnecessary spaces
+    const cleanEmail = email.trim();
+
+    // Basic validation
+    if (!cleanEmail || !password) {
+      Alert.alert(
+        "Missing Information",
+        "Please enter your email and password.",
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await api.post("/auth/login", {
+        email: cleanEmail,
+        password,
+      });
+
+      console.log("Login response:", response.data);
+
+      Alert.alert("Login Successful", "Welcome back!", [
+        {
+          text: "Continue",
+          onPress: () => router.replace("/(customer)"),
+        },
+      ]);
+    } catch (error: any) {
+      console.log("Login error:", error);
+
+      const message =
+        error?.response?.data?.message ||
+        "Unable to login. Please check your email and password.";
+
+      Alert.alert("Login Failed", message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ThemedView>
-        <View style={styles.container}>
+      <ThemedView style={styles.screen}>
+        <KeyboardAwareScrollView
+          contentContainerStyle={styles.container}
+          enableOnAndroid
+          enableAutomaticScroll
+          extraScrollHeight={30}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Header */}
           <View
             style={[
@@ -47,8 +106,9 @@ const Login = () => {
               <View style={[styles.redLine, { backgroundColor: "#DA291C" }]} />
             </View>
 
+            {/* Logo */}
             <View style={styles.logo}>
-              <Image style={{ width: 70, height: 70 }} source={logo} />
+              <Image style={styles.logoImage} source={logo} />
             </View>
 
             <Text style={styles.headerTitle}>Welcome Back</Text>
@@ -89,8 +149,12 @@ const Login = () => {
                 <TextInput
                   placeholder="Enter your email"
                   placeholderTextColor={colors.muted}
+                  value={email}
+                  onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
                   onFocus={() => setEmailFocused(true)}
                   onBlur={() => setEmailFocused(false)}
                   style={[styles.input, { color: colors.headline }]}
@@ -121,13 +185,21 @@ const Login = () => {
                 <TextInput
                   placeholder="Enter your password"
                   placeholderTextColor={colors.muted}
+                  value={password}
+                  onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
                   style={[styles.input, { color: colors.headline }]}
                 />
 
-                <Pressable onPress={() => setShowPassword(!showPassword)}>
+                <Pressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={10}
+                >
                   {showPassword ? (
                     <EyeOff size={20} color={colors.muted} />
                   ) : (
@@ -147,16 +219,24 @@ const Login = () => {
 
             {/* Login Button */}
             <Pressable
+              onPress={handleSubmit}
+              disabled={loading}
               style={[
                 styles.loginButton,
                 {
-                  backgroundColor: "#007A53",
+                  backgroundColor: loading ? "#6FAE98" : "#007A53",
                 },
               ]}
             >
-              <Text style={styles.loginButtonText}>Login</Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.loginButtonText}>Login</Text>
 
-              <ArrowRight size={20} color="#FFFFFF" />
+                  <ArrowRight size={20} color="#FFFFFF" />
+                </>
+              )}
             </Pressable>
 
             {/* Register */}
@@ -172,18 +252,6 @@ const Login = () => {
                 Register
               </Link>
             </View>
-            <View style={styles.registerContainer}>
-              <Text style={{ color: colors.muted }}>
-                Don't have an account?
-              </Text>
-
-              <Link
-                href="/(customer)"
-                style={[styles.registerText, { color: "#007A53" }]}
-              >
-                Dashboard
-              </Link>
-            </View>
 
             {/* Brand Accent */}
             <View style={styles.bottomAccent}>
@@ -194,15 +262,19 @@ const Login = () => {
               <View style={[styles.accent, { backgroundColor: "#DA291C" }]} />
             </View>
           </View>
-        </View>
+        </KeyboardAwareScrollView>
       </ThemedView>
     </TouchableWithoutFeedback>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
+  },
+
+  container: {
+    flexGrow: 1,
   },
 
   header: {
@@ -241,12 +313,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 15,
+    overflow: "hidden",
   },
 
-  logoText: {
-    color: "#007A53",
-    fontSize: 32,
-    fontWeight: "900",
+  logoImage: {
+    width: 70,
+    height: 70,
   },
 
   headerTitle: {
@@ -262,9 +334,9 @@ const styles = StyleSheet.create({
   },
 
   formContainer: {
-    flex: 1,
     paddingHorizontal: 24,
     paddingTop: 27,
+    paddingBottom: 30,
   },
 
   formTitle: {
