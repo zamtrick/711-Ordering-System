@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,102 +7,158 @@ import {
   Pressable,
   TextInput,
   ScrollView,
+  ActivityIndicator,
+  Image,
 } from "react-native";
 import {
   Search,
-  SlidersHorizontal,
   ShoppingCart,
   Plus,
   Star,
+  PackageSearch,
 } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import { router } from "expo-router";
+import api from "@/api/axios";
+import { useCart } from "@/context/CartContext";
+
+// --------------------------------------------------
+// TYPES
+// --------------------------------------------------
+
+type Category = {
+  _id: string;
+  name: string;
+};
+
+type Product = {
+  _id: string;
+  name: string;
+  price: number;
+  image?: string;
+  categoryId?: Category;
+  stock: number;
+};
+
+// --------------------------------------------------
+// SCREEN
+// --------------------------------------------------
 
 const Products = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
+  const { addItem, totalCount } = useCart();
+
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [categories, setCategories] = useState<string[]>(["All"]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const categories = [
-    "All",
-    "Food",
-    "Drinks",
-    "Snacks",
-    "Grocery",
-    "Personal Care",
-  ];
+  // --------------------------------------------------
+  // FETCH PRODUCTS
+  // --------------------------------------------------
 
-  const products = [
-    {
-      id: 1,
-      name: "Classic Burger",
-      category: "Food",
-      price: "₱89.00",
-      rating: "4.8",
-      emoji: "🍔",
-      bg: "#FFF0F0",
-    },
-    {
-      id: 2,
-      name: "Iced Coffee",
-      category: "Drinks",
-      price: "₱59.00",
-      rating: "4.9",
-      emoji: "☕",
-      bg: "#FFF3E8",
-    },
-    {
-      id: 3,
-      name: "Potato Chips",
-      category: "Snacks",
-      price: "₱45.00",
-      rating: "4.7",
-      emoji: "🍟",
-      bg: "#FFF8E5",
-    },
-    {
-      id: 4,
-      name: "Fresh Sandwich",
-      category: "Food",
-      price: "₱75.00",
-      rating: "4.8",
-      emoji: "🥪",
-      bg: "#EDF8F1",
-    },
-    {
-      id: 5,
-      name: "Soft Drink",
-      category: "Drinks",
-      price: "₱35.00",
-      rating: "4.6",
-      emoji: "🥤",
-      bg: "#FFF0F0",
-    },
-    {
-      id: 6,
-      name: "Chocolate Bar",
-      category: "Snacks",
-      price: "₱39.00",
-      rating: "4.7",
-      emoji: "🍫",
-      bg: "#FFF3E8",
-    },
-  ];
+  const fetchProducts = useCallback(async () => {
+    try {
+      setError("");
+      setLoading(true);
 
-  const filteredProducts = products.filter((product) => {
-    const matchesCategory =
-      selectedCategory === "All" || product.category === selectedCategory;
+      const response = await api.get("/customer/products");
 
-    const matchesSearch = product.name
-      .toLowerCase()
-      .includes(search.toLowerCase());
+      const data: Product[] = response.data?.data ?? [];
+      setProducts(data);
 
-    return matchesCategory && matchesSearch;
+      // Build category list from returned products
+      const unique = Array.from(
+        new Set(
+          data
+            .map((p) => p.categoryId?.name)
+            .filter((n): n is string => Boolean(n)),
+        ),
+      );
+      setCategories(["All", ...unique]);
+    } catch (err: any) {
+      console.log("Fetch products error:", err);
+      setError("Could not load products. Please try again.");
+
+      if (err?.response?.status === 401) {
+        router.replace("/(auth)/login");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // --------------------------------------------------
+  // FILTER
+  // --------------------------------------------------
+
+  const filtered = products.filter((p) => {
+    const matchCat =
+      selectedCategory === "All" || p.categoryId?.name === selectedCategory;
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchSearch;
   });
+
+  // --------------------------------------------------
+  // ADD TO CART
+  // --------------------------------------------------
+
+  const handleAdd = (product: Product) => {
+    addItem({
+      id: product._id,
+      name: product.name,
+      category: product.categoryId?.name ?? "Product",
+      price: product.price,
+      image: product.image,
+    });
+  };
+
+  // --------------------------------------------------
+  // LOADING
+  // --------------------------------------------------
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.centered}>
+        <ActivityIndicator size="large" color="#007A53" />
+        <Text style={[styles.loadingText, { color: colors.muted }]}>
+          Loading products...
+        </Text>
+      </ThemedView>
+    );
+  }
+
+  // --------------------------------------------------
+  // ERROR
+  // --------------------------------------------------
+
+  if (error) {
+    return (
+      <ThemedView style={styles.centered}>
+        <Text style={[styles.errorText, { color: colors.headline }]}>
+          {error}
+        </Text>
+        <Pressable style={styles.retryButton} onPress={fetchProducts}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
 
   return (
     <ThemedView>
@@ -116,26 +172,27 @@ const Products = () => {
             <Text style={[styles.smallTitle, { color: colors.muted }]}>
               Browse
             </Text>
-
             <Text style={[styles.title, { color: colors.headline }]}>
               Our Products
             </Text>
           </View>
 
           <Pressable
+            onPress={() => router.push("/(customer)/cart")}
             style={[
               styles.cartButton,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
+              { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
             <ShoppingCart size={21} color="#007A53" />
 
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>2</Text>
-            </View>
+            {totalCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>
+                  {totalCount > 99 ? "99+" : totalCount}
+                </Text>
+              </View>
+            )}
           </Pressable>
         </View>
 
@@ -143,14 +200,10 @@ const Products = () => {
         <View
           style={[
             styles.searchContainer,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
+            { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
           <Search size={20} color={colors.muted} />
-
           <TextInput
             value={search}
             onChangeText={setSearch}
@@ -158,10 +211,6 @@ const Products = () => {
             placeholderTextColor={colors.muted}
             style={[styles.searchInput, { color: colors.headline }]}
           />
-
-          <Pressable>
-            <SlidersHorizontal size={20} color="#007A53" />
-          </Pressable>
         </View>
 
         {/* Categories */}
@@ -174,13 +223,12 @@ const Products = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryList}
         >
-          {categories.map((category) => {
-            const active = selectedCategory === category;
-
+          {categories.map((cat) => {
+            const active = selectedCategory === cat;
             return (
               <Pressable
-                key={category}
-                onPress={() => setSelectedCategory(category)}
+                key={cat}
+                onPress={() => setSelectedCategory(cat)}
                 style={[
                   styles.categoryButton,
                   {
@@ -192,59 +240,64 @@ const Products = () => {
                 <Text
                   style={[
                     styles.categoryText,
-                    {
-                      color: active ? "#FFFFFF" : colors.headline,
-                    },
+                    { color: active ? "#FFFFFF" : colors.headline },
                   ]}
                 >
-                  {category}
+                  {cat}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
 
-        {/* Product Header */}
+        {/* Products */}
         <View style={styles.productHeader}>
-          <View>
-            <Text style={[styles.sectionTitle, { color: colors.headline }]}>
-              All Products
-            </Text>
-
-            <Text style={[styles.resultText, { color: colors.muted }]}>
-              {filteredProducts.length} products
-            </Text>
-          </View>
+          <Text style={[styles.sectionTitle, { color: colors.headline }]}>
+            All Products
+          </Text>
+          <Text style={[styles.resultText, { color: colors.muted }]}>
+            {filtered.length} products
+          </Text>
         </View>
 
-        {/* Products */}
         <View style={styles.productGrid}>
-          {filteredProducts.map((product) => (
+          {filtered.map((product) => (
             <Pressable
-              key={product.id}
+              key={product._id}
               style={[
                 styles.productCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
             >
+              {/* Image */}
               <View
-                style={[styles.productImage, { backgroundColor: product.bg }]}
+                style={[
+                  styles.productImageContainer,
+                  { backgroundColor: colors.background },
+                ]}
               >
-                <Text style={styles.productEmoji}>{product.emoji}</Text>
+                {product.image ? (
+                  <Image
+                    source={{ uri: product.image }}
+                    style={styles.productImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <PackageSearch size={40} color={colors.muted} />
+                )}
 
                 <Pressable
+                  onPress={() => handleAdd(product)}
                   style={[styles.addButton, { backgroundColor: "#007A53" }]}
                 >
                   <Plus size={18} color="#FFFFFF" />
                 </Pressable>
               </View>
 
+              {/* Info */}
               <View style={styles.productInfo}>
                 <Text style={[styles.productCategory, { color: colors.muted }]}>
-                  {product.category}
+                  {product.categoryId?.name ?? "Product"}
                 </Text>
 
                 <Text
@@ -254,30 +307,27 @@ const Products = () => {
                   {product.name}
                 </Text>
 
-                <View style={styles.rating}>
-                  <Star size={14} color="#FF6720" fill="#FF6720" />
-
-                  <Text style={[styles.ratingText, { color: colors.muted }]}>
-                    {product.rating}
+                <View style={styles.stockRow}>
+                  <Star size={12} color="#FF6720" fill="#FF6720" />
+                  <Text style={[styles.stockText, { color: colors.muted }]}>
+                    {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
                   </Text>
                 </View>
 
                 <Text style={[styles.price, { color: "#007A53" }]}>
-                  {product.price}
+                  ₱{product.price.toFixed(2)}
                 </Text>
               </View>
             </Pressable>
           ))}
         </View>
 
-        {filteredProducts.length === 0 && (
+        {filtered.length === 0 && (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>🔍</Text>
-
             <Text style={[styles.emptyTitle, { color: colors.headline }]}>
               No products found
             </Text>
-
             <Text style={[styles.emptyText, { color: colors.muted }]}>
               Try searching for something else.
             </Text>
@@ -288,7 +338,45 @@ const Products = () => {
   );
 };
 
+// --------------------------------------------------
+// STYLES
+// --------------------------------------------------
+
 const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+  },
+
+  errorText: {
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  retryButton: {
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: "#007A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  retryText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
   content: {
     padding: 20,
     paddingBottom: 35,
@@ -352,7 +440,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     marginLeft: 10,
-    marginRight: 10,
   },
 
   sectionTitle: {
@@ -389,7 +476,6 @@ const styles = StyleSheet.create({
 
   resultText: {
     fontSize: 12,
-    marginTop: 3,
   },
 
   productGrid: {
@@ -406,7 +492,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  productImage: {
+  productImageContainer: {
     height: 145,
     borderRadius: 13,
     alignItems: "center",
@@ -414,8 +500,10 @@ const styles = StyleSheet.create({
     position: "relative",
   },
 
-  productEmoji: {
-    fontSize: 58,
+  productImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 13,
   },
 
   addButton: {
@@ -445,14 +533,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  rating: {
+  stockRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     marginTop: 6,
   },
 
-  ratingText: {
+  stockText: {
     fontSize: 11,
   },
 

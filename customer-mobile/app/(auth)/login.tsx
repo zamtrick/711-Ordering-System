@@ -58,13 +58,7 @@ const Login = () => {
       });
 
       console.log("Login response:", response.data);
-
-      Alert.alert("Login Successful", "Welcome back!", [
-        {
-          text: "Continue",
-          onPress: () => router.replace("/(customer)"),
-        },
-      ]);
+      router.replace("/(customer)");
     } catch (error: any) {
       console.log("Login error:", error);
 

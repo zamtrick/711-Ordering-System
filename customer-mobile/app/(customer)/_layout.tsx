@@ -5,7 +5,6 @@ import {
   ShoppingBag,
   ShoppingCart,
   ClipboardList,
-  SquareUser,
   User,
 } from "lucide-react-native";
 import { LightTheme, DarkTheme } from "@/constants/theme";

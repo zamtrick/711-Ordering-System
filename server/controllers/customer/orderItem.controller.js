@@ -9,10 +9,8 @@ import Product from "../../models/Product.js";
 // ==========================================
 export const getOrderItems = async (req, res) => {
   try {
-    // ADDED: Get orderId from URL parameter
     const { orderId } = req.params;
 
-    // ADDED: Check if orderId is a valid MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(400).json({
         success: false,
@@ -20,7 +18,6 @@ export const getOrderItems = async (req, res) => {
       });
     }
 
-    // ADDED: Check if the order exists
     const order = await Order.findById(orderId);
 
     if (!order) {
@@ -30,26 +27,17 @@ export const getOrderItems = async (req, res) => {
       });
     }
 
-    // ADDED: Find all items belonging to this order
     const orderItems = await OrderItem.find({ order: orderId })
-      .populate("productId")
-      .populate("user", "name email")
+      .populate("product")
       .sort({ createdAt: -1 });
-
-    if (orderItems.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No order items found",
-      });
-    }
 
     return res.status(200).json({
       success: true,
-      message: "View all order items",
-      orderItems,
+      message: "Order items retrieved",
+      data: orderItems,
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Get order items error:", err.message);
 
     return res.status(500).json({
       success: false,
@@ -64,13 +52,10 @@ export const getOrderItems = async (req, res) => {
 // ==========================================
 export const createOrderItem = async (req, res) => {
   try {
-    // ADDED: Get orderId from URL
     const { orderId } = req.params;
+    const { productId, quantity } = req.body;
 
-    // ADDED: Get data from request body
-    const { user, productId, quantity } = req.body;
-
-    // ADDED: Validate orderId
+    // Validate orderId
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(400).json({
         success: false,
@@ -78,15 +63,21 @@ export const createOrderItem = async (req, res) => {
       });
     }
 
-    // ADDED: Validate required fields
-    if (!user || !productId || !quantity) {
+    // Validate required fields
+    if (!productId || !quantity) {
       return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "productId and quantity are required",
       });
     }
 
-    // ADDED: Validate quantity
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Product ID",
+      });
+    }
+
     if (quantity < 1) {
       return res.status(400).json({
         success: false,
@@ -94,8 +85,11 @@ export const createOrderItem = async (req, res) => {
       });
     }
 
-    // ADDED: Check if order exists
-    const order = await Order.findById(orderId);
+    // Check order exists and belongs to this customer
+    const order = await Order.findOne({
+      _id: orderId,
+      user: req.user.userId,
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -104,42 +98,44 @@ export const createOrderItem = async (req, res) => {
       });
     }
 
-    // ADDED: Check if product exists
+    // Check product exists and is active
     const product = await Product.findById(productId);
 
-    if (!product) {
+    if (!product || !product.isActive) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
 
-    // ADDED: Create order item
+    const unitPrice = product.price;
+    const subTotal = unitPrice * quantity;
+
+    // Create the order item
     const orderItem = await OrderItem.create({
       order: orderId,
-      user,
-      productId,
+      product: productId,
       quantity,
+      unitPrice,
+      subTotal,
     });
 
-    // ADDED: Add the new OrderItem ID to the Order
+    // Add item reference to the order and update totalAmount
     order.orderItems.push(orderItem._id);
-
-    // ADDED: Save the updated Order
+    order.totalAmount += subTotal;
     await order.save();
 
-    // ADDED: Get the newly created item with populated data
-    const populatedOrderItem = await OrderItem.findById(orderItem._id)
-      .populate("productId")
-      .populate("user", "name email");
+    const populated = await OrderItem.findById(orderItem._id).populate(
+      "product",
+    );
 
     return res.status(201).json({
       success: true,
-      message: "Order item created successfully",
-      orderItem: populatedOrderItem,
+      message: "Order item added successfully",
+      data: populated,
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Create order item error:", err.message);
 
     return res.status(500).json({
       success: false,
@@ -154,10 +150,8 @@ export const createOrderItem = async (req, res) => {
 // ==========================================
 export const getOrderItemById = async (req, res) => {
   try {
-    // ADDED: Get orderId and itemId from URL
     const { orderId, itemId } = req.params;
 
-    // ADDED: Validate IDs
     if (
       !mongoose.Types.ObjectId.isValid(orderId) ||
       !mongoose.Types.ObjectId.isValid(itemId)
@@ -168,13 +162,10 @@ export const getOrderItemById = async (req, res) => {
       });
     }
 
-    // ADDED: Find the item only if it belongs to this order
     const orderItem = await OrderItem.findOne({
       _id: itemId,
       order: orderId,
-    })
-      .populate("productId")
-      .populate("user", "name email");
+    }).populate("product");
 
     if (!orderItem) {
       return res.status(404).json({
@@ -185,11 +176,11 @@ export const getOrderItemById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "View order item successfully",
-      orderItem,
+      message: "Order item retrieved",
+      data: orderItem,
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Get order item error:", err.message);
 
     return res.status(500).json({
       success: false,
@@ -204,13 +195,9 @@ export const getOrderItemById = async (req, res) => {
 // ==========================================
 export const updateOrderItemById = async (req, res) => {
   try {
-    // ADDED: Get orderId and itemId from URL
     const { orderId, itemId } = req.params;
+    const { quantity } = req.body;
 
-    // ADDED: Get updated data
-    const { productId, quantity } = req.body;
-
-    // ADDED: Validate IDs
     if (
       !mongoose.Types.ObjectId.isValid(orderId) ||
       !mongoose.Types.ObjectId.isValid(itemId)
@@ -221,59 +208,14 @@ export const updateOrderItemById = async (req, res) => {
       });
     }
 
-    // ADDED: Validate required fields
-    if (!productId || !quantity) {
-      return res.status(400).json({
-        success: false,
-        message: "Product and quantity are required",
-      });
-    }
-
-    // ADDED: Validate quantity
-    if (quantity < 1) {
+    if (!quantity || quantity < 1) {
       return res.status(400).json({
         success: false,
         message: "Quantity must be at least 1",
       });
     }
 
-    // ADDED: Check if order exists
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    // ADDED: Check if product exists
-    const product = await Product.findById(productId);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    // ADDED: Find the item belonging to this order and update it
-    const orderItem = await OrderItem.findOneAndUpdate(
-      {
-        _id: itemId,
-        order: orderId,
-      },
-      {
-        productId,
-        quantity,
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
-    )
-      .populate("productId")
-      .populate("user", "name email");
+    const orderItem = await OrderItem.findOne({ _id: itemId, order: orderId });
 
     if (!orderItem) {
       return res.status(404).json({
@@ -282,13 +224,27 @@ export const updateOrderItemById = async (req, res) => {
       });
     }
 
+    // Recalculate order totalAmount delta
+    const order = await Order.findById(orderId);
+    if (order) {
+      order.totalAmount =
+        order.totalAmount - orderItem.subTotal + orderItem.unitPrice * quantity;
+      await order.save();
+    }
+
+    orderItem.quantity = quantity;
+    orderItem.subTotal = orderItem.unitPrice * quantity;
+    await orderItem.save();
+
+    const updated = await OrderItem.findById(orderItem._id).populate("product");
+
     return res.status(200).json({
       success: true,
-      message: "Order item updated successfully",
-      orderItem,
+      message: "Order item updated",
+      data: updated,
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Update order item error:", err.message);
 
     return res.status(500).json({
       success: false,
@@ -303,10 +259,8 @@ export const updateOrderItemById = async (req, res) => {
 // ==========================================
 export const deleteOrderItemById = async (req, res) => {
   try {
-    // ADDED: Get orderId and itemId from URL
     const { orderId, itemId } = req.params;
 
-    // ADDED: Validate IDs
     if (
       !mongoose.Types.ObjectId.isValid(orderId) ||
       !mongoose.Types.ObjectId.isValid(itemId)
@@ -317,11 +271,7 @@ export const deleteOrderItemById = async (req, res) => {
       });
     }
 
-    // ADDED: Delete only if the item belongs to this order
-    const orderItem = await OrderItem.findOneAndDelete({
-      _id: itemId,
-      order: orderId,
-    });
+    const orderItem = await OrderItem.findOne({ _id: itemId, order: orderId });
 
     if (!orderItem) {
       return res.status(404).json({
@@ -330,19 +280,24 @@ export const deleteOrderItemById = async (req, res) => {
       });
     }
 
-    // ADDED: Remove the deleted item ID from the Order
-    await Order.findByIdAndUpdate(orderId, {
-      $pull: {
-        orderItems: itemId,
-      },
-    });
+    // Subtract item subTotal from order totalAmount
+    const order = await Order.findById(orderId);
+    if (order) {
+      order.orderItems = order.orderItems.filter(
+        (id) => id.toString() !== itemId,
+      );
+      order.totalAmount = Math.max(0, order.totalAmount - orderItem.subTotal);
+      await order.save();
+    }
+
+    await orderItem.deleteOne();
 
     return res.status(200).json({
       success: true,
-      message: "Order item deleted successfully",
+      message: "Order item removed",
     });
   } catch (err) {
-    console.error(err.message);
+    console.error("Delete order item error:", err.message);
 
     return res.status(500).json({
       success: false,

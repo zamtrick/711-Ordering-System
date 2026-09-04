@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   useColorScheme,
   Pressable,
   ScrollView,
+  ActivityIndicator,
+  Alert,
+  Image,
 } from "react-native";
 import {
   ShoppingCart,
@@ -13,76 +16,109 @@ import {
   Minus,
   Trash2,
   ArrowRight,
-  Tag,
+  PackageSearch,
 } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import { router } from "expo-router";
+import api from "@/api/axios";
+import { useCart } from "@/context/CartContext";
+
+// --------------------------------------------------
+// DELIVERY FEE
+// --------------------------------------------------
+
+const DELIVERY_FEE = 30;
+
+// --------------------------------------------------
+// SCREEN
+// --------------------------------------------------
 
 const Cart = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
-  const [cartItems, setCartItems] = useState([
-    {
-      id: 1,
-      name: "Classic Burger",
-      category: "Food",
-      price: 89,
-      quantity: 1,
-      emoji: "🍔",
-      bg: "#FFF0F0",
-    },
-    {
-      id: 2,
-      name: "Iced Coffee",
-      category: "Drinks",
-      price: 59,
-      quantity: 2,
-      emoji: "☕",
-      bg: "#FFF3E8",
-    },
-    {
-      id: 3,
-      name: "Potato Chips",
-      category: "Snacks",
-      price: 45,
-      quantity: 1,
-      emoji: "🍟",
-      bg: "#FFF8E5",
-    },
-  ]);
+  const { items, removeItem, increaseQuantity, decreaseQuantity, clearCart, subtotal, totalCount } =
+    useCart();
 
-  const increaseQuantity = (id: number) => {
-    setCartItems((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item,
-      ),
-    );
-  };
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [branchId, setBranchId] = useState<string | null>(null);
 
-  const decreaseQuantity = (id: number) => {
-    setCartItems((items) =>
-      items
-        .map((item) =>
-          item.id === id ? { ...item, quantity: item.quantity - 1 } : item,
-        )
-        .filter((item) => item.quantity > 0),
-    );
-  };
+  // Fetch the first active branch on mount
+  useEffect(() => {
+    api
+      .get("/customer/branches")
+      .then((res) => {
+        const first = res.data?.data?.[0];
+        if (first?._id) setBranchId(first._id);
+      })
+      .catch((err) => console.log("Fetch branches error:", err));
+  }, []);
 
-  const removeItem = (id: number) => {
-    setCartItems((items) => items.filter((item) => item.id !== id));
-  };
-
-  const subtotal = cartItems.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
-  );
-
-  const deliveryFee = subtotal > 0 ? 30 : 0;
+  const deliveryFee = subtotal > 0 ? DELIVERY_FEE : 0;
   const total = subtotal + deliveryFee;
+
+  // --------------------------------------------------
+  // CHECKOUT
+  // --------------------------------------------------
+
+  const handleCheckout = async () => {
+    if (items.length === 0) return;
+
+    if (!branchId) {
+      Alert.alert(
+        "No Branch Available",
+        "There are no active branches available right now. Please try again later.",
+      );
+      return;
+    }
+
+    try {
+      setCheckingOut(true);
+
+      // 1. Create the order
+      const orderRes = await api.post("/orders", { branch: branchId });
+      const orderId: string = orderRes.data?.data?._id;
+
+      if (!orderId) throw new Error("Failed to create order");
+
+      // 2. Add each cart item to the order
+      await Promise.all(
+        items.map((item) =>
+          api.post(`/orders/${orderId}/items`, {
+            productId: item.id,
+            quantity: item.quantity,
+          }),
+        ),
+      );
+
+      clearCart();
+
+      Alert.alert(
+        "Order Placed!",
+        "Your order has been placed successfully.",
+        [{ text: "View Orders", onPress: () => router.push("/(customer)/orders") }],
+      );
+    } catch (err: any) {
+      console.log("Checkout error:", err);
+
+      const message =
+        err?.response?.data?.message ?? "Could not place your order. Please try again.";
+      Alert.alert("Checkout Failed", message);
+
+      if (err?.response?.status === 401) {
+        router.replace("/(auth)/login");
+      }
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
 
   return (
     <ThemedView>
@@ -96,7 +132,6 @@ const Cart = () => {
             <Text style={[styles.smallTitle, { color: colors.muted }]}>
               Your items
             </Text>
-
             <Text style={[styles.title, { color: colors.headline }]}>
               My Cart
             </Text>
@@ -105,54 +140,57 @@ const Cart = () => {
           <View
             style={[
               styles.cartIcon,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
+              { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
             <ShoppingCart size={21} color="#007A53" />
 
-            {cartItems.length > 0 && (
+            {totalCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
-                  {cartItems.reduce((total, item) => total + item.quantity, 0)}
+                  {totalCount > 99 ? "99+" : totalCount}
                 </Text>
               </View>
             )}
           </View>
         </View>
 
-        {cartItems.length > 0 ? (
+        {items.length > 0 ? (
           <>
             {/* Cart Items */}
             <View style={styles.itemsContainer}>
-              {cartItems.map((item) => (
+              {items.map((item) => (
                 <View
                   key={item.id}
                   style={[
                     styles.itemCard,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                    },
+                    { backgroundColor: colors.surface, borderColor: colors.border },
                   ]}
                 >
+                  {/* Product image or placeholder */}
                   <View
-                    style={[styles.productImage, { backgroundColor: item.bg }]}
+                    style={[
+                      styles.productImageContainer,
+                      { backgroundColor: colors.background },
+                    ]}
                   >
-                    <Text style={styles.productEmoji}>{item.emoji}</Text>
+                    {item.image ? (
+                      <Image
+                        source={{ uri: item.image }}
+                        style={styles.productImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <PackageSearch size={32} color={colors.muted} />
+                    )}
                   </View>
 
                   <View style={styles.itemInfo}>
                     <View style={styles.itemTop}>
                       <View style={styles.nameContainer}>
-                        <Text
-                          style={[styles.category, { color: colors.muted }]}
-                        >
+                        <Text style={[styles.category, { color: colors.muted }]}>
                           {item.category}
                         </Text>
-
                         <Text
                           style={[styles.itemName, { color: colors.headline }]}
                           numberOfLines={1}
@@ -190,9 +228,7 @@ const Cart = () => {
                           <Minus size={15} color="#007A53" />
                         </Pressable>
 
-                        <Text
-                          style={[styles.quantity, { color: colors.headline }]}
-                        >
+                        <Text style={[styles.quantity, { color: colors.headline }]}>
                           {item.quantity}
                         </Text>
 
@@ -200,9 +236,7 @@ const Cart = () => {
                           onPress={() => increaseQuantity(item.id)}
                           style={[
                             styles.quantityButton,
-                            {
-                              backgroundColor: "#007A53",
-                            },
+                            { backgroundColor: "#007A53" },
                           ]}
                         >
                           <Plus size={15} color="#FFFFFF" />
@@ -214,33 +248,6 @@ const Cart = () => {
               ))}
             </View>
 
-            {/* Promo */}
-            <Pressable
-              style={[
-                styles.promoContainer,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.promoIcon}>
-                <Tag size={19} color="#FF6720" />
-              </View>
-
-              <View style={styles.promoTextContainer}>
-                <Text style={[styles.promoTitle, { color: colors.headline }]}>
-                  Have a promo code?
-                </Text>
-
-                <Text style={[styles.promoSubtitle, { color: colors.muted }]}>
-                  Apply your discount
-                </Text>
-              </View>
-
-              <ArrowRight size={18} color="#007A53" />
-            </Pressable>
-
             {/* Summary */}
             <View style={styles.summary}>
               <Text style={[styles.summaryTitle, { color: colors.headline }]}>
@@ -251,7 +258,6 @@ const Cart = () => {
                 <Text style={[styles.summaryLabel, { color: colors.muted }]}>
                   Subtotal
                 </Text>
-
                 <Text style={[styles.summaryValue, { color: colors.headline }]}>
                   ₱{subtotal.toFixed(2)}
                 </Text>
@@ -261,21 +267,17 @@ const Cart = () => {
                 <Text style={[styles.summaryLabel, { color: colors.muted }]}>
                   Delivery Fee
                 </Text>
-
                 <Text style={[styles.summaryValue, { color: colors.headline }]}>
                   ₱{deliveryFee.toFixed(2)}
                 </Text>
               </View>
 
-              <View
-                style={[styles.separator, { backgroundColor: colors.border }]}
-              />
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
 
               <View style={styles.totalRow}>
                 <Text style={[styles.totalLabel, { color: colors.headline }]}>
                   Total
                 </Text>
-
                 <Text style={[styles.totalValue, { color: "#007A53" }]}>
                   ₱{total.toFixed(2)}
                 </Text>
@@ -284,19 +286,27 @@ const Cart = () => {
 
             {/* Checkout */}
             <Pressable
-              style={[styles.checkoutButton, { backgroundColor: "#007A53" }]}
+              onPress={handleCheckout}
+              disabled={checkingOut}
+              style={[
+                styles.checkoutButton,
+                { backgroundColor: "#007A53", opacity: checkingOut ? 0.7 : 1 },
+              ]}
             >
-              <Text style={styles.checkoutText}>Proceed to Checkout</Text>
-
-              <ArrowRight size={20} color="#FFFFFF" />
+              {checkingOut ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <ArrowRight size={20} color="#FFFFFF" />
+              )}
+              <Text style={styles.checkoutText}>
+                {checkingOut ? "Placing Order..." : "Proceed to Checkout"}
+              </Text>
             </Pressable>
           </>
         ) : (
-          /* Empty Cart */
+          /* Empty */
           <View style={styles.emptyContainer}>
-            <View
-              style={[styles.emptyIcon, { backgroundColor: colors.surface }]}
-            >
+            <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
               <ShoppingCart size={42} color="#007A53" />
             </View>
 
@@ -309,6 +319,7 @@ const Cart = () => {
             </Text>
 
             <Pressable
+              onPress={() => router.push("/(customer)/products")}
               style={[styles.browseButton, { backgroundColor: "#007A53" }]}
             >
               <Text style={styles.browseText}>Browse Products</Text>
@@ -319,6 +330,10 @@ const Cart = () => {
     </ThemedView>
   );
 };
+
+// --------------------------------------------------
+// STYLES
+// --------------------------------------------------
 
 const styles = StyleSheet.create({
   content: {
@@ -382,16 +397,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
 
-  productImage: {
+  productImageContainer: {
     width: 105,
     height: 105,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
 
-  productEmoji: {
-    fontSize: 48,
+  productImage: {
+    width: "100%",
+    height: "100%",
   },
 
   itemInfo: {
@@ -458,40 +475,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 13,
     fontWeight: "700",
-  },
-
-  promoContainer: {
-    height: 68,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginTop: 18,
-    paddingHorizontal: 13,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  promoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#FFF3E8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  promoTextContainer: {
-    flex: 1,
-    marginLeft: 11,
-  },
-
-  promoTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  promoSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
   },
 
   summary: {

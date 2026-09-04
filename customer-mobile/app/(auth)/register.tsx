@@ -62,10 +62,10 @@ const Register = () => {
     }
 
     // Basic password validation
-    if (password.length < 6) {
+    if (password.length < 8) {
       Alert.alert(
         "Invalid Password",
-        "Password must be at least 6 characters.",
+        "Password must be at least 8 characters.",
       );
       return;
     }
@@ -74,8 +74,8 @@ const Register = () => {
       setLoading(true);
 
       const response = await api.post("/auth/register", {
-        firstName: cleanFirstName,
-        lastName: cleanLastName,
+        firstname: cleanFirstName,
+        lastname: cleanLastName,
         email: cleanEmail,
         password,
       });
@@ -85,7 +85,7 @@ const Register = () => {
       Alert.alert("Registration Successful", "Your account has been created.", [
         {
           text: "Login",
-          onPress: () => router.replace("/(auth)/login"),
+          onPress: () => router.replace("/(customer)"),
         },
       ]);
     } catch (error: any) {
