@@ -32,6 +32,20 @@ const orderSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Assigned rider for delivery
+    rider: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Rider",
+      default: null,
+    },
+
+    // Rider delivery status
+    deliveryStatus: {
+      type: String,
+      enum: ["unassigned", "assigned", "picked_up", "in_transit", "delivered"],
+      default: "unassigned",
+    },
+
     // Current status of the order
     status: {
       type: String,

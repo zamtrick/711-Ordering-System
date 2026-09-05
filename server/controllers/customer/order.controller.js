@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 import Order from "../../models/Order.js";
 import Branch from "../../models/Branch.js";
+import User from "../../models/User.js";
+import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -125,6 +127,17 @@ export const createOrder = async (req, res) => {
     const createdOrder = await Order.findById(order._id)
       .populate("user", "firstname lastname email")
       .populate("branch");
+
+    /* Email notification (non-blocking) */
+    if (createdOrder?.user?.email) {
+      notifyOrderPlaced({
+        _id: createdOrder._id,
+        customerName: `${createdOrder.user.firstname} ${createdOrder.user.lastname}`,
+        customerEmail: createdOrder.user.email,
+        branchName: createdOrder.branch?.name || "Unknown",
+        totalAmount: createdOrder.totalAmount,
+      }).catch(() => {});
+    }
 
     return res.status(201).json({
       success: true,
@@ -403,6 +416,17 @@ export const cancelOrder = async (req, res) => {
         },
       })
       .populate("payment");
+
+    /* Email notification (non-blocking) */
+    if (cancelledOrder?.user?.email) {
+      notifyOrderStatusChanged({
+        _id: cancelledOrder._id,
+        customerName: `${cancelledOrder.user.firstname} ${cancelledOrder.user.lastname}`,
+        customerEmail: cancelledOrder.user.email,
+        status: "cancelled",
+        totalAmount: cancelledOrder.totalAmount,
+      }).catch(() => {});
+    }
 
     return res.status(200).json({
       success: true,

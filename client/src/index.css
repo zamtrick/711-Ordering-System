@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+/* ── Dark mode base styles ── */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #121212;
+  color: #E5E5E5;
+}
+
+/* ── Smooth theme transitions ── */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}

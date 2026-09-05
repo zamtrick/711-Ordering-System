@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 
 import User from "../../models/User.js";
 import Rider from "../../models/Rider.js";
+import { notifyRiderCreated } from "../../services/email.service.js";
 import Branch from "../../models/Branch.js";
 
 /*
@@ -285,11 +286,16 @@ export const createRider = async (req, res) => {
       |--------------------------------------------------------------------------
       | RETURN CREATED RIDER
       |--------------------------------------------------------------------------
-      */
-
-      const createdRider = await Rider.findById(rider._id)
+      */      const createdRider = await Rider.findById(rider._id)
         .populate("user", "-password")
         .populate("assignedBranch");
+
+      /* Email notification (non-blocking) */
+      notifyRiderCreated({
+        name: `${firstname} ${lastname}`,
+        email: normalizedEmail,
+        tempPassword: password,
+      }).catch(() => {});
 
       return res.status(201).json({
         success: true,

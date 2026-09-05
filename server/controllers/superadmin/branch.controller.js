@@ -1,11 +1,12 @@
 import Branch from "../../models/Branch.js";
+import { logAction } from "./audit.controller.js";
 
 // ==========================================
 // GET ALL BRANCHES
 // ==========================================
 export const getBranches = async (req, res) => {
   try {
-    const branches = await Branch.find([]).sort({ createdAt: -1 });
+    const branches = await Branch.find().sort({ createdAt: -1 });
 
     if (branches.length === 0) {
       return res
@@ -30,24 +31,18 @@ export const getBranches = async (req, res) => {
 // ==========================================
 // GET BRANCH BY ID
 // ==========================================
-
-// ADDED: Get a single branch using its ID
 export const getBranchById = async (req, res) => {
   try {
-    // ADDED: Get the branch ID from the URL parameter
     const { id } = req.params;
 
-    // ADDED: Find the branch using its MongoDB ID
     const branch = await Branch.findById(id);
 
-    // ADDED: Check if branch does not exist
     if (!branch) {
       return res
         .status(404)
         .json({ success: false, message: "Branch not found" });
     }
 
-    // ADDED: Return the branch
     return res.status(200).json({
       success: true,
       message: "View branch successfully",
@@ -67,7 +62,22 @@ export const getBranchById = async (req, res) => {
 // ==========================================
 export const createBranch = async (req, res) => {
   try {
-    const { name, branchCode, location, city } = req.body;
+    const {
+      name,
+      branchCode,
+      location,
+      city,
+      street,
+      barangay,
+      province,
+      postalCode,
+      contactNumber,
+      email,
+      status,
+      openingTime,
+      closingTime,
+      paymentMethods,
+    } = req.body;
 
     if (!name || !branchCode || !location || !city) {
       return res
@@ -85,9 +95,22 @@ export const createBranch = async (req, res) => {
 
     const branch = await Branch.create({
       name,
-      branchCode,
+      branchCode: branchCode.toUpperCase(),
       location,
-      city,
+      address: { street, barangay, city, province, postalCode },
+      contactNumber,
+      email,
+      status: status ?? "active",
+      openingTime,
+      closingTime,
+      paymentMethods: paymentMethods ?? ["cash"],
+    });
+
+    // Audit log
+    logAction(req.user.userId, "create_branch", "branch", branch._id, {
+      name: branch.name,
+      branchCode: branch.branchCode,
+      location: branch.location,
     });
 
     return res.status(201).json({
@@ -107,26 +130,35 @@ export const createBranch = async (req, res) => {
 // ==========================================
 // UPDATE BRANCH
 // ==========================================
-
-// ADDED: Update an existing branch
 export const updateBranch = async (req, res) => {
   try {
-    // ADDED: Get branch ID from URL
     const { id } = req.params;
 
-    // ADDED: Get updated data from request body
-    const { name, branchCode, location, city } = req.body;
+    const {
+      name,
+      branchCode,
+      location,
+      city,
+      street,
+      barangay,
+      province,
+      postalCode,
+      contactNumber,
+      email,
+      status,
+      openingTime,
+      closingTime,
+      paymentMethods,
+    } = req.body;
 
-    // ADDED: Validate required fields
     if (!name || !branchCode || !location || !city) {
       return res
         .status(400)
         .json({ success: false, message: "All fields are required" });
     }
 
-    // ADDED: Check if another branch is already using this branchCode
     const existBranch = await Branch.findOne({
-      branchCode,
+      branchCode: branchCode.toUpperCase(),
       _id: { $ne: id },
     });
 
@@ -136,29 +168,36 @@ export const updateBranch = async (req, res) => {
         .json({ success: false, message: "Branch Code already exists" });
     }
 
-    // ADDED: Find the branch and update it
     const branch = await Branch.findByIdAndUpdate(
       id,
       {
         name,
-        branchCode,
+        branchCode: branchCode.toUpperCase(),
         location,
-        city,
+        address: { street, barangay, city, province, postalCode },
+        contactNumber,
+        email,
+        status,
+        openingTime,
+        closingTime,
+        paymentMethods,
       },
-      {
-        new: true,
-        runValidators: true,
-      },
+      { new: true, runValidators: true },
     );
 
-    // ADDED: Check if branch was not found
     if (!branch) {
       return res
         .status(404)
         .json({ success: false, message: "Branch not found" });
     }
 
-    // ADDED: Return the updated branch
+    // Audit log
+    logAction(req.user.userId, "update_branch", "branch", id, {
+      name: branch.name,
+      branchCode: branch.branchCode,
+      status: branch.status,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Branch updated successfully",
@@ -176,24 +215,30 @@ export const updateBranch = async (req, res) => {
 // ==========================================
 // DELETE BRANCH
 // ==========================================
-
-// ADDED: Delete an existing branch
 export const deleteBranch = async (req, res) => {
   try {
-    // ADDED: Get branch ID from URL
     const { id } = req.params;
 
-    // ADDED: Find and delete the branch
-    const branch = await Branch.findByIdAndDelete(id);
+    // Get branch info before deleting
+    const branch = await Branch.findById(id);
 
-    // ADDED: Check if branch was not found
     if (!branch) {
       return res
         .status(404)
         .json({ success: false, message: "Branch not found" });
     }
 
-    // ADDED: Return success response
+    const branchName = branch.name;
+    const branchCode = branch.branchCode;
+
+    await Branch.findByIdAndDelete(id);
+
+    // Audit log
+    logAction(req.user.userId, "delete_branch", "branch", id, {
+      name: branchName,
+      branchCode,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Branch deleted successfully",

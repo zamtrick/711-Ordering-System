@@ -1,5 +1,10 @@
 export const authorize = (...allowedRoles) => {
   return (req, res, next) => {
+    // Superadmin has access to ALL routes
+    if (req.user.role === "superadmin") {
+      return next();
+    }
+
     // Check if the user's role is included in the allowed roles
     const role = req.user.role;
     if (!allowedRoles.includes(role)) {

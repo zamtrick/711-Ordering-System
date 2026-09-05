@@ -1,195 +1,146 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { FormEvent } from "react";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
-import { LightTheme } from "../../theme/theme";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 
-const Login = () => {
+export default function Login() {
+  const { user, loading, login } = useAuth();
+  const { isDark } = useTheme();
+  const navigate = useNavigate();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const { colors, spacing, radius } = LightTheme;
+  useEffect(() => {
+    if (!loading && user !== null) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+
+    if (!email.trim()) {
+      setError("Email is required.");
+      return;
+    }
+    if (!password) {
+      setError("Password is required.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      navigate("/dashboard", { replace: true });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F5F2] dark:bg-[#121212]">
+        <div className="w-8 h-8 border-4 border-[#007A53] dark:border-[#078080] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-4"
-      style={{
-        backgroundColor: colors.background,
-      }}
-    >
+    <div className="min-h-screen flex items-center justify-center px-4 bg-[#F8F5F2] dark:bg-[#121212]">
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div
-            className="w-16 h-16 mx-auto flex items-center justify-center shadow-md"
-            style={{
-              backgroundColor: colors.primary,
-              borderRadius: radius.lg,
-            }}
-          >
-            <span className="text-white text-2xl font-bold">711</span>
+        {/* Green header banner */}
+        <div className="rounded-t-3xl px-6 pt-10 pb-8 text-center" style={{ backgroundColor: isDark ? "#078080" : "#007A53" }}>
+          <div className="flex items-center justify-center gap-1.5 mb-4">
+            <div className="w-10 h-1.5 rounded-full bg-[#FF6720]" />
+            <div className="w-6 h-1.5 rounded-full bg-[#DA291C]" />
           </div>
-
-          <h1
-            className="text-3xl font-bold mt-5"
-            style={{ color: colors.headline }}
-          >
-            Welcome Back
-          </h1>
-
-          <p className="mt-2" style={{ color: colors.muted }}>
-            Sign in to your customer account
-          </p>
+          <div className="w-14 h-14 mx-auto flex items-center justify-center bg-white rounded-2xl mb-4 overflow-hidden">
+            <span className="text-[#007A53] text-xl font-bold">711</span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-white">Welcome Back</h1>
+          <p className="text-sm text-white/80 mt-1.5">Login to continue</p>
         </div>
 
-        {/* Login Card */}
-        <div
-          className="shadow-lg p-8"
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: radius.xl,
-            border: `1px solid ${colors.border}`,
-          }}
-        >
-          <form>
-            {/* Email */}
-            <div style={{ marginBottom: spacing.lg }}>
-              <label
-                htmlFor="email"
-                className="block font-semibold mb-2"
-                style={{ color: colors.headline }}
-              >
-                Email Address
-              </label>
+        {/* Form Card */}
+        <div className={`rounded-b-3xl shadow-lg px-7 py-7 ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
+          <form onSubmit={handleSubmit} noValidate>
+            <h2 className={`text-xl font-extrabold mb-1 ${isDark ? "text-white" : "text-[#232323]"}`}>
+              Sign in
+            </h2>
+            <p className={`text-sm mb-6 ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>
+              Enter your account details below
+            </p>
 
-              <div
-                className="flex items-center px-4 h-14"
-                style={{
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: radius.md,
-                }}
-              >
-                <Mail size={20} color={colors.muted} />
+            {error && (
+              <div className="mb-5 px-4 py-3 rounded-xl bg-[#FFF0F0] dark:bg-[#3D1515] border border-[#DA291C]/30">
+                <p className="text-sm text-[#DA291C]">{error}</p>
+              </div>
+            )}
 
+            <div className="mb-4">
+              <label className={`text-sm font-semibold mb-1.5 block ${isDark ? "text-white" : "text-[#232323]"}`}>Email</label>
+              <div className={`flex items-center h-12 px-3 rounded-xl border gap-2 focus-within:border-[#007A53] dark:focus-within:border-[#078080] focus-within:ring-2 focus-within:ring-[#007A53]/20 ${isDark ? "bg-[#121212] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>
+                <Mail size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />
                 <input
-                  id="email"
                   type="email"
                   placeholder="Enter your email"
-                  className="w-full h-full px-3 outline-none bg-transparent"
-                  style={{
-                    color: colors.paragraph,
-                  }}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-[#555]" : "text-[#232323] placeholder:text-[#aaa]"}`}
+                  disabled={submitting}
                 />
               </div>
             </div>
 
-            {/* Password */}
-            <div style={{ marginBottom: spacing.sm }}>
-              <label
-                htmlFor="password"
-                className="block font-semibold mb-2"
-                style={{ color: colors.headline }}
-              >
-                Password
-              </label>
-
-              <div
-                className="flex items-center px-4 h-14"
-                style={{
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: radius.md,
-                }}
-              >
-                <Lock size={20} color={colors.muted} />
-
+            <div className="mb-2">
+              <label className={`text-sm font-semibold mb-1.5 block ${isDark ? "text-white" : "text-[#232323]"}`}>Password</label>
+              <div className={`flex items-center h-12 px-3 rounded-xl border gap-2 focus-within:border-[#007A53] dark:focus-within:border-[#078080] focus-within:ring-2 focus-within:ring-[#007A53]/20 ${isDark ? "bg-[#121212] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>
+                <Lock size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />
                 <input
-                  id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
-                  className="w-full h-full px-3 outline-none bg-transparent"
-                  style={{
-                    color: colors.paragraph,
-                  }}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-[#555]" : "text-[#232323] placeholder:text-[#aaa]"}`}
+                  disabled={submitting}
                 />
-
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="flex items-center justify-center"
-                >
-                  {showPassword ? (
-                    <EyeOff size={20} color={colors.muted} />
-                  ) : (
-                    <Eye size={20} color={colors.muted} />
-                  )}
+                <button type="button" onClick={() => setShowPassword((p) => !p)} className="cursor-pointer" tabIndex={-1}>
+                  {showPassword ? <EyeOff size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} /> : <Eye size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />}
                 </button>
               </div>
             </div>
 
-            {/* Forgot Password */}
-            <div className="flex justify-end mb-7">
-              <a
-                href="/forgot-password"
-                className="text-sm font-semibold"
-                style={{ color: colors.primary }}
-              >
-                Forgot Password?
-              </a>
+            <div className="mt-6">
+              <button type="submit" disabled={submitting} className={`w-full h-12 rounded-xl flex items-center justify-center gap-2 text-white font-bold text-sm transition-colors cursor-pointer ${submitting ? "opacity-70" : ""}`} style={{ backgroundColor: isDark ? "#078080" : "#007A53" }}>
+                {submitting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Login"}
+              </button>
             </div>
-
-            {/* Login Button */}
-            <button
-              type="submit"
-              className="w-full h-14 text-white font-bold transition-all"
-              style={{
-                backgroundColor: colors.primary,
-                borderRadius: radius.md,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = colors.primaryDark;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = colors.primary;
-              }}
-            >
-              Sign In
-            </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-7">
-            <div
-              className="h-px flex-1"
-              style={{ backgroundColor: colors.border }}
-            />
-
-            <span className="text-sm" style={{ color: colors.muted }}>
-              OR
-            </span>
-
-            <div
-              className="h-px flex-1"
-              style={{ backgroundColor: colors.border }}
-            />
+          <div className="flex items-center justify-center gap-1.5 mt-7">
+            <div className="w-8 h-1 rounded-full bg-[#007A53] dark:bg-[#078080]" />
+            <div className="w-8 h-1 rounded-full bg-[#FF6720]" />
+            <div className="w-8 h-1 rounded-full bg-[#DA291C]" />
           </div>
-
-          {/* Register */}
-          <p className="text-center text-sm" style={{ color: colors.muted }}>
-            Don't have an account?{" "}
-            <a
-              href="/register"
-              className="font-bold"
-              style={{ color: colors.primary }}
-            >
-              Create an account
-            </a>
-          </p>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-xs mt-6" style={{ color: colors.muted }}>
-          © 2026 Customer Portal. All rights reserved.
+        <p className={`text-center text-xs mt-5 ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>
+          © 2026 7-Eleven Portal. All rights reserved.
         </p>
       </div>
     </div>
   );
-};
-
-export default Login;
+}

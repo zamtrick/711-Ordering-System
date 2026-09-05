@@ -2,17 +2,19 @@ import User from "../../models/User.js";
 import Admin from "../../models/Admin.js";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import { logAction } from "./audit.controller.js";
+import { notifyAdminCreated } from "../../services/email.service.js";
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | GET ALL ADMINS
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Retrieves all Admin records and populates:
 | - user           → Basic user information
 | - assignedBranch → Branch assigned to the admin
 |
 | Password is excluded for security.
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 
 export const getAdmins = async (req, res) => {
@@ -46,15 +48,15 @@ export const getAdmins = async (req, res) => {
 };
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | CREATE ADMIN
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Creates:
 | 1. A User document → firstname, lastname, email, password, role
 | 2. An Admin document → user reference + assigned branch
 |
 | The password is hashed before saving.
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 
 export const createAdmin = async (req, res) => {
@@ -112,6 +114,21 @@ export const createAdmin = async (req, res) => {
         assignedBranch,
       });
 
+      // Audit log
+      logAction(req.user.userId, "create_admin", "admin", admin._id, {
+        name: `${firstname} ${lastname}`,
+        email: normalizedEmail,
+      });
+
+      // Email notification (non-blocking)
+      const branchDoc = await (await import("../../models/Branch.js")).default.findById(assignedBranch);
+      notifyAdminCreated({
+        name: `${firstname} ${lastname}`,
+        email: normalizedEmail,
+        branchName: branchDoc?.name || "Unknown",
+        tempPassword: password,
+      }).catch(() => {});
+
       // Return created admin information
       return res.status(201).json({
         success: true,
@@ -147,15 +164,15 @@ export const createAdmin = async (req, res) => {
 };
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | GET ADMIN BY ID
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Retrieves a single Admin using the Admin document ID.
 |
 | Populates:
 | - user
 | - assignedBranch
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 
 export const getAdminById = async (req, res) => {
@@ -199,9 +216,9 @@ export const getAdminById = async (req, res) => {
 };
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | UPDATE ADMIN
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Updates both:
 |
 | User:
@@ -213,7 +230,7 @@ export const getAdminById = async (req, res) => {
 |
 | Admin:
 | - assignedBranch
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 
 export const updateAdminById = async (req, res) => {
@@ -251,20 +268,25 @@ export const updateAdminById = async (req, res) => {
       });
     }
 
+    // Track changes for audit log
+    const changes = {};
+
     /*
-    |--------------------------------------------------------------------------
+    |--------------------------------------------------------------------------|
     | UPDATE USER INFORMATION
-    |--------------------------------------------------------------------------
+    |--------------------------------------------------------------------------|
     */
 
     // Update first name if provided
     if (firstname !== undefined) {
       user.firstname = firstname.trim();
+      changes.firstname = firstname.trim();
     }
 
     // Update last name if provided
     if (lastname !== undefined) {
       user.lastname = lastname.trim();
+      changes.lastname = lastname.trim();
     }
 
     // Update email if provided
@@ -285,22 +307,25 @@ export const updateAdminById = async (req, res) => {
       }
 
       user.email = normalizedEmail;
+      changes.email = normalizedEmail;
     }
 
     // Update active status
     if (isActive !== undefined) {
       user.isActive = isActive;
+      changes.isActive = isActive;
     }
 
     // Update password only if a new password was provided
     if (password) {
       user.password = await bcrypt.hash(password, 10);
+      changes.passwordChanged = true;
     }
 
     /*
-    |--------------------------------------------------------------------------
+    |--------------------------------------------------------------------------|
     | UPDATE ADMIN INFORMATION
-    |--------------------------------------------------------------------------
+    |--------------------------------------------------------------------------|
     */
 
     // Update assigned branch
@@ -314,6 +339,7 @@ export const updateAdminById = async (req, res) => {
       }
 
       admin.assignedBranch = assignedBranch;
+      changes.assignedBranch = assignedBranch;
     }
 
     // Save User changes
@@ -321,6 +347,9 @@ export const updateAdminById = async (req, res) => {
 
     // Save Admin changes
     await admin.save();
+
+    // Audit log
+    logAction(req.user.userId, "update_admin", "admin", admin._id, changes);
 
     // Return updated admin
     const updatedAdmin = await Admin.findById(admin._id)
@@ -343,15 +372,15 @@ export const updateAdminById = async (req, res) => {
 };
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | DELETE ADMIN
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Deletes:
 | 1. Admin profile
 | 2. Associated User account
 |
 | This prevents an orphaned User document from remaining in the database.
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 
 export const deleteAdminById = async (req, res) => {
@@ -376,11 +405,20 @@ export const deleteAdminById = async (req, res) => {
       });
     }
 
+    // Get admin name for audit log before deleting
+    const adminUser = await User.findById(admin.user).select("firstname lastname email");
+
     // Delete the associated User account
     await User.findByIdAndDelete(admin.user);
 
     // Delete the Admin profile
     await Admin.findByIdAndDelete(id);
+
+    // Audit log
+    logAction(req.user.userId, "delete_admin", "admin", id, {
+      name: adminUser ? `${adminUser.firstname} ${adminUser.lastname}` : "Unknown",
+      email: adminUser?.email,
+    });
 
     return res.status(200).json({
       success: true,
