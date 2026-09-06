@@ -303,7 +303,7 @@ function BranchForm({
         </div>
         <div className="sm:col-span-2">
           <p className="text-sm font-semibold text-[#232323] dark:text-white mb-2">
-            Payment Methods
+            Payment Methods <span className="text-[#DA291C]">*</span>
           </p>
           <div className="flex flex-wrap gap-3">
             {PAYMENT_OPTIONS.map((opt) => (
@@ -322,6 +322,9 @@ function BranchForm({
               </label>
             ))}
           </div>
+          {formErrors.paymentMethods && (
+            <p className="text-xs text-[#DA291C] mt-2">{formErrors.paymentMethods}</p>
+          )}
         </div>
       </div>
 
@@ -425,6 +428,9 @@ export default function Branches() {
     if (!form.branchCode.trim()) errs.branchCode = "Branch code is required.";
     if (!form.location.trim()) errs.location = "Location is required.";
     if (!form.city.trim()) errs.city = "City is required.";
+    if (form.paymentMethods.length === 0) {
+      errs.paymentMethods = "Select at least one payment method.";
+    }
     return errs;
   }
 

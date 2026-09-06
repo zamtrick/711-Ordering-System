@@ -22,6 +22,8 @@ import manageCategories from "./routes/admin/category.routes.js";
 import manageRiders from "./routes/admin/rider.routes.js";
 import manageCustomer from "./routes/admin/customer.routes.js";
 import manageAdminAnalytics from "./routes/admin/analytics.routes.js";
+import manageAdminBranches from "./routes/admin/branch.routes.js";
+import manageAdminProfile from "./routes/admin/profile.routes.js";
 import manageOrderItems from "./routes/customer/orderItem.routes.js";
 import manageOrders from "./routes/customer/order.routes.js";
 import manageProfileCustomer from "./routes/profile.routes.js";
@@ -66,11 +68,18 @@ const resolveRelativeImages = (node, origin) => {
   if (Array.isArray(node)) {
     node.forEach((item) => resolveRelativeImages(item, origin));
   } else if (node && typeof node === "object") {
+    // Mongoose documents expose internals ($__, _doc, etc.) that contain
+    // circular parent references — walking them causes infinite recursion
+    // (RangeError) and every populated endpoint 500s. Convert to plain JSON
+    // first so we only ever walk real response data.
+    if (node instanceof mongoose.Document) {
+      node = node.toJSON({ depopulate: false });
+    }
     for (const key of Object.keys(node)) {
       const value = node[key];
       if (key === "image" && typeof value === "string" && value.startsWith("/uploads/")) {
         node[key] = origin + value;
-      } else {
+      } else if (value && typeof value === "object") {
         resolveRelativeImages(value, origin);
       }
     }
@@ -106,6 +115,13 @@ app.use("/api/admin/products", auth, authorize("admin"), manageProducts);
 app.use("/api/admin/categories", auth, authorize("admin"), manageCategories);
 app.use("/api/admin/customers", auth, authorize("admin"), manageCustomer);
 app.use("/api/admin/analytics", auth, authorize("admin"), manageAdminAnalytics);
+app.use(
+  "/api/admin/branches",
+  auth,
+  authorize("admin"),
+  manageAdminBranches,
+);
+app.use("/api/admin/profile", auth, authorize("admin"), manageAdminProfile);
 
 //manage by customer
 app.use("/api/customer/profile", auth, manageProfileCustomer);

@@ -70,7 +70,7 @@ export default function Riders() {
     try {
       const [rRes, bRes] = await Promise.all([
         api.get("/admin/riders").catch(() => ({ data: { riders: [] } })),
-        api.get("/superadmin/branches").catch(() => ({ data: { branches: [] } })),
+        api.get("/admin/branches").catch(() => ({ data: { branches: [] } })),
       ]);
       setRiders(rRes.data?.riders ?? []);
       setBranches(bRes.data?.branches ?? []);

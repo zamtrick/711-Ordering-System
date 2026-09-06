@@ -101,6 +101,9 @@ async function run() {
   const adm = await login(admCookies, "johndoe@gmail.com", "12345678", "Admin");
   check("Admin login", adm.success);
 
+  // Unique suffix so repeated runs never collide with unique indexes
+  const uniq = Date.now().toString().slice(-8);
+
   // ── AUTH ME ──────────────────────────────────────────────────
   console.log("\n── 2. AUTH ME ──────────────────────────────────────────\n");
   await get(saCookies, "/auth/me", "Superadmin /me");
@@ -112,8 +115,8 @@ async function run() {
   check("Branches list", branchList.status === 200 || branchList.status === 404);
 
   const branchCreate = await post(saCookies, "/superadmin/branches", {
-    name: "Test Branch Audit",
-    branchCode: "AUDIT001",
+    name: `Test Branch Audit ${uniq}`,
+    branchCode: `AUDIT${uniq}`,
     location: "Test Location",
     city: "Test City",
     status: "active",
@@ -136,10 +139,10 @@ async function run() {
   const brRes = await get(saCookies, "/superadmin/branches", "GET branches for admin");
   const firstBranch = brRes.data?.branches?.[0];
   if (firstBranch) {
-    const adminCreate = await post(saCookies, "/superadmin/admins", {
+    const adminCreate =    await post(saCookies, "/superadmin/admins", {
       firstname: "Test",
       lastname: "AdminAudit",
-      email: "testadminaudit@test.com",
+      email: `testadminaudit${uniq}@test.com`,
       password: "12345678",
       assignedBranch: firstBranch._id,
     }, "POST admin");
@@ -173,12 +176,16 @@ async function run() {
   const prodList = await get(admCookies, "/admin/products", "GET products");
   check("Products list", prodList.status === 200 || prodList.status === 404);
 
+  const catsForProduct = await get(admCookies, "/admin/categories", "GET categories for product");
+  const firstCategory = catsForProduct.data?.categories?.[0];
   const prodCreate = await post(admCookies, "/admin/products", {
-    name: "Test Product Audit",
+    name: `Test Product Audit ${uniq}`,
     description: "Test",
     price: 99,
     stock: 10,
-    sku: "AUDITSKU001",
+    sku: `AUDIT${uniq}`,
+    barcode: `AUDITBC${uniq}`,
+    categoryId: firstCategory?._id,
   }, "POST product");
   check("Product create", prodCreate.status === 201);
   const newProdId = prodCreate.data?.data?._id || prodCreate.data?.product?._id;
@@ -193,13 +200,13 @@ async function run() {
   check("Categories list", catList.status === 200 || catList.status === 404);
 
   const catCreate = await post(admCookies, "/admin/categories", {
-    name: "Test Category Audit",
+    name: `Test Category Audit ${uniq}`,
     description: "Test",
   }, "POST category");
   check("Category create", catCreate.status === 201);
   const newCatId = catCreate.data?.data?._id || catCreate.data?.category?._id;
   if (newCatId) {
-    await patch(admCookies, `/admin/categories/${newCatId}`, { name: "Updated Category" }, "PATCH category");
+    await patch(admCookies, `/admin/categories/${newCatId}`, { name: `Updated Category ${uniq}` }, "PATCH category");
     await del(admCookies, `/admin/categories/${newCatId}`, "DELETE category");
   }
 

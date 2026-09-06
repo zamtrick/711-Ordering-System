@@ -30,8 +30,19 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const isSuperadmin = user?.role === "superadmin";
+
+  // Don't mount role-specific routes until auth resolves — otherwise a hard
+  // load/refresh of /branches etc. matches the "*" catch-all and redirects
+  // to /dashboard before the user's role is known.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F5F2] dark:bg-[#121212]">
+        <div className="w-8 h-8 border-4 border-[#007A53] dark:border-[#078080] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <Routes>

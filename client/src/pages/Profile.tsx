@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Mail, Lock, Save, Shield } from "lucide-react";
 import api from "@/api/axios";
+import { useAuth } from "@/context/AuthContext";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ToastContainer from "@/components/ui/Toast";
@@ -51,7 +52,10 @@ function formatDate(iso: string): string {
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { toasts, removeToast, success, error: toastError } = useToast();
+  const isSuperadmin = user?.role === "superadmin";
+  const profileBase = isSuperadmin ? "/superadmin/profile" : "/admin/profile";
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +76,7 @@ export default function Profile() {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/superadmin/profile/me");
+      const res = await api.get(`${profileBase}/me`);
       const data = res.data?.data;
       if (data) {
         setProfile(data);
@@ -147,7 +151,7 @@ export default function Profile() {
         payload.newPassword = form.newPassword;
       }
 
-      const res = await api.patch("/superadmin/profile/me", payload);
+      const res = await api.patch(`${profileBase}/me`, payload);
       const data = res.data?.data;
 
       if (data) {

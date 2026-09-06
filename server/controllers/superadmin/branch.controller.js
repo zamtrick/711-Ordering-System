@@ -103,7 +103,11 @@ export const createBranch = async (req, res) => {
       status: status ?? "active",
       openingTime,
       closingTime,
-      paymentMethods: paymentMethods ?? ["cash"],
+      // Empty arrays would fail the schema validator — default to cash
+      paymentMethods:
+        Array.isArray(paymentMethods) && paymentMethods.length > 0
+          ? paymentMethods
+          : ["cash"],
     });
 
     // Audit log
@@ -119,6 +123,12 @@ export const createBranch = async (req, res) => {
       branch,
     });
   } catch (err) {
+    // Surface validation errors (bad payload) as 400, not 500
+    if (err.name === "ValidationError") {
+      const msg =
+        Object.values(err.errors)[0]?.message ?? "Validation failed";
+      return res.status(400).json({ success: false, message: msg });
+    }
     console.error(err.message);
 
     return res
@@ -180,7 +190,11 @@ export const updateBranch = async (req, res) => {
         status,
         openingTime,
         closingTime,
-        paymentMethods,
+        // Only set when a non-empty array is provided; undefined keeps existing
+        paymentMethods:
+          Array.isArray(paymentMethods) && paymentMethods.length > 0
+            ? paymentMethods
+            : undefined,
       },
       { new: true, runValidators: true },
     );
@@ -204,6 +218,12 @@ export const updateBranch = async (req, res) => {
       branch,
     });
   } catch (err) {
+    // Surface validation errors (bad payload) as 400, not 500
+    if (err.name === "ValidationError") {
+      const msg =
+        Object.values(err.errors)[0]?.message ?? "Validation failed";
+      return res.status(400).json({ success: false, message: msg });
+    }
     console.error(err.message);
 
     return res
