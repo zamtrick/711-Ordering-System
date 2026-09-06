@@ -57,6 +57,43 @@ async function call(method, path, body) {
 const stamp = Date.now().toString().slice(-8);
 const TEST_EMAIL = `cust${stamp}@test.com`;
 const TEST_PASS = "password123";
+const SA_EMAIL = "patrickzambrano48@gmail.com";
+const SA_PASS = "12345678";
+const SET_FEE = 25; // fee we set for the test run (restored to 20 after)
+
+// ---------------------------------------------------------------
+// 0. Delivery fee setup (admin PUT, public GET, validation)
+// ---------------------------------------------------------------
+{
+  // login as superadmin first — only admins can change the fee
+  const saLogin = await call("POST", "/auth/login", { email: SA_EMAIL, password: SA_PASS });
+  ok("POST /auth/login (superadmin) → 200", saLogin.status === 200, `got ${saLogin.status}`);
+
+  const pub = await call("GET", "/settings/delivery-fee");
+  ok(
+    "GET /settings/delivery-fee (public) → 200",
+    pub.status === 200 && typeof pub.data?.data?.fee === "number",
+    `got ${pub.status} fee=${pub.data?.data?.fee}`,
+  );
+
+  // set a known fee for deterministic order math
+  const put = await call("PUT", "/settings/delivery-fee", { fee: SET_FEE });
+  ok(
+    `PUT /settings/delivery-fee ${SET_FEE} (superadmin) → 200`,
+    put.status === 200 && put.data?.data?.fee === SET_FEE,
+    `got ${put.status}`,
+  );
+
+  const invalid = await call("PUT", "/settings/delivery-fee", { fee: -5 });
+  ok("  PUT negative fee → 400", invalid.status === 400, `got ${invalid.status}`);
+
+  // anonymous PUT check needs a clean jar — logout, test, login again
+  await call("POST", "/auth/logout");
+  const anon = await call("PUT", "/settings/delivery-fee", { fee: 99 });
+  ok("  PUT without auth → 401", anon.status === 401, `got ${anon.status}`);
+  await call("POST", "/auth/login", { email: SA_EMAIL, password: SA_PASS });
+  await call("POST", "/auth/logout"); // back to anonymous for the register flow
+}
 
 // ---------------------------------------------------------------
 // 1. REGISTER (register.tsx → POST /auth/register)
@@ -143,6 +180,13 @@ let orderId;
   );
   orderId = r.data?.data?._id;
 
+  // New empty order starts at exactly the delivery fee
+  ok(
+    "  empty order totalAmount === delivery fee (snapshot)",
+    r.data?.data?.totalAmount === SET_FEE && r.data?.data?.deliveryFee === SET_FEE,
+    `total=${r.data?.data?.totalAmount} fee=${r.data?.data?.deliveryFee}`,
+  );
+
   if (orderId && cart.length === 2) {
     const results = await Promise.all(
       cart.map((c) =>
@@ -159,11 +203,11 @@ let orderId;
       results.map((r) => r.status).join(","),
     );
 
-    // verify server-computed total matches the app's cart math
+    // verify server-computed total matches the app's cart math (items + fee)
     const od = await call("GET", `/orders/${orderId}`);
-    const expected = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+    const expected = SET_FEE + cart.reduce((s, c) => s + c.price * c.quantity, 0);
     ok(
-      "  order totalAmount matches cart subtotal",
+      "  order totalAmount === items + delivery fee",
       Math.abs((od.data?.data?.totalAmount ?? -1) - expected) < 0.001,
       `server=${od.data?.data?.totalAmount} expected=${expected}`,
     );
@@ -277,6 +321,23 @@ let orderId;
   const guard2 = await call("GET", "/admin/products");
   ok("  GET /admin/products as customer → 403", guard2.status === 403, `got ${guard2.status}`);
 
+  const putAsCust = await call("PUT", "/settings/delivery-fee", { fee: 1 });
+  ok("  PUT /settings/delivery-fee as customer → 403", putAsCust.status === 403, `got ${putAsCust.status}`);
+
+  await call("POST", "/auth/logout");
+}
+
+// ---------------------------------------------------------------
+// 10. Restore default fee (₱20) via superadmin
+// ---------------------------------------------------------------
+{
+  await call("POST", "/auth/login", { email: SA_EMAIL, password: SA_PASS });
+  const restore = await call("PUT", "/settings/delivery-fee", { fee: 20 });
+  ok(
+    "  restore fee to 20 → 200",
+    restore.status === 200 && restore.data?.data?.fee === 20,
+    `got ${restore.status}`,
+  );
   await call("POST", "/auth/logout");
 }
 

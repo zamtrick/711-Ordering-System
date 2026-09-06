@@ -46,6 +46,15 @@ const orderSchema = new mongoose.Schema(
       default: "unassigned",
     },
 
+    // Delivery fee in effect when the order was placed.
+    // Snapshotted at creation so later fee changes don't alter old orders.
+    deliveryFee: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+
     // Current status of the order
     status: {
       type: String,

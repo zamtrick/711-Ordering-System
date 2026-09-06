@@ -17,6 +17,7 @@ type Order = {
   branch: { name: string; branchCode: string } | null;
   status: string;
   totalAmount: number;
+  deliveryFee?: number;
   deliveryStatus?: string;
   createdAt: string;
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
@@ -200,6 +201,26 @@ export default function Orders() {
                 </div>
               </div>
             )}
+
+            {/* Totals breakdown */}
+            <div className="bg-[#F8F5F2] dark:bg-[#2A2A2A] rounded-xl p-3 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#777] dark:text-[#A0A0A0]">Items subtotal</span>
+                <span className="font-medium text-[#232323] dark:text-white">
+                  ₱{Math.max(0, viewOrder.totalAmount - (viewOrder.deliveryFee ?? 0)).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#777] dark:text-[#A0A0A0]">Delivery fee</span>
+                <span className="font-medium text-[#232323] dark:text-white">
+                  ₱{(viewOrder.deliveryFee ?? 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-[#E5E2DE] dark:border-[#2E2E2E] pt-1.5">
+                <span className="font-semibold text-[#232323] dark:text-white">Total</span>
+                <span className="font-bold text-[#007A53] dark:text-[#4CAF50]">₱{viewOrder.totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
 
             {(viewOrder.status === "pending" || viewOrder.status === "processing") && (
               <div className="flex justify-end pt-2">

@@ -13,6 +13,7 @@ import Categories from "@/pages/Categories";
 import Riders from "@/pages/Riders";
 import Customers from "@/pages/Customers";
 import Orders from "@/pages/Orders";
+import Settings from "@/pages/Settings";
 import type { JSX } from "react";
 
 // Route guard: redirects to /login if not authenticated
@@ -76,6 +77,7 @@ function AppRoutes() {
             <Route path="/riders" element={<Riders />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/settings" element={<Settings />} />
           </>
         )}
       </Route>

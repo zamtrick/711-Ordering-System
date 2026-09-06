@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Order from "../../models/Order.js";
 import Branch from "../../models/Branch.js";
 import User from "../../models/User.js";
+import { getCurrentDeliveryFee } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
 
 /*
@@ -109,12 +110,17 @@ export const createOrder = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
+    // Snapshot the current delivery fee — the order keeps the fee that was
+    // in effect when it was placed, even if the admin changes it later.
+    const deliveryFee = await getCurrentDeliveryFee();
+
     const order = await Order.create({
       user,
       branch,
       orderItems: [],
       payment: null,
-      totalAmount: 0,
+      deliveryFee,
+      totalAmount: deliveryFee, // starts at the fee; items add on top
       status: "pending",
     });
 

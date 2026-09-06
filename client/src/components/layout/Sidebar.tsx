@@ -32,6 +32,7 @@ const adminNav = [
   { to: "/riders", label: "Riders", icon: Truck },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/settings", label: "Settings", icon: Settings },
   { to: "/profile", label: "Profile & Settings", icon: Settings },
 ];
 

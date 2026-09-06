@@ -29,6 +29,7 @@ import manageOrders from "./routes/customer/order.routes.js";
 import manageProfileCustomer from "./routes/profile.routes.js";
 import manageCustomerProducts from "./routes/customer/product.routes.js";
 import manageCustomerBranches from "./routes/customer/branch.routes.js";
+import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
 
 dotenv.config();
@@ -129,6 +130,9 @@ app.use("/api/customer/products", auth, manageCustomerProducts);
 app.use("/api/customer/branches", auth, manageCustomerBranches);
 app.use("/api/orders", auth, authorize("customer", "admin"), manageOrderItems);
 app.use("/api/orders", auth, authorize("customer", "admin"), manageOrders);
+
+// App settings (delivery fee etc.)
+app.use("/api/settings", manageSettings);
 
 // Rider routes
 app.use("/api/rider", auth, authorize("rider", "superadmin"), manageRiderRoutes);

@@ -37,6 +37,7 @@ type Order = {
     quantity: number;
     product?: { name: string; image?: string };
   }[];
+  deliveryFee?: number;
 };
 
 // --------------------------------------------------
@@ -343,7 +344,9 @@ const Orders = () => {
                 <View style={styles.orderBottom}>
                   <View>
                     <Text style={[styles.totalLabel, { color: colors.muted }]}>
-                      Total
+                      {(order.deliveryFee ?? 0) > 0
+                        ? `Total (incl. ₱${(order.deliveryFee ?? 0).toFixed(2)} delivery)`
+                        : "Total"}
                     </Text>
                     <Text style={[styles.total, { color: "#007A53" }]}>
                       ₱{order.totalAmount.toFixed(2)}

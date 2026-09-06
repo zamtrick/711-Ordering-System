@@ -37,15 +37,11 @@ const Cart = () => {
   const { items, removeItem, increaseQuantity, decreaseQuantity, clearCart, subtotal, totalCount } =
     useCart();
 
-  // NOTE: The server records the order total as the item subtotal only —
-  // there is no delivery-fee support on the backend yet. Showing a fee the
-  // customer will never be charged (and that the merchant never sees) is a
-  // mismatch, so the summary reflects the real recorded total.
-
   const [checkingOut, setCheckingOut] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
 
-  // Fetch the first active branch on mount
+  // Fetch the first active branch + current delivery fee on mount
   useEffect(() => {
     api
       .get("/customer/branches")
@@ -54,9 +50,18 @@ const Cart = () => {
         if (first?._id) setBranchId(first._id);
       })
       .catch((err) => console.log("Fetch branches error:", err));
+
+    api
+      .get("/settings/delivery-fee")
+      .then((res) => {
+        const fee = res.data?.data?.fee;
+        if (typeof fee === "number") setDeliveryFee(fee);
+      })
+      .catch((err) => console.log("Fetch delivery fee error:", err));
   }, []);
 
-  const total = subtotal;
+  const fee = subtotal > 0 ? deliveryFee : 0;
+  const total = subtotal + fee;
 
   // --------------------------------------------------
   // CHECKOUT
@@ -280,6 +285,15 @@ const Cart = () => {
                 </Text>
                 <Text style={[styles.summaryValue, { color: colors.headline }]}>
                   ₱{subtotal.toFixed(2)}
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: colors.muted }]}>
+                  Delivery Fee
+                </Text>
+                <Text style={[styles.summaryValue, { color: colors.headline }]}>
+                  ₱{fee.toFixed(2)}
                 </Text>
               </View>
 
