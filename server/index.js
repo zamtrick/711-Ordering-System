@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -42,14 +43,47 @@ app.use(morgan("dev"));
 app.use(express.json());
 app.use(
   cors({
-    // Allow the mobile app's LAN origin and the web admin client.
-    // In production replace these with your real domains.
-    origin: [
-      "http://192.168.254.181:8081", // Expo dev client (same LAN)
-      "http://localhost:8081",        // Expo web
-      "http://localhost:5173",        // Vite superadmin
-      "http://localhost:5174",        // Vite admin
-    ],
+    // Allow the machine's own interfaces (Expo web/mobile on LAN), localhost dev
+    // servers, and anything listed in CORS_ORIGINS. Computing the LAN IPs at
+    // startup avoids stale hardcoded addresses breaking when the network changes.
+    // In production set CORS_ORIGINS to your real domains.
+    origin: (origin, callback) => {
+      const allowed = new Set([
+        "http://localhost:8081",        // Expo web (loopback)
+        "http://127.0.0.1:8081",        // Expo web (ipv4)
+        "http://localhost:5173",        // Vite admin client
+        "http://localhost:5174",        // Vite admin client (alt port)
+        "exp://192.168.254.181:8081",   // Expo Go (legacy dev client)
+      ]);
+
+      // The server host's own LAN IPs — covers http://<lan-ip>:8081 (Expo web)
+      // and exp://<lan-ip>:8081 (Expo Go) for every interface of this machine.
+      const nets = os.networkInterfaces();
+      for (const addrs of Object.values(nets)) {
+        for (const net of addrs ?? []) {
+          if (net.family === "IPv4" && net.address) {
+            allowed.add(`http://${net.address}:8081`);
+            allowed.add(`http://${net.address}:19000`);
+            allowed.add(`exp://${net.address}:8081`);
+          }
+        }
+      }
+
+      for (const extra of (process.env.CORS_ORIGINS ?? "").split(",")) {
+        const trimmed = extra.trim();
+        if (trimmed) allowed.add(trimmed);
+      }
+
+      // No Origin header = native apps / curl / same-origin — always allowed.
+      if (!origin || allowed.has(origin)) return callback(null, true);
+
+      // Any localhost port is allowed for dev convenience.
+      if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
     credentials: true, // Required for Set-Cookie to be accepted cross-origin
   }),
 );

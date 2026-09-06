@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import Product from "../../models/Product.js";
 import XLSX from "xlsx";
-import { removeUploadedFile } from "../../utils/uploads.js";
+import { removeUploadedFile, isCloudinaryConfigured } from "../../utils/uploads.js";
 
 export const getProducts = async (req, res) => {
   try {
@@ -119,8 +119,9 @@ export const deleteProductById = async (req, res) => {
 // ==========================================
 // POST /api/admin/products/:id/image
 // multipart/form-data with field "image"
-// The DB stores a relative path (/uploads/products/...) so every client
-// receives an absolute URL that matches the host it uses to reach the API.
+// Images are uploaded straight to Cloudinary via multer-storage-cloudinary;
+// the DB stores the full https://res.cloudinary.com/... URL, so every client
+// (web admin, customer mobile app) renders it directly — no host rewriting.
 export const uploadProductImage = async (req, res) => {
   try {
     const { id } = req.params;
@@ -135,15 +136,16 @@ export const uploadProductImage = async (req, res) => {
 
     const product = await Product.findById(id);
     if (!product) {
-      // Remove the just-saved orphan file
-      removeUploadedFile(`/uploads/products/${req.file.filename}`);
+      // Remove the just-uploaded orphan asset from Cloudinary
+      removeUploadedFile(req.file.path);
       return res.status(404).json({ success: false, message: "Product not found" });
     }
 
-    // Delete the previous uploaded image before replacing it
+    // Delete the previous image (Cloudinary or legacy local) before replacing it
     removeUploadedFile(product.image);
 
-    product.image = `/uploads/products/${req.file.filename}`;
+    // req.file.path is the full Cloudinary delivery URL
+    product.image = req.file.path;
     await product.save();
 
     const updated = await Product.findById(id).populate("categoryId");
