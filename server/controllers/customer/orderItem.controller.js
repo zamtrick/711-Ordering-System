@@ -4,6 +4,17 @@ import Order from "../../models/Order.js";
 import Product from "../../models/Product.js";
 
 // ==========================================
+// Helpers
+// ==========================================
+
+// Customers may only touch their own orders; admins can manage all.
+const orderQueryFor = (req, orderId) => {
+  const query = { _id: orderId };
+  if (req.user.role !== "admin") query.user = req.user.userId;
+  return query;
+};
+
+// ==========================================
 // GET ALL ORDER ITEMS
 // GET /api/orders/:orderId/items
 // ==========================================
@@ -18,7 +29,7 @@ export const getOrderItems = async (req, res) => {
       });
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findOne(orderQueryFor(req, orderId));
 
     if (!order) {
       return res.status(404).json({
@@ -78,23 +89,28 @@ export const createOrderItem = async (req, res) => {
       });
     }
 
-    if (quantity < 1) {
+    if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
       return res.status(400).json({
         success: false,
-        message: "Quantity must be at least 1",
+        message: "Quantity must be a whole number of at least 1",
       });
     }
 
     // Check order exists and belongs to this customer
-    const order = await Order.findOne({
-      _id: orderId,
-      user: req.user.userId,
-    });
+    const order = await Order.findOne(orderQueryFor(req, orderId));
 
     if (!order) {
       return res.status(404).json({
         success: false,
         message: "Order not found",
+      });
+    }
+
+    // Only pending orders accept new items
+    if (order.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot add items to a ${order.status} order`,
       });
     }
 
@@ -108,22 +124,34 @@ export const createOrderItem = async (req, res) => {
       });
     }
 
+    // Stock guard — never allow ordering more than available
+    if (product.stock < quantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient stock for "${product.name}". Only ${product.stock} left.`,
+      });
+    }
+
     const unitPrice = product.price;
-    const subTotal = unitPrice * quantity;
+    const subTotal = unitPrice * Number(quantity);
 
     // Create the order item
     const orderItem = await OrderItem.create({
       order: orderId,
       product: productId,
-      quantity,
+      quantity: Number(quantity),
       unitPrice,
       subTotal,
     });
 
-    // Add item reference to the order and update totalAmount
-    order.orderItems.push(orderItem._id);
-    order.totalAmount += subTotal;
-    await order.save();
+    // Add item reference to the order and update totalAmount ATOMICALLY.
+    // The mobile checkout fires one request per cart item in parallel
+    // (Promise.all) — a read-modify-write here loses updates and corrupts
+    // the total. $push/$inc are atomic on the server.
+    await Order.findByIdAndUpdate(orderId, {
+      $push: { orderItems: orderItem._id },
+      $inc: { totalAmount: subTotal },
+    });
 
     const populated = await OrderItem.findById(orderItem._id).populate(
       "product",
@@ -159,6 +187,16 @@ export const getOrderItemById = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid Order ID or Order Item ID",
+      });
+    }
+
+    // Ownership check — customers can only read their own order's items
+    const order = await Order.findOne(orderQueryFor(req, orderId));
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
       });
     }
 
@@ -208,10 +246,20 @@ export const updateOrderItemById = async (req, res) => {
       });
     }
 
-    if (!quantity || quantity < 1) {
+    if (!quantity || !Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
       return res.status(400).json({
         success: false,
-        message: "Quantity must be at least 1",
+        message: "Quantity must be a whole number of at least 1",
+      });
+    }
+
+    // Ownership check
+    const order = await Order.findOne(orderQueryFor(req, orderId));
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
       });
     }
 
@@ -224,17 +272,25 @@ export const updateOrderItemById = async (req, res) => {
       });
     }
 
-    // Recalculate order totalAmount delta
-    const order = await Order.findById(orderId);
-    if (order) {
-      order.totalAmount =
-        order.totalAmount - orderItem.subTotal + orderItem.unitPrice * quantity;
-      await order.save();
+    // Stock guard for the new quantity
+    const product = await Product.findById(orderItem.product);
+    if (product && product.stock < Number(quantity)) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient stock for "${product.name}". Only ${product.stock} left.`,
+      });
     }
 
-    orderItem.quantity = quantity;
-    orderItem.subTotal = orderItem.unitPrice * quantity;
+    // Atomic total adjustment: apply the delta, not a read-modify-write
+    const delta = orderItem.unitPrice * Number(quantity) - orderItem.subTotal;
+
+    orderItem.quantity = Number(quantity);
+    orderItem.subTotal = orderItem.unitPrice * Number(quantity);
     await orderItem.save();
+
+    if (delta !== 0) {
+      await Order.findByIdAndUpdate(orderId, { $inc: { totalAmount: delta } });
+    }
 
     const updated = await OrderItem.findById(orderItem._id).populate("product");
 
@@ -271,6 +327,16 @@ export const deleteOrderItemById = async (req, res) => {
       });
     }
 
+    // Ownership check
+    const order = await Order.findOne(orderQueryFor(req, orderId));
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
     const orderItem = await OrderItem.findOne({ _id: itemId, order: orderId });
 
     if (!orderItem) {
@@ -280,15 +346,11 @@ export const deleteOrderItemById = async (req, res) => {
       });
     }
 
-    // Subtract item subTotal from order totalAmount
-    const order = await Order.findById(orderId);
-    if (order) {
-      order.orderItems = order.orderItems.filter(
-        (id) => id.toString() !== itemId,
-      );
-      order.totalAmount = Math.max(0, order.totalAmount - orderItem.subTotal);
-      await order.save();
-    }
+    // Remove the reference and subtract the subtotal ATOMICALLY
+    await Order.findByIdAndUpdate(orderId, {
+      $pull: { orderItems: itemId },
+      $inc: { totalAmount: -orderItem.subTotal },
+    });
 
     await orderItem.deleteOne();
 

@@ -4,6 +4,22 @@ import bcrypt from "bcryptjs";
 import User from "../../models/User.js";
 import Customer from "../../models/Customer.js";
 
+// Maps common Mongoose errors to proper 4xx responses instead of a bare 500
+const handleCustomerError = (err, res) => {
+  if (err?.code === 11000) {
+    const field = Object.keys(err.keyValue || {})[0] || "field";
+    return res.status(409).json({ success: false, message: `Customer ${field} already exists` });
+  }
+  if (err?.name === "ValidationError") {
+    return res.status(400).json({ success: false, message: Object.values(err.errors)[0]?.message ?? "Invalid customer data" });
+  }
+  if (err?.name === "CastError") {
+    return res.status(400).json({ success: false, message: "Invalid customer ID" });
+  }
+  console.error(err.message);
+  return res.status(500).json({ success: false, message: "Internal Server Error" });
+};
+
 /*
 |--------------------------------------------------------------------------
 | GET ALL CUSTOMERS
@@ -21,16 +37,11 @@ export const getCustomers = async (req, res) => {
   try {
     // Get all customers and populate User information
     const customers = await Customer.find()
-      .populate("user", "firstname lastname email")
+      .populate("user", "firstname lastname email isActive")
       .sort({ createdAt: -1 });
 
-    // Check if there are no customers
-    if (customers.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "You don't have any customers yet!",
-      });
-    }
+    // An empty list is a valid 200 — the UI shows its own empty state.
+    // (A 404 here made the client fire a false "Failed to load" toast.)
 
     // Return all customers
     return res.status(200).json({
@@ -71,7 +82,7 @@ export const getCustomerById = async (req, res) => {
     // Find customer and populate User information
     const customer = await Customer.findById(id).populate(
       "user",
-      "firstname lastname email",
+      "firstname lastname email isActive",
     );
 
     // Check if customer exists
@@ -229,12 +240,7 @@ export const createCustomer = async (req, res) => {
       throw customerError;
     }
   } catch (err) {
-    console.error("Create customer error:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return handleCustomerError(err, res);
   }
 };
 

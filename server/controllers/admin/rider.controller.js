@@ -6,6 +6,22 @@ import Rider from "../../models/Rider.js";
 import { notifyRiderCreated } from "../../services/email.service.js";
 import Branch from "../../models/Branch.js";
 
+// Maps common Mongoose errors to proper 4xx responses instead of a bare 500
+const handleRiderError = (err, res) => {
+  if (err?.code === 11000) {
+    const field = Object.keys(err.keyValue || {})[0] || "field";
+    return res.status(409).json({ success: false, message: `Rider ${field} already exists` });
+  }
+  if (err?.name === "ValidationError") {
+    return res.status(400).json({ success: false, message: Object.values(err.errors)[0]?.message ?? "Invalid rider data" });
+  }
+  if (err?.name === "CastError") {
+    return res.status(400).json({ success: false, message: "Invalid rider ID" });
+  }
+  console.error(err.message);
+  return res.status(500).json({ success: false, message: "Internal Server Error" });
+};
+
 /*
 |--------------------------------------------------------------------------
 | GET ALL RIDERS
@@ -21,12 +37,8 @@ export const getRiders = async (req, res) => {
       .populate("assignedBranch")
       .sort({ createdAt: -1 });
 
-    if (riders.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No riders yet",
-      });
-    }
+    // An empty list is a valid 200 — the UI shows its own empty state.
+    // (A 404 here made the client fire a false "Failed to load" toast.)
 
     return res.status(200).json({
       success: true,
@@ -317,12 +329,7 @@ export const createRider = async (req, res) => {
       throw riderError;
     }
   } catch (err) {
-    console.error("Create rider error:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return handleRiderError(err, res);
   }
 };
 

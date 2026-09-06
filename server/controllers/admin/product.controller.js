@@ -13,9 +13,28 @@ export const getProducts = async (req, res) => {
   }
 };
 
+// Maps common Mongoose errors to proper 4xx responses instead of a bare 500
+const handleProductError = (err, res) => {
+  if (err?.code === 11000) {
+    const field = Object.keys(err.keyValue || {})[0] || "field";
+    return res.status(409).json({ success: false, message: `Product ${field} already exists` });
+  }
+  if (err?.name === "ValidationError") {
+    return res.status(400).json({ success: false, message: Object.values(err.errors)[0]?.message ?? "Invalid product data" });
+  }
+  if (err?.name === "CastError") {
+    return res.status(400).json({ success: false, message: "Invalid product ID" });
+  }
+  console.error(err.message);
+  return res.status(500).json({ success: false, message: "Internal Server Error" });
+};
+
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
+    }
     const product = await Product.findById(id).populate("categoryId");
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });
@@ -33,32 +52,53 @@ export const createProduct = async (req, res) => {
     if (!sku || !barcode || !name || !categoryId || price === undefined || stock === undefined) {
       return res.status(400).json({ success: false, message: "SKU, barcode, name, categoryId, price, and stock are required" });
     }
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({ success: false, message: "Invalid category ID" });
+    }
+    // Duplicate check first so the client gets a clean 409, not a 500
+    const existingSku = await Product.findOne({ sku: String(sku).trim() });
+    if (existingSku) {
+      return res.status(409).json({ success: false, message: "SKU already exists" });
+    }
     const product = await Product.create({ sku, barcode, name, description, categoryId, price, stock });
     return res.status(201).json({ success: true, message: "Product Created Successfully", product });
   } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return handleProductError(err, res);
   }
 };
 
 export const updateProductById = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
+    }
     const { sku, barcode, name, description, categoryId, price, stock } = req.body;
+    if (categoryId !== undefined && !mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({ success: false, message: "Invalid category ID" });
+    }
+    if (sku !== undefined) {
+      const existingSku = await Product.findOne({ sku: String(sku).trim(), _id: { $ne: id } });
+      if (existingSku) {
+        return res.status(409).json({ success: false, message: "SKU already exists" });
+      }
+    }
     const product = await Product.findByIdAndUpdate(id, { sku, barcode, name, description, categoryId, price, stock }, { new: true, runValidators: true }).populate("categoryId");
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
     return res.status(200).json({ success: true, message: "Product Updated Successfully", product });
   } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return handleProductError(err, res);
   }
 };
 
 export const deleteProductById = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
+    }
     const product = await Product.findByIdAndDelete(id);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });

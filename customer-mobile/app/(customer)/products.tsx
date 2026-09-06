@@ -51,7 +51,7 @@ const Products = () => {
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
-  const { addItem, totalCount } = useCart();
+  const { addItem, totalCount, items } = useCart();
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -115,6 +115,13 @@ const Products = () => {
   // --------------------------------------------------
 
   const handleAdd = (product: Product) => {
+    // Respect stock — don't let the cart exceed what's available.
+    // (The server enforces this too; this keeps the UI honest.)
+    const inCart = items.find((i) => i.id === product._id)?.quantity ?? 0;
+    if (inCart >= product.stock) {
+      return;
+    }
+
     addItem({
       id: product._id,
       name: product.name,
@@ -286,12 +293,20 @@ const Products = () => {
                   <PackageSearch size={40} color={colors.muted} />
                 )}
 
-                <Pressable
-                  onPress={() => handleAdd(product)}
-                  style={[styles.addButton, { backgroundColor: "#007A53" }]}
-                >
-                  <Plus size={18} color="#FFFFFF" />
-                </Pressable>
+                {product.stock <= 0 && (
+                  <View style={styles.outOfStockOverlay}>
+                    <Text style={styles.outOfStockText}>Out of stock</Text>
+                  </View>
+                )}
+
+                {product.stock > 0 && (
+                  <Pressable
+                    onPress={() => handleAdd(product)}
+                    style={[styles.addButton, { backgroundColor: "#007A53" }]}
+                  >
+                    <Plus size={18} color="#FFFFFF" />
+                  </Pressable>
+                )}
               </View>
 
               {/* Info */}
@@ -515,6 +530,24 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  outOfStockOverlay: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderRadius: 13,
+  },
+
+  outOfStockText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
 
   productInfo: {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, Ban } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
@@ -44,12 +44,13 @@ function orderStatusVariant(s: string): "green" | "blue" | "orange" | "red" | "g
 
 export default function Orders() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, error: toastError } = useToast();
+  const { toasts, removeToast, success, error: toastError } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -59,6 +60,18 @@ export default function Orders() {
     } catch { toastError("Failed to load orders."); } finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
+
+  const handleCancel = async (o: Order) => {
+    setCancellingId(o._id);
+    try {
+      await api.patch(`/orders/${o._id}/cancel`);
+      success("Order cancelled successfully.");
+      setViewOrder(null);
+      fetchData();
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to cancel order.");
+    } finally { setCancellingId(null); }
+  };
 
   const filtered = orders.filter((o) => {
     const name = o.user ? `${o.user.firstname} ${o.user.lastname}`.toLowerCase() : "";
@@ -120,7 +133,12 @@ export default function Orders() {
                   <td className="px-4 py-3"><Badge variant={orderStatusVariant(o.status)}>{o.status}</Badge></td>
                   <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
                   <td className="px-4 py-3">
-                    <Button variant="ghost" size="sm" icon={<Eye size={14} />} onClick={() => setViewOrder(o)}>View</Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" icon={<Eye size={14} />} onClick={() => setViewOrder(o)}>View</Button>
+                      {(o.status === "pending" || o.status === "processing") && (
+                        <Button variant="danger" size="sm" icon={<Ban size={14} />} loading={cancellingId === o._id} onClick={() => handleCancel(o)}>Cancel</Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -180,6 +198,14 @@ export default function Orders() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {(viewOrder.status === "pending" || viewOrder.status === "processing") && (
+              <div className="flex justify-end pt-2">
+                <Button variant="danger" icon={<Ban size={14} />} loading={cancellingId === viewOrder._id} onClick={() => handleCancel(viewOrder)}>
+                  Cancel Order
+                </Button>
               </div>
             )}
           </div>

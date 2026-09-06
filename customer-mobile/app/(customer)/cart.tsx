@@ -26,12 +26,6 @@ import api from "@/api/axios";
 import { useCart } from "@/context/CartContext";
 
 // --------------------------------------------------
-// DELIVERY FEE
-// --------------------------------------------------
-
-const DELIVERY_FEE = 30;
-
-// --------------------------------------------------
 // SCREEN
 // --------------------------------------------------
 
@@ -42,6 +36,11 @@ const Cart = () => {
 
   const { items, removeItem, increaseQuantity, decreaseQuantity, clearCart, subtotal, totalCount } =
     useCart();
+
+  // NOTE: The server records the order total as the item subtotal only —
+  // there is no delivery-fee support on the backend yet. Showing a fee the
+  // customer will never be charged (and that the merchant never sees) is a
+  // mismatch, so the summary reflects the real recorded total.
 
   const [checkingOut, setCheckingOut] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
@@ -57,8 +56,7 @@ const Cart = () => {
       .catch((err) => console.log("Fetch branches error:", err));
   }, []);
 
-  const deliveryFee = subtotal > 0 ? DELIVERY_FEE : 0;
-  const total = subtotal + deliveryFee;
+  const total = subtotal;
 
   // --------------------------------------------------
   // CHECKOUT
@@ -84,23 +82,45 @@ const Cart = () => {
 
       if (!orderId) throw new Error("Failed to create order");
 
-      // 2. Add each cart item to the order
-      await Promise.all(
-        items.map((item) =>
-          api.post(`/orders/${orderId}/items`, {
+      // 2. Add items one at a time and track which succeed, so a mid-flight
+      // failure (e.g. stock ran out) doesn't silently drop items — and the
+      // user retrying doesn't create a duplicate order.
+      const failures: { id: string; message?: string }[] = [];
+
+      for (const item of items) {
+        try {
+          await api.post(`/orders/${orderId}/items`, {
             productId: item.id,
             quantity: item.quantity,
-          }),
-        ),
-      );
+          });
+        } catch (itemErr: any) {
+          console.log("Add order item error:", itemErr);
+          failures.push({
+            id: item.id,
+            message: itemErr?.response?.data?.message,
+          });
+        }
+      }
 
-      clearCart();
+      if (failures.length === 0) {
+        clearCart();
 
-      Alert.alert(
-        "Order Placed!",
-        "Your order has been placed successfully.",
-        [{ text: "View Orders", onPress: () => router.push("/(customer)/orders") }],
-      );
+        Alert.alert(
+          "Order Placed!",
+          "Your order has been placed successfully.",
+          [{ text: "View Orders", onPress: () => router.push("/(customer)/orders") }],
+        );
+      } else {
+        // Keep only the failed items in the cart; the placed order holds the rest.
+        const failedIds = new Set(failures.map((f) => f.id));
+        items.filter((i) => !failedIds.has(i.id)).forEach((i) => removeItem(i.id));
+
+        Alert.alert(
+          "Partially Placed",
+          failures[0]?.message ??
+            "Some items couldn't be added (stock may have changed). They're still in your cart — you can place a new order for them.",
+        );
+      }
     } catch (err: any) {
       console.log("Checkout error:", err);
 
@@ -263,15 +283,6 @@ const Cart = () => {
                 </Text>
               </View>
 
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.muted }]}>
-                  Delivery Fee
-                </Text>
-                <Text style={[styles.summaryValue, { color: colors.headline }]}>
-                  ₱{deliveryFee.toFixed(2)}
-                </Text>
-              </View>
-
               <View style={[styles.separator, { backgroundColor: colors.border }]} />
 
               <View style={styles.totalRow}>
@@ -315,7 +326,7 @@ const Cart = () => {
             </Text>
 
             <Text style={[styles.emptyText, { color: colors.muted }]}>
-              Looks like you haven't added anything yet.
+              {"Looks like you haven't added anything yet."}
             </Text>
 
             <Pressable

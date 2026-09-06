@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Plus, Pencil, Trash2, Search, Upload, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Upload, Download, ImagePlus, ImageOff } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
@@ -14,7 +14,7 @@ import ToastContainer from "@/components/ui/Toast";
 import { usePagination } from "@/hooks/usePagination";
 import Pagination from "@/components/ui/Pagination";
 
-type Product = { _id: string; sku: string; barcode: string; name: string; description: string; categoryId: { _id: string; name: string } | string; price: number; stock: number; isActive: boolean; createdAt: string };
+type Product = { _id: string; sku: string; barcode: string; name: string; description: string; categoryId: { _id: string; name: string } | string; price: number; stock: number; image?: string; isActive: boolean; createdAt: string };
 type Category = { _id: string; name: string };
 type FormData = { sku: string; barcode: string; name: string; description: string; categoryId: string; price: string; stock: string };
 const defaultForm = (): FormData => ({ sku: "", barcode: "", name: "", description: "", categoryId: "", price: "", stock: "" });
@@ -22,7 +22,7 @@ const defaultForm = (): FormData => ({ sku: "", barcode: "", name: "", descripti
 function SkeletonRow() {
   return (
     <tr className="animate-pulse border-b border-[#F0F0F0]">
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 7 }).map((_, i) => (
         <td key={i} className="px-4 py-3">
           <div className="h-4 rounded bg-[#F0F0F0] dark:bg-[#2A2A2A]" />
         </td>
@@ -50,6 +50,40 @@ export default function Products() {
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const openImagePicker = (p: Product) => {
+    setUploadingImageFor(p._id);
+    imageInputRef.current?.click();
+  };
+
+  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingImageFor) return;
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      await api.post(`/admin/products/${uploadingImageFor}/image`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      success("Product image uploaded.");
+      fetchData();
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Image upload failed.");
+    } finally {
+      setUploadingImageFor(null);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  };
+
+  const handleImageRemove = async (p: Product) => {
+    try {
+      await api.delete(`/admin/products/${p._id}/image`);
+      success("Product image removed.");
+      fetchData();
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to remove image.");
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -190,6 +224,7 @@ export default function Products() {
         <div className="flex items-center gap-2">
           <Button variant="secondary" icon={<Download size={16} />} onClick={exportTemplate}>Template</Button>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelImport} className="hidden" />
+          <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleImageUpload} className="hidden" />
           <Button variant="primary" icon={<Upload size={16} />} onClick={() => fileInputRef.current?.click()} loading={importing}>{importing ? "Importing..." : "Import Excel"}</Button>
           <Button variant="primary" icon={<Plus size={16} />} onClick={() => { setForm(defaultForm()); setFormErrors({}); setShowCreate(true); }}>Add Product</Button>
         </div>
@@ -206,7 +241,7 @@ export default function Products() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-[#F8F5F2] dark:bg-[#2A2A2A] border-b border-[#E5E2DE] dark:border-[#2E2E2E]">
-                {["Name", "SKU", "Category", "Price", "Stock", "Actions"].map((h) => (
+                {["Image", "Name", "SKU", "Category", "Price", "Stock", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-semibold text-[#555] dark:text-[#A0A0A0]">{h}</th>
                 ))}
               </tr>
@@ -215,7 +250,7 @@ export default function Products() {
               {loading ? (
                 <><SkeletonRow /><SkeletonRow /><SkeletonRow /><SkeletonRow /><SkeletonRow /></>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-[#777] dark:text-[#A0A0A0]">No products found.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-[#777] dark:text-[#A0A0A0]">No products found.</td></tr>
               ) : pagination.paginatedItems.map((p) => (
                 <tr key={p._id} className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA] dark:hover:bg-[#2A2A2A] transition-colors">
                   <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{p.name}</td>
@@ -226,8 +261,21 @@ export default function Products() {
                     <Badge variant={p.stock <= 5 ? "red" : "green"}>{p.stock}</Badge>
                   </td>
                   <td className="px-4 py-3">
+                    {p.image ? (
+                      <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover border border-[#E5E2DE] dark:border-[#2E2E2E]" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-[#F0F0F0] dark:bg-[#2A2A2A] flex items-center justify-center text-[#aaa] dark:text-[#555]">
+                        <ImageOff size={14} />
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" icon={<Pencil size={14} />} onClick={() => openEdit(p)}>Edit</Button>
+                      <Button variant="ghost" size="sm" icon={<ImagePlus size={14} />} loading={uploadingImageFor === p._id} onClick={() => openImagePicker(p)}>Image</Button>
+                      {p.image && (
+                        <Button variant="ghost" size="sm" icon={<ImageOff size={14} />} onClick={() => handleImageRemove(p)}>Remove</Button>
+                      )}
                       <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setDeleteProduct(p)}>Delete</Button>
                     </div>
                   </td>
