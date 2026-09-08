@@ -31,6 +31,55 @@ function SkeletonRow() {
   );
 }
 
+// Module-level so the component identity is stable across re-renders —
+// defining it inside the page unmounts/remounts the form on every keystroke,
+// which made all inputs lose focus while typing.
+type ProductFormProps = {
+  f: FormData;
+  setF: (v: FormData) => void;
+  errs: Partial<Record<keyof FormData, string>>;
+  setErrs: (v: Partial<Record<keyof FormData, string>>) => void;
+  onSubmit: (e: FormEvent) => void;
+  onCancel: () => void;
+  categories: Category[];
+  isDark: boolean;
+  submitting: boolean;
+};
+
+function ProductForm({ f, setF, errs, setErrs, onSubmit, onCancel, categories, isDark, submitting }: ProductFormProps) {
+  return (
+    <form onSubmit={onSubmit} noValidate>
+      <div className="grid grid-cols-2 gap-4">
+        <Input label="SKU *" placeholder="SKU" value={f.sku} onChange={(e) => { setF({ ...f, sku: e.target.value }); setErrs({ ...errs, sku: undefined }); }} error={errs.sku} disabled={submitting} />
+        <Input label="Barcode *" placeholder="Barcode" value={f.barcode} onChange={(e) => { setF({ ...f, barcode: e.target.value }); setErrs({ ...errs, barcode: undefined }); }} error={errs.barcode} disabled={submitting} />
+        <Input label="Name *" placeholder="Product name" value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErrs({ ...errs, name: undefined }); }} error={errs.name} disabled={submitting} />
+        <div>
+          <Select label="Category *" value={f.categoryId} onChange={(e) => { setF({ ...f, categoryId: e.target.value }); setErrs({ ...errs, categoryId: undefined }); }} disabled={submitting} error={errs.categoryId}>
+            <option value="">Select category...</option>
+            {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+          </Select>
+        </div>
+        <Input label="Price *" type="number" placeholder="0" value={f.price} onChange={(e) => { setF({ ...f, price: e.target.value }); setErrs({ ...errs, price: undefined }); }} error={errs.price} disabled={submitting} />
+        <Input label="Stock *" type="number" placeholder="0" value={f.stock} onChange={(e) => { setF({ ...f, stock: e.target.value }); setErrs({ ...errs, stock: undefined }); }} error={errs.stock} disabled={submitting} />
+        <div className="col-span-2">
+          <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Description</label>
+          <textarea
+            className={`w-full h-20 px-3 py-2 rounded-xl border text-sm outline-none resize-none transition-colors ${isDark ? "bg-[#121212] border-[#2E2E2E] text-white placeholder:text-[#555] focus:border-[#078080]" : "bg-white border-[#E5E2DE] text-[#232323] placeholder:text-[#aaa] focus:border-[#007A53]"} focus:ring-2 focus:ring-[#007A53]/20`}
+            placeholder="Description"
+            value={f.description}
+            onChange={(e) => setF({ ...f, description: e.target.value })}
+            disabled={submitting}
+          />
+        </div>
+      </div>
+      <div className="flex justify-end gap-3 mt-6">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" variant="primary" loading={submitting}>Save Product</Button>
+      </div>
+    </form>
+  );
+}
+
 export default function Products() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
@@ -181,38 +230,6 @@ export default function Products() {
     URL.revokeObjectURL(url);
   };
 
-  const ProductForm = ({ f, setF, errs, setErrs, onSubmit }: { f: FormData; setF: (v: FormData) => void; errs: Partial<Record<keyof FormData, string>>; setErrs: (v: Partial<Record<keyof FormData, string>>) => void; onSubmit: (e: FormEvent) => void }) => (
-    <form onSubmit={onSubmit} noValidate>
-      <div className="grid grid-cols-2 gap-4">
-        <Input label="SKU *" placeholder="SKU" value={f.sku} onChange={(e) => { setF({ ...f, sku: e.target.value }); setErrs({ ...errs, sku: undefined }); }} error={errs.sku} disabled={submitting} />
-        <Input label="Barcode *" placeholder="Barcode" value={f.barcode} onChange={(e) => { setF({ ...f, barcode: e.target.value }); setErrs({ ...errs, barcode: undefined }); }} error={errs.barcode} disabled={submitting} />
-        <Input label="Name *" placeholder="Product name" value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErrs({ ...errs, name: undefined }); }} error={errs.name} disabled={submitting} />
-        <div>
-          <Select label="Category *" value={f.categoryId} onChange={(e) => { setF({ ...f, categoryId: e.target.value }); setErrs({ ...errs, categoryId: undefined }); }} disabled={submitting} error={errs.categoryId}>
-            <option value="">Select category...</option>
-            {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-          </Select>
-        </div>
-        <Input label="Price *" type="number" placeholder="0" value={f.price} onChange={(e) => { setF({ ...f, price: e.target.value }); setErrs({ ...errs, price: undefined }); }} error={errs.price} disabled={submitting} />
-        <Input label="Stock *" type="number" placeholder="0" value={f.stock} onChange={(e) => { setF({ ...f, stock: e.target.value }); setErrs({ ...errs, stock: undefined }); }} error={errs.stock} disabled={submitting} />
-        <div className="col-span-2">
-          <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Description</label>
-          <textarea
-            className={`w-full h-20 px-3 py-2 rounded-xl border text-sm outline-none resize-none transition-colors ${isDark ? "bg-[#121212] border-[#2E2E2E] text-white placeholder:text-[#555] focus:border-[#078080]" : "bg-white border-[#E5E2DE] text-[#232323] placeholder:text-[#aaa] focus:border-[#007A53]"} focus:ring-2 focus:ring-[#007A53]/20`}
-            placeholder="Description"
-            value={f.description}
-            onChange={(e) => setF({ ...f, description: e.target.value })}
-            disabled={submitting}
-          />
-        </div>
-      </div>
-      <div className="flex justify-end gap-3 mt-6">
-        <Button type="button" variant="secondary" onClick={() => { setShowCreate(false); setEditProduct(null); }} disabled={submitting}>Cancel</Button>
-        <Button type="submit" variant="primary" loading={submitting}>Save Product</Button>
-      </div>
-    </form>
-  );
-
   return (
     <div>
       {/* Header */}
@@ -300,12 +317,12 @@ export default function Products() {
 
       {/* Create Modal */}
       <Modal open={showCreate} onClose={() => !submitting && setShowCreate(false)} title="Add Product" width="max-w-2xl">
-        <ProductForm f={form} setF={setForm} errs={formErrors} setErrs={setFormErrors} onSubmit={handleCreate} />
+        <ProductForm f={form} setF={setForm} errs={formErrors} setErrs={setFormErrors} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} categories={categories} isDark={isDark} submitting={submitting} />
       </Modal>
 
       {/* Edit Modal */}
       <Modal open={editProduct !== null} onClose={() => !submitting && setEditProduct(null)} title="Edit Product" width="max-w-2xl">
-        <ProductForm f={editForm} setF={setEditForm} errs={editErrors} setErrs={setEditErrors} onSubmit={handleEdit} />
+        <ProductForm f={editForm} setF={setEditForm} errs={editErrors} setErrs={setEditErrors} onSubmit={handleEdit} onCancel={() => setEditProduct(null)} categories={categories} isDark={isDark} submitting={submitting} />
       </Modal>
 
       {/* Delete Confirm */}

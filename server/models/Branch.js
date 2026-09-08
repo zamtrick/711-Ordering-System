@@ -69,6 +69,29 @@ const branchSchema = new mongoose.Schema(
       trim: true,
     },
 
+    deliveryRange: {
+      type: Number,
+      default: 2,
+      min: 0,
+    },
+
+    // Branch location on the map (WGS84). Used to draw the delivery
+    // range circle and to validate customer orders against it.
+    coordinates: {
+      lat: {
+        type: Number,
+        min: -90,
+        max: 90,
+        default: null,
+      },
+      lng: {
+        type: Number,
+        min: -180,
+        max: 180,
+        default: null,
+      },
+    },
+
     status: {
       type: String,
       enum: ["active", "inactive", "maintenance"],

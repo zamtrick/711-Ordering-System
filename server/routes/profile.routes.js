@@ -1,6 +1,9 @@
 import {
   getMyProfile,
   updateMyProfile,
+  addAddress,
+  updateAddress,
+  removeAddress,
 } from "../controllers/customer/profile.controller.js";
 import express from "express";
 
@@ -15,5 +18,8 @@ router.get("/test", (req, res) => {
 
 router.get("/me", getMyProfile);
 router.patch("/me", updateMyProfile);
+router.post("/me/addresses", addAddress);
+router.patch("/me/addresses/:addressId", updateAddress);
+router.delete("/me/addresses/:addressId", removeAddress);
 
 export default router;

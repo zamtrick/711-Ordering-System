@@ -1,20 +1,170 @@
 import {
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import {
   View,
   Text,
   StyleSheet,
   useColorScheme,
   Pressable,
   ScrollView,
+  ActivityIndicator,
+  Image,
 } from "react-native";
-import { Search, ShoppingCart, ChevronRight } from "lucide-react-native";
+import { Search, ShoppingCart, ChevronRight, PackageSearch } from "lucide-react-native";
+import { playTap } from "@/utils/sound";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import { router } from "expo-router";
+import api from "@/api/axios";
+import { useCart } from "@/context/CartContext";
+
+// --------------------------------------------------
+// TYPES
+// --------------------------------------------------
+
+type Category = {
+  _id: string;
+  name: string;
+};
+
+type Product = {
+  _id: string;
+  name: string;
+  price: number;
+  image?: string;
+  categoryId?: Category;
+  stock: number;
+};
+
+// Home screen category chips — emoji chosen per known category name, with a
+// sensible default for anything else.
+const CATEGORY_ICONS: Record<string, string> = {
+  food: "🍔",
+  drinks: "🥤",
+  snacks: "🍿",
+  grocery: "🛒",
+  "personal care": "🧴",
+  bakery: "🥐",
+  "canned goods": "🥫",
+  "dairy & chilled": "🥛",
+  "frozen goods": "🧊",
+  desserts: "🍰",
+};
+
+const iconFor = (name: string) =>
+  CATEGORY_ICONS[name.toLowerCase()] ?? "🛍️";
+
+// --------------------------------------------------
+// SCREEN
+// --------------------------------------------------
 
 const Home = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
+
+  const { addItem, items, totalCount } = useCart();
+
+  // ── data ──────────────────────────────────────────────────────────────────
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [popular, setPopular] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // ── fetch categories + latest products (same shape as products.tsx) ──────
+  const fetchData = useCallback(async () => {
+    try {
+      setError("");
+      setLoading(true);
+
+      const [catRes, prodRes] = await Promise.all([
+        api.get("/customer/branches"), // keepalive warm-up (also validates auth)
+        api.get("/customer/products"),
+      ]);
+      void catRes;
+
+      const products: Product[] = prodRes.data?.data ?? [];
+      const uniqueCats: Category[] = [];
+      const seen = new Set<string>();
+      for (const p of products) {
+        const c = p.categoryId;
+        if (c?._id && !seen.has(c._id)) {
+          seen.add(c._id);
+          uniqueCats.push({ _id: c._id, name: c.name });
+        }
+      }
+
+      setCategories(uniqueCats);
+      // "Popular" = 2 newest products (same sort the backend already returns)
+      setPopular(products.slice(0, 2));
+    } catch (err: any) {
+      console.log("Fetch home data error:", err);
+      setError("Could not load the store. Please try again.");
+
+      if (err?.response?.status === 401) {
+        router.replace("/(auth)/login");
+      }
+    }  finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
+    fetchData();
+  }, [fetchData]);
+
+  // ── actions (all keep the homepage design; they just go somewhere) ───────
+  const goProducts = () => router.push("/(customer)/products");
+
+  const goCategory = (name: string) => {
+    router.push({
+      pathname: "/(customer)/products",
+      params: { category: name },
+    });
+  };
+
+  const handleAdd = (product: Product) => {
+    const inCart = items.find((i) => i.id === product._id)?.quantity ?? 0;
+    if (inCart >= product.stock) return; // same guard as products.tsx
+    addItem({
+      id: product._id,
+      name: product.name,
+      category: product.categoryId?.name ?? "Product",
+      price: product.price,
+      image: product.image,
+    });
+
+    playTap();
+  };
+
+  // ── loading ───────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <ThemedView style={styles.centered}>
+        <ActivityIndicator size="large" color="#007A53" />
+        <Text style={[styles.loadingText, { color: colors.muted }]}>
+          Loading the store...
+        </Text>
+      </ThemedView>
+    );
+  }
+
+  // ── error ─────────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <ThemedView style={styles.centered}>
+        <Text style={[styles.errorText, { color: colors.headline }]}>{error}</Text>
+        <Pressable style={styles.retryButton} onPress={fetchData}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView>
@@ -35,6 +185,7 @@ const Home = () => {
           </View>
 
           <Pressable
+            onPress={() => router.push("/(customer)/cart")}
             style={[
               styles.cartButton,
               {
@@ -44,24 +195,34 @@ const Home = () => {
             ]}
           >
             <ShoppingCart size={22} color="#007A53" />
+
+            {totalCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>
+                  {totalCount > 99 ? "99+" : totalCount}
+                </Text>
+              </View>
+            )}
           </Pressable>
         </View>
 
-        {/* Search */}
-        <Pressable
-          style={[
-            styles.searchContainer,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Search size={20} color={colors.muted} />
+        {/* Search — jumps to the products screen which has live search */}
+        <Pressable onPress={goProducts} style={styles.searchPressable}>
+          <View
+            style={[
+              styles.searchContainer,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Search size={20} color={colors.muted} />
 
-          <Text style={[styles.searchText, { color: colors.muted }]}>
-            Search products...
-          </Text>
+            <Text style={[styles.searchText, { color: colors.muted }]}>
+              Search products...
+            </Text>
+          </View>
         </Pressable>
 
         {/* Promo */}
@@ -71,7 +232,7 @@ const Home = () => {
 
             <Text style={styles.promoTitle}>Fresh deals{"\n"}just for you</Text>
 
-            <Pressable style={styles.shopButton}>
+            <Pressable style={styles.shopButton} onPress={goProducts}>
               <Text style={[styles.shopButtonText, { color: "#007A53" }]}>
                 Shop Now
               </Text>
@@ -95,7 +256,9 @@ const Home = () => {
             Categories
           </Text>
 
-          <Text style={[styles.seeAll, { color: "#007A53" }]}>See all</Text>
+          <Pressable onPress={goProducts}>
+            <Text style={[styles.seeAll, { color: "#007A53" }]}>See all</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -103,15 +266,10 @@ const Home = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryList}
         >
-          {[
-            { name: "Food", icon: "🍔" },
-            { name: "Drinks", icon: "🥤" },
-            { name: "Snacks", icon: "🍿" },
-            { name: "Grocery", icon: "🛒" },
-            { name: "Personal Care", icon: "🧴" },
-          ].map((category) => (
+          {categories.map((category) => (
             <Pressable
-              key={category.name}
+              key={category._id}
+              onPress={() => goCategory(category.name)}
               style={[
                 styles.category,
                 {
@@ -120,9 +278,12 @@ const Home = () => {
                 },
               ]}
             >
-              <Text style={styles.categoryIcon}>{category.icon}</Text>
+              <Text style={styles.categoryIcon}>{iconFor(category.name)}</Text>
 
-              <Text style={[styles.categoryName, { color: colors.headline }]}>
+              <Text
+                style={[styles.categoryName, { color: colors.headline }]}
+                numberOfLines={2}
+              >
                 {category.name}
               </Text>
             </Pressable>
@@ -135,54 +296,74 @@ const Home = () => {
             Popular Products
           </Text>
 
-          <Text style={[styles.seeAll, { color: "#007A53" }]}>See all</Text>
+          <Pressable onPress={goProducts}>
+            <Text style={[styles.seeAll, { color: "#007A53" }]}>See all</Text>
+          </Pressable>
         </View>
 
         <View style={styles.productRow}>
-          <View
-            style={[
-              styles.productCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={[styles.productImage, { backgroundColor: "#FFF3E8" }]}>
-              <Text style={styles.productEmoji}>🥤</Text>
-            </View>
+          {popular.map((product) => (
+            <Pressable
+              key={product._id}
+              style={[
+                styles.productCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.productImage,
+                  { backgroundColor: colors.background },
+                ]}
+              >
+                {product.image ? (
+                  <Image
+                    source={{ uri: product.image }}
+                    style={styles.productImageContent}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <PackageSearch size={44} color={colors.muted} />
+                )}
 
-            <Text style={[styles.productName, { color: colors.headline }]}>
-              Refreshing Drink
-            </Text>
+                {product.stock > 0 && (
+                  <Pressable
+                    onPress={() => handleAdd(product)}
+                    style={[styles.addButton, { backgroundColor: "#007A53" }]}
+                  >
+                    <Text style={styles.addButtonText}>+</Text>
+                  </Pressable>
+                )}
+              </View>
 
-            <Text style={[styles.productPrice, { color: "#007A53" }]}>
-              ₱49.00
-            </Text>
-          </View>
+              <Text
+                style={[styles.productName, { color: colors.headline }]}
+                numberOfLines={1}
+              >
+                {product.name}
+              </Text>
 
-          <View
-            style={[
-              styles.productCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={[styles.productImage, { backgroundColor: "#FFF0F0" }]}>
-              <Text style={styles.productEmoji}>🍔</Text>
-            </View>
-
-            <Text style={[styles.productName, { color: colors.headline }]}>
-              Classic Burger
-            </Text>
-
-            <Text style={[styles.productPrice, { color: "#007A53" }]}>
-              ₱89.00
-            </Text>
-          </View>
+              <Text style={[styles.productPrice, { color: "#007A53" }]}>
+                ₱{product.price.toFixed(2)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
+
+        {popular.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🛒</Text>
+            <Text style={[styles.emptyTitle, { color: colors.headline }]}>
+              No products yet
+            </Text>
+            <Text style={[styles.emptyText, { color: colors.muted }]}>
+              Check back soon — the store is being stocked!
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -192,6 +373,40 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 30,
+  },
+
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+  },
+
+  errorText: {
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  retryButton: {
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: "#007A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  retryText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
   },
 
   header: {
@@ -218,6 +433,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  cartBadge: {
+    position: "absolute",
+    right: -3,
+    top: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#DA291C",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cartBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  searchPressable: {
+    // wrapper so the whole search bar is tappable
   },
 
   searchContainer: {
@@ -334,6 +571,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 6,
   },
 
   categoryIcon: {
@@ -365,10 +603,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
+    position: "relative" as const,
+    overflow: "hidden",
   },
 
-  productEmoji: {
-    fontSize: 50,
+  productImageContent: {
+    width: "100%" as const,
+    height: "100%" as const,
+    borderRadius: 12,
+  },
+
+  addButton: {
+    position: "absolute" as const,
+    right: 6,
+    bottom: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+
+  addButtonText: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "800",
+    lineHeight: 24,
   },
 
   productName: {
@@ -380,6 +640,26 @@ const styles = StyleSheet.create({
   productPrice: {
     fontSize: 15,
     fontWeight: "800",
+  },
+
+  emptyContainer: {
+    alignItems: "center",
+    paddingTop: 40,
+  },
+
+  emptyEmoji: {
+    fontSize: 42,
+    marginBottom: 12,
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  emptyText: {
+    fontSize: 13,
+    marginTop: 5,
   },
 });
 

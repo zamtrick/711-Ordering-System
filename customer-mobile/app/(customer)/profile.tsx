@@ -29,6 +29,8 @@ import {
   Pencil,
   X,
   Check,
+  Trash,
+  Plus,
 } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
@@ -40,6 +42,13 @@ import api from "@/api/axios";
 // TYPES
 // --------------------------------------------------
 
+type AddressItem = {
+  _id: string;
+  label: string;
+  address: string;
+  isDefault: boolean;
+};
+
 type ProfileData = {
   user: {
     firstname: string;
@@ -47,7 +56,7 @@ type ProfileData = {
     email: string;
   };
   phone: string;
-  address: string;
+  addresses: AddressItem[];
   age: string;
 };
 
@@ -68,17 +77,12 @@ const Profile = () => {
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
-  // --------------------------------------------------
-  // PROFILE STATE
-  // --------------------------------------------------
-
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  // --------------------------------------------------
-  // EDIT MODAL STATE
-  // --------------------------------------------------
-
+  // Edit profile modal
   const [editVisible, setEditVisible] = useState(false);
   const [editForm, setEditForm] = useState<EditForm>({
     firstname: "",
@@ -87,28 +91,28 @@ const Profile = () => {
     address: "",
     age: "",
   });
-  const [saving, setSaving] = useState(false);
+
+  // Add address modal
+  const [addAddressVisible, setAddAddressVisible] = useState(false);
+  const [newAddressLabel, setNewAddressLabel] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+
+  // Edit address modal
+  const [editAddressVisible, setEditAddressVisible] = useState(false);
+  const [editAddressItemId, setEditAddressItemId] = useState<string | null>(null);
 
   // --------------------------------------------------
-  // LOGOUT STATE
-  // --------------------------------------------------
-
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  // --------------------------------------------------
-  // GET CUSTOMER PROFILE
+  // FETCH PROFILE
   // --------------------------------------------------
 
   const fetchProfile = async () => {
     try {
       const response = await api.get("/customer/profile/me");
-
       if (response.data?.data) {
         setProfile(response.data.data);
       }
     } catch (error: any) {
       console.log("Get profile error:", error);
-
       if (error?.response?.status === 401) {
         router.replace("/(auth)/login");
       }
@@ -122,7 +126,7 @@ const Profile = () => {
   }, []);
 
   // --------------------------------------------------
-  // OPEN EDIT MODAL — pre-fill form with current data
+  // EDIT PROFILE
   // --------------------------------------------------
 
   const openEdit = () => {
@@ -130,15 +134,14 @@ const Profile = () => {
       firstname: profile?.user?.firstname ?? "",
       lastname: profile?.user?.lastname ?? "",
       phone: profile?.phone ?? "",
-      address: profile?.address ?? "",
+      address:
+        profile?.addresses?.find((a) => a.isDefault)?.address ??
+        profile?.addresses?.[0]?.address ??
+        "",
       age: profile?.age ?? "",
     });
     setEditVisible(true);
   };
-
-  // --------------------------------------------------
-  // SAVE PROFILE
-  // --------------------------------------------------
 
   const handleSave = async () => {
     const { firstname, lastname, phone, address, age } = editForm;
@@ -150,7 +153,6 @@ const Profile = () => {
 
     try {
       setSaving(true);
-
       const response = await api.patch("/customer/profile/me", {
         firstname: firstname.trim(),
         lastname: lastname.trim(),
@@ -158,25 +160,123 @@ const Profile = () => {
         address: address.trim(),
         age: age.trim(),
       });
-
-      if (response.data?.data) {
-        setProfile(response.data.data);
-      }
-
+      if (response.data?.data) setProfile(response.data.data);
       setEditVisible(false);
     } catch (error: any) {
       console.log("Update profile error:", error);
-
       const message =
         error?.response?.data?.message ?? "Failed to update profile.";
       Alert.alert("Error", message);
-
-      if (error?.response?.status === 401) {
-        router.replace("/(auth)/login");
-      }
+      if (error?.response?.status === 401) router.replace("/(auth)/login");
     } finally {
       setSaving(false);
     }
+  };
+
+  // --------------------------------------------------
+  // ADDRESS — ADD
+  // --------------------------------------------------
+
+  const openAddAddress = () => {
+    setNewAddressLabel("");
+    setNewAddress("");
+    setAddAddressVisible(true);
+  };
+
+  const addAddress = async () => {
+    if (!newAddress.trim()) {
+      Alert.alert("Validation", "Address cannot be empty.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const response = await api.post("/customer/profile/me/addresses", {
+        label: newAddressLabel.trim() || "Address",
+        address: newAddress.trim(),
+      });
+      if (response.data?.data) setProfile(response.data.data);
+      setAddAddressVisible(false);
+      setNewAddressLabel("");
+      setNewAddress("");
+    } catch (error: any) {
+      console.log("Add address error:", error);
+      const message =
+        error?.response?.data?.message ?? "Failed to add address.";
+      Alert.alert("Error", message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --------------------------------------------------
+  // ADDRESS — EDIT
+  // --------------------------------------------------
+
+  const openEditAddress = (item: AddressItem) => {
+    setNewAddressLabel(item.label);
+    setNewAddress(item.address);
+    setEditAddressItemId(item._id);
+    setEditAddressVisible(true);
+  };
+
+  const updateAddressItem = async () => {
+    if (!editAddressItemId) return;
+    if (!newAddress.trim()) {
+      Alert.alert("Validation", "Address cannot be empty.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const response = await api.patch(
+        `/customer/profile/me/addresses/${editAddressItemId}`,
+        {
+          label: newAddressLabel.trim() || "Address",
+          address: newAddress.trim(),
+        },
+      );
+      if (response.data?.data) setProfile(response.data.data);
+      setEditAddressVisible(false);
+      setNewAddressLabel("");
+      setNewAddress("");
+      setEditAddressItemId(null);
+    } catch (error: any) {
+      console.log("Update address error:", error);
+      const message =
+        error?.response?.data?.message ?? "Failed to update address.";
+      Alert.alert("Error", message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // --------------------------------------------------
+  // ADDRESS — REMOVE
+  // --------------------------------------------------
+
+  const removeAddress = async (addressId: string) => {
+    Alert.alert("Remove Address", "Are you sure you want to remove this address?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setSaving(true);
+            const response = await api.delete(
+              `/customer/profile/me/addresses/${addressId}`,
+            );
+            if (response.data?.data) setProfile(response.data.data);
+          } catch (error: any) {
+            console.log("Remove address error:", error);
+            const message =
+              error?.response?.data?.message ?? "Failed to remove address.";
+            Alert.alert("Error", message);
+          } finally {
+            setSaving(false);
+          }
+        },
+      },
+    ]);
   };
 
   // --------------------------------------------------
@@ -188,8 +288,7 @@ const Profile = () => {
       setLoggingOut(true);
       await api.post("/auth/logout");
       router.replace("/(auth)/login");
-    } catch (error: any) {
-      console.log("Logout error:", error);
+    } catch {
       router.replace("/(auth)/login");
     } finally {
       setLoggingOut(false);
@@ -221,10 +320,7 @@ const Profile = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* ==================================================
-            HEADER
-        ================================================== */}
-
+        {/* HEADER */}
         <View style={styles.header}>
           <View>
             <Text style={[styles.smallTitle, { color: colors.muted }]}>
@@ -234,7 +330,6 @@ const Profile = () => {
               My Profile
             </Text>
           </View>
-
           <Pressable
             onPress={openEdit}
             style={[
@@ -246,10 +341,7 @@ const Profile = () => {
           </Pressable>
         </View>
 
-        {/* ==================================================
-            PROFILE CARD
-        ================================================== */}
-
+        {/* PROFILE CARD */}
         <View
           style={[
             styles.profileCard,
@@ -259,27 +351,20 @@ const Profile = () => {
           <View style={[styles.avatar, { backgroundColor: "#E8F5EF" }]}>
             <User size={34} color="#007A53" />
           </View>
-
           <View style={styles.profileInfo}>
             <Text style={[styles.name, { color: colors.headline }]}>
-              {profile?.user?.firstname ?? "—"}{" "}
-              {profile?.user?.lastname ?? ""}
+              {profile?.user?.firstname ?? "—"} {profile?.user?.lastname ?? ""}
             </Text>
-
             <Text style={[styles.email, { color: colors.muted }]}>
               {profile?.user?.email ?? "—"}
             </Text>
-
             <View style={styles.memberBadge}>
               <Text style={styles.memberText}>Customer</Text>
             </View>
           </View>
         </View>
 
-        {/* ==================================================
-            PERSONAL INFORMATION
-        ================================================== */}
-
+        {/* PERSONAL INFORMATION */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>
           Personal Information
         </Text>
@@ -296,48 +381,115 @@ const Profile = () => {
             value={profile?.user?.firstname ?? "—"}
             colors={colors}
           />
-
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
           <InfoRow
             icon={<User size={19} color="#007A53" />}
             label="Last Name"
             value={profile?.user?.lastname ?? "—"}
             colors={colors}
           />
-
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
           <InfoRow
             icon={<Mail size={19} color="#007A53" />}
             label="Email"
             value={profile?.user?.email ?? "—"}
             colors={colors}
           />
-
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
           <InfoRow
             icon={<Phone size={19} color="#007A53" />}
             label="Phone"
             value={profile?.phone || "Not set"}
             colors={colors}
           />
+        </View>
+
+        {/* ADDRESSES */}
+        <Text style={[styles.sectionTitle, { color: colors.headline }]}>
+          Saved Addresses
+        </Text>
+
+        <View
+          style={[
+            styles.infoCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          {(profile?.addresses ?? []).length === 0 ? (
+            <View style={styles.emptyAddressContainer}>
+              <MapPin size={28} color={colors.muted} />
+              <Text style={[styles.emptyAddressText, { color: colors.muted }]}>
+                No addresses saved yet
+              </Text>
+            </View>
+          ) : (
+            (profile?.addresses ?? []).map((item, index) => (
+              <View key={item._id}>
+                <View style={styles.addressItem}>
+                  <View
+                    style={[
+                      styles.addressIcon,
+                      { backgroundColor: colors.background },
+                    ]}
+                  >
+                    <MapPin
+                      size={16}
+                      color={item.isDefault ? "#007A53" : "#6B7280"}
+                    />
+                  </View>
+                  <View style={styles.addressContent}>
+                    <View style={styles.addressLabelRow}>
+                      <Text
+                        style={[styles.addressLabel, { color: colors.headline }]}
+                      >
+                        {item.label}
+                      </Text>
+                      {item.isDefault && (
+                        <View style={styles.defaultBadge}>
+                          <Text style={styles.defaultBadgeText}>Default</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      style={[styles.addressValue, { color: colors.muted }]}
+                      numberOfLines={2}
+                    >
+                      {item.address || "—"}
+                    </Text>
+                  </View>
+                  <View style={styles.addressActions}>
+                    <Pressable
+                      style={styles.addressActionBtn}
+                      onPress={() => openEditAddress(item)}
+                    >
+                      <Pencil size={15} color="#007A53" />
+                    </Pressable>
+                    <Pressable
+                      style={styles.addressActionBtn}
+                      onPress={() => removeAddress(item._id)}
+                    >
+                      <Trash size={15} color="#EF4444" />
+                    </Pressable>
+                  </View>
+                </View>
+                {index < (profile?.addresses ?? []).length - 1 && (
+                  <View
+                    style={[styles.divider, { backgroundColor: colors.border }]}
+                  />
+                )}
+              </View>
+            ))
+          )}
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          <InfoRow
-            icon={<MapPin size={19} color="#007A53" />}
-            label="Address"
-            value={profile?.address || "Not set"}
-            colors={colors}
-          />
+          <Pressable style={styles.addAddressButton} onPress={openAddAddress}>
+            <Plus size={18} color="#007A53" />
+            <Text style={styles.addAddressText}>Add New Address</Text>
+          </Pressable>
         </View>
 
-        {/* ==================================================
-            MY ACTIVITY
-        ================================================== */}
-
+        {/* MY ACTIVITY */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>
           My Activity
         </Text>
@@ -355,9 +507,7 @@ const Profile = () => {
             onPress={() => router.push("/(customer)/orders")}
             colors={colors}
           />
-
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
           <MenuItem
             icon={<Heart size={20} color="#DA291C" />}
             title="Favorites"
@@ -366,10 +516,7 @@ const Profile = () => {
           />
         </View>
 
-        {/* ==================================================
-            SETTINGS
-        ================================================== */}
-
+        {/* SETTINGS */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>
           Settings
         </Text>
@@ -384,11 +531,10 @@ const Profile = () => {
             icon={<Settings size={20} color="#007A53" />}
             title="Settings"
             subtitle="App preferences"
+            onPress={() => router.push("/(customer)/settings")}
             colors={colors}
           />
-
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
           <MenuItem
             icon={<HelpCircle size={20} color="#FF6720" />}
             title="Help & Support"
@@ -397,10 +543,7 @@ const Profile = () => {
           />
         </View>
 
-        {/* ==================================================
-            LOGOUT
-        ================================================== */}
-
+        {/* LOGOUT */}
         <Pressable
           onPress={handleLogOut}
           disabled={loggingOut}
@@ -428,10 +571,9 @@ const Profile = () => {
         </Text>
       </ScrollView>
 
-      {/* ==================================================
-          EDIT MODAL
-      ================================================== */}
-
+      {/* ================================================
+          EDIT PROFILE MODAL
+      ================================================ */}
       <Modal
         visible={editVisible}
         animationType="slide"
@@ -442,98 +584,56 @@ const Profile = () => {
           style={styles.modalOverlay}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <View
-            style={[
-              styles.modalSheet,
-              { backgroundColor: colors.surface },
-            ]}
-          >
-            {/* Modal Header */}
+          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.headline }]}>
                 Edit Profile
               </Text>
-
               <Pressable
                 onPress={() => setEditVisible(false)}
-                style={[
-                  styles.modalCloseBtn,
-                  { backgroundColor: colors.background },
-                ]}
+                style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}
               >
                 <X size={18} color={colors.muted} />
               </Pressable>
             </View>
-
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* First Name */}
               <EditField
                 label="First Name"
                 value={editForm.firstname}
-                onChangeText={(v) =>
-                  setEditForm((f) => ({ ...f, firstname: v }))
-                }
+                onChangeText={(v) => setEditForm((f) => ({ ...f, firstname: v }))}
                 placeholder="Enter first name"
                 colors={colors}
               />
-
-              {/* Last Name */}
               <EditField
                 label="Last Name"
                 value={editForm.lastname}
-                onChangeText={(v) =>
-                  setEditForm((f) => ({ ...f, lastname: v }))
-                }
+                onChangeText={(v) => setEditForm((f) => ({ ...f, lastname: v }))}
                 placeholder="Enter last name"
                 colors={colors}
               />
-
-              {/* Phone */}
               <EditField
                 label="Phone"
                 value={editForm.phone}
-                onChangeText={(v) =>
-                  setEditForm((f) => ({ ...f, phone: v }))
-                }
+                onChangeText={(v) => setEditForm((f) => ({ ...f, phone: v }))}
                 placeholder="e.g. +63 917 123 4567"
                 keyboardType="phone-pad"
                 colors={colors}
               />
-
-              {/* Address */}
-              <EditField
-                label="Address"
-                value={editForm.address}
-                onChangeText={(v) =>
-                  setEditForm((f) => ({ ...f, address: v }))
-                }
-                placeholder="Enter your address"
-                colors={colors}
-              />
-
-              {/* Age */}
               <EditField
                 label="Age"
                 value={editForm.age}
-                onChangeText={(v) =>
-                  setEditForm((f) => ({ ...f, age: v }))
-                }
+                onChangeText={(v) => setEditForm((f) => ({ ...f, age: v }))}
                 placeholder="Enter your age"
                 keyboardType="numeric"
                 colors={colors}
               />
-
-              {/* Save Button */}
               <Pressable
                 onPress={handleSave}
                 disabled={saving}
-                style={[
-                  styles.saveButton,
-                  { opacity: saving ? 0.7 : 1 },
-                ]}
+                style={[styles.saveButton, { opacity: saving ? 0.7 : 1 }]}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -548,13 +648,127 @@ const Profile = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ================================================
+          ADD ADDRESS MODAL
+      ================================================ */}
+      <Modal
+        visible={addAddressVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAddAddressVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.headline }]}>
+                Add Address
+              </Text>
+              <Pressable
+                onPress={() => setAddAddressVisible(false)}
+                style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}
+              >
+                <X size={18} color={colors.muted} />
+              </Pressable>
+            </View>
+            <EditField
+              label="Label (e.g. Home, Work)"
+              value={newAddressLabel}
+              onChangeText={setNewAddressLabel}
+              placeholder="e.g. Home"
+              colors={colors}
+            />
+            <EditField
+              label="Address"
+              value={newAddress}
+              onChangeText={setNewAddress}
+              placeholder="Enter full address"
+              colors={colors}
+            />
+            <Pressable
+              onPress={addAddress}
+              disabled={saving}
+              style={[styles.saveButton, { opacity: saving ? 0.7 : 1 }]}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Plus size={18} color="#fff" />
+              )}
+              <Text style={styles.saveButtonText}>
+                {saving ? "Saving..." : "Add Address"}
+              </Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ================================================
+          EDIT ADDRESS MODAL
+      ================================================ */}
+      <Modal
+        visible={editAddressVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEditAddressVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.headline }]}>
+                Edit Address
+              </Text>
+              <Pressable
+                onPress={() => setEditAddressVisible(false)}
+                style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}
+              >
+                <X size={18} color={colors.muted} />
+              </Pressable>
+            </View>
+            <EditField
+              label="Label (e.g. Home, Work)"
+              value={newAddressLabel}
+              onChangeText={setNewAddressLabel}
+              placeholder="e.g. Home"
+              colors={colors}
+            />
+            <EditField
+              label="Address"
+              value={newAddress}
+              onChangeText={setNewAddress}
+              placeholder="Enter full address"
+              colors={colors}
+            />
+            <Pressable
+              onPress={updateAddressItem}
+              disabled={saving}
+              style={[styles.saveButton, { opacity: saving ? 0.7 : 1 }]}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Check size={18} color="#fff" />
+              )}
+              <Text style={styles.saveButtonText}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ThemedView>
   );
 };
 
-// ==================================================
+// --------------------------------------------------
 // EDIT FIELD
-// ==================================================
+// --------------------------------------------------
 
 const EditField = ({
   label,
@@ -572,9 +786,7 @@ const EditField = ({
   colors: any;
 }) => (
   <View style={styles.editFieldWrapper}>
-    <Text style={[styles.editFieldLabel, { color: colors.muted }]}>
-      {label}
-    </Text>
+    <Text style={[styles.editFieldLabel, { color: colors.muted }]}>{label}</Text>
     <TextInput
       value={value}
       onChangeText={onChangeText}
@@ -593,9 +805,9 @@ const EditField = ({
   </View>
 );
 
-// ==================================================
+// --------------------------------------------------
 // INFO ROW
-// ==================================================
+// --------------------------------------------------
 
 const InfoRow = ({
   icon,
@@ -624,9 +836,9 @@ const InfoRow = ({
   </View>
 );
 
-// ==================================================
+// --------------------------------------------------
 // MENU ITEM
-// ==================================================
+// --------------------------------------------------
 
 const MenuItem = ({
   icon,
@@ -646,25 +858,19 @@ const MenuItem = ({
       {icon}
     </View>
     <View style={styles.menuContent}>
-      <Text style={[styles.menuTitle, { color: colors.headline }]}>
-        {title}
-      </Text>
-      <Text style={[styles.menuSubtitle, { color: colors.muted }]}>
-        {subtitle}
-      </Text>
+      <Text style={[styles.menuTitle, { color: colors.headline }]}>{title}</Text>
+      <Text style={[styles.menuSubtitle, { color: colors.muted }]}>{subtitle}</Text>
     </View>
     <ChevronRight size={19} color={colors.muted} />
   </Pressable>
 );
 
-// ==================================================
+// --------------------------------------------------
 // STYLES
-// ==================================================
+// --------------------------------------------------
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
 
   loadingContainer: {
     flex: 1,
@@ -672,15 +878,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
+  loadingText: { marginTop: 12, fontSize: 14 },
 
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
+  content: { padding: 20, paddingBottom: 40 },
 
   header: {
     flexDirection: "row",
@@ -689,15 +889,9 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
 
-  smallTitle: {
-    fontSize: 14,
-    marginBottom: 3,
-  },
+  smallTitle: { fontSize: 14, marginBottom: 3 },
 
-  title: {
-    fontSize: 25,
-    fontWeight: "800",
-  },
+  title: { fontSize: 25, fontWeight: "800" },
 
   editButton: {
     width: 46,
@@ -725,20 +919,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  profileInfo: {
-    flex: 1,
-    marginLeft: 15,
-  },
+  profileInfo: { flex: 1, marginLeft: 15 },
 
-  name: {
-    fontSize: 19,
-    fontWeight: "800",
-  },
+  name: { fontSize: 19, fontWeight: "800" },
 
-  email: {
-    fontSize: 12,
-    marginTop: 4,
-  },
+  email: { fontSize: 12, marginTop: 4 },
 
   memberBadge: {
     alignSelf: "flex-start",
@@ -749,17 +934,9 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
 
-  memberText: {
-    color: "#007A53",
-    fontSize: 10,
-    fontWeight: "700",
-  },
+  memberText: { color: "#007A53", fontSize: 10, fontWeight: "700" },
 
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    marginBottom: 12,
-  },
+  sectionTitle: { fontSize: 17, fontWeight: "800", marginBottom: 12 },
 
   infoCard: {
     borderRadius: 18,
@@ -782,25 +959,88 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  infoContent: {
-    flex: 1,
-    marginLeft: 11,
+  infoContent: { flex: 1, marginLeft: 11 },
+
+  infoLabel: { fontSize: 11, marginBottom: 3 },
+
+  infoValue: { fontSize: 13, fontWeight: "600" },
+
+  divider: { height: 1 },
+
+  // Address list
+  emptyAddressContainer: {
+    alignItems: "center",
+    paddingVertical: 22,
+    gap: 8,
   },
 
-  infoLabel: {
-    fontSize: 11,
+  emptyAddressText: { fontSize: 13 },
+
+  addressItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    gap: 10,
+  },
+
+  addressIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  addressContent: { flex: 1 },
+
+  addressLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 3,
   },
 
-  infoValue: {
-    fontSize: 13,
-    fontWeight: "600",
+  addressLabel: { fontSize: 13, fontWeight: "700" },
+
+  defaultBadge: {
+    backgroundColor: "#E8F5EF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
 
-  divider: {
-    height: 1,
+  defaultBadgeText: { color: "#007A53", fontSize: 10, fontWeight: "700" },
+
+  addressValue: { fontSize: 12, lineHeight: 17 },
+
+  addressActions: {
+    flexDirection: "row",
+    gap: 4,
   },
 
+  addressActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  addAddressButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+
+  addAddressText: {
+    color: "#007A53",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  // Menu
   menuCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -822,20 +1062,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  menuContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
+  menuContent: { flex: 1, marginLeft: 12 },
 
-  menuTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  menuTitle: { fontSize: 14, fontWeight: "700" },
 
-  menuSubtitle: {
-    fontSize: 11,
-    marginTop: 3,
-  },
+  menuSubtitle: { fontSize: 11, marginTop: 3 },
 
   logoutButton: {
     height: 52,
@@ -848,22 +1079,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  logoutText: {
-    color: "#DA291C",
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  logoutText: { color: "#DA291C", fontSize: 14, fontWeight: "700" },
 
-  version: {
-    textAlign: "center",
-    fontSize: 11,
-    marginTop: 18,
-  },
+  version: { textAlign: "center", fontSize: 11, marginTop: 18 },
 
-  // --------------------------------------------------
-  // MODAL
-  // --------------------------------------------------
-
+  // Modals
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -886,10 +1106,7 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
 
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-  },
+  modalTitle: { fontSize: 20, fontWeight: "800" },
 
   modalCloseBtn: {
     width: 36,
@@ -899,19 +1116,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // --------------------------------------------------
-  // EDIT FIELD
-  // --------------------------------------------------
+  editFieldWrapper: { marginBottom: 16 },
 
-  editFieldWrapper: {
-    marginBottom: 16,
-  },
-
-  editFieldLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
+  editFieldLabel: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
 
   editFieldInput: {
     height: 48,
@@ -932,11 +1139,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+  saveButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
 
 export default Profile;

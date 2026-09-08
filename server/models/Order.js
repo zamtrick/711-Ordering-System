@@ -68,6 +68,13 @@ const orderSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+
+    // Delivery address for this order
+    deliveryAddress: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: true,

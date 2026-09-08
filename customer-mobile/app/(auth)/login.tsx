@@ -82,6 +82,7 @@ const Login = () => {
           extraScrollHeight={30}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
         >
           {/* Header */}
           <View
@@ -204,12 +205,11 @@ const Login = () => {
             </View>
 
             {/* Forgot Password */}
-            <Link
-              href="/(auth)/login"
-              style={[styles.forgot, { color: "#007A53" }]}
-            >
-              Forgot password?
-            </Link>
+            <View style={styles.forgotRow}>
+              <Text style={[styles.forgot, { color: "#007A53" }]}>
+                Forgot password?
+              </Text>
+            </View>
 
             {/* Login Button */}
             <Pressable
@@ -236,14 +236,16 @@ const Login = () => {
             {/* Register */}
             <View style={styles.registerContainer}>
               <Text style={{ color: colors.muted }}>
-                Don't have an account?
+                Don{"'"}t have an account?
               </Text>
 
               <Link
                 href="/(auth)/register"
                 style={[styles.registerText, { color: "#007A53" }]}
               >
-                Register
+                <Text style={[styles.registerText, { color: "#007A53" }]}>
+                  Register
+                </Text>
               </Link>
             </View>
 
@@ -264,6 +266,10 @@ const Login = () => {
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+  },
+
+  scrollView: {
     flex: 1,
   },
 
@@ -369,12 +375,16 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  forgot: {
-    alignSelf: "flex-end",
-    fontSize: 14,
-    fontWeight: "600",
+  forgotRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginTop: -4,
     marginBottom: 22,
+  },
+
+  forgot: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   loginButton: {

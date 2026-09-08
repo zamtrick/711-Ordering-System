@@ -10,12 +10,14 @@ import {
   Store,
   Sun,
   Moon,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/branches", label: "Branches", icon: MapPin },
   { to: "/products", label: "Products", icon: Package },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/riders", label: "Riders", icon: Truck },

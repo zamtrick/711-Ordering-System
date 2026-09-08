@@ -332,8 +332,8 @@ const Cart = () => {
           /* Empty */
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
-              <ShoppingCart size={42} color="#007A53" />
-            </View>
+            <ShoppingCart size={42} color="#007A53" />
+          </View>
 
             <Text style={[styles.emptyTitle, { color: colors.headline }]}>
               Your cart is empty

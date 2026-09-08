@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import AppLayout from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import Branches from "@/pages/Branches";
 import Products from "@/pages/Products";
 import Categories from "@/pages/Categories";
 import Riders from "@/pages/Riders";
@@ -30,6 +31,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/branches" element={<Branches />} />
         <Route path="/products" element={<Products />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/riders" element={<Riders />} />

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Order from "../../models/Order.js";
 import Branch from "../../models/Branch.js";
 import User from "../../models/User.js";
+import Customer from "../../models/Customer.js";
 import { getCurrentDeliveryFee } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
 
@@ -106,6 +107,20 @@ export const createOrder = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
+    | GET CUSTOMER'S DEFAULT ADDRESS
+    |--------------------------------------------------------------------------
+    */
+
+    const customer = await Customer.findOne({ user });
+    let deliveryAddress = "";
+
+    if (customer && customer.addresses.length > 0) {
+      const defaultAddr = customer.addresses.find((a) => a.isDefault);
+      deliveryAddress = defaultAddr ? defaultAddr.address : customer.addresses[0].address;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | CREATE ORDER
     |--------------------------------------------------------------------------
     */
@@ -122,6 +137,7 @@ export const createOrder = async (req, res) => {
       deliveryFee,
       totalAmount: deliveryFee, // starts at the fee; items add on top
       status: "pending",
+      deliveryAddress,
     });
 
     /*

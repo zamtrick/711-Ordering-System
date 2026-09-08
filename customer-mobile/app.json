@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "customermobile",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -18,7 +17,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -30,12 +28,15 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/logos/711logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#007A53",
           "dark": {
-            "backgroundColor": "#000000"
+            "image": "./assets/logos/711logo.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "backgroundColor": "#121212"
           }
         }
       ]
@@ -43,6 +44,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "apiUrl": "http://192.168.254.181:5000/api"
     }
   }
 }

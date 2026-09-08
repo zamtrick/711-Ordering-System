@@ -14,10 +14,22 @@ const customerSchema = new mongoose.Schema(
       trim: true,
     },
 
-    address: {
-      type: String,
-      trim: true,
-    },
+    addresses: [
+      {
+        label: {
+          type: String,
+          default: "Home",
+        },
+        address: {
+          type: String,
+          trim: true,
+        },
+        isDefault: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    ],
 
     age: {
       type: String,

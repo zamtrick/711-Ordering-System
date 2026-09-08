@@ -1,23 +1,24 @@
 import { useEffect, useState } from "react";
-import { Tabs } from "expo-router";
-import { useColorScheme } from "react-native";
+import { Tabs, router } from "expo-router";
+import { useColorScheme, type ColorValue, ActivityIndicator, Text, StyleSheet } from "react-native";
 import {
   House,
   ShoppingBag,
-  ShoppingCart,
   ClipboardList,
   User,
 } from "lucide-react-native";
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
-import { router } from "expo-router";
 import api from "@/api/axios";
-import { ActivityIndicator, Text, StyleSheet } from "react-native";
+import CartTabIcon from "@/components/CartTabIcon";
+import { useSettings } from "@/context/SettingsContext";
 
 const CustomerLayout = () => {
-  const colorScheme = useColorScheme(); // either dark || light
-
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const systemScheme = useColorScheme();
+  const { themePreference } = useSettings();
+  const resolvedScheme =
+    themePreference === "system" ? systemScheme : themePreference;
+  const theme = resolvedScheme === "dark" ? DarkTheme : LightTheme;
 
   // Auth guard: verify the session once before showing any tab screen.
   // Without this, an expired session makes every tab fail independently
@@ -74,7 +75,7 @@ const CustomerLayout = () => {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => <House color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => <House color={color} size={size} />,
         }}
       />
 
@@ -82,7 +83,7 @@ const CustomerLayout = () => {
         name="products"
         options={{
           title: "Products",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => (
             <ShoppingBag color={color} size={size} />
           ),
         }}
@@ -92,9 +93,7 @@ const CustomerLayout = () => {
         name="cart"
         options={{
           title: "Cart",
-          tabBarIcon: ({ color, size }) => (
-            <ShoppingCart color={color} size={size} />
-          ),
+          tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => <CartTabIcon color={color} size={size} />,
         }}
       />
 
@@ -102,7 +101,7 @@ const CustomerLayout = () => {
         name="orders"
         options={{
           title: "Orders",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => (
             <ClipboardList color={color} size={size} />
           ),
         }}
@@ -111,7 +110,16 @@ const CustomerLayout = () => {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
+          tabBarIcon: ({ color, size }: { color: ColorValue; size: number }) => <User color={color} size={size} />,
+        }}
+      />
+
+      {/* Hidden screen — no tab button */}
+      <Tabs.Screen
+        name="settings"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
     </Tabs>

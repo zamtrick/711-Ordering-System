@@ -67,10 +67,7 @@ const ensureCloudinary = () => {
 // Product image upload — Cloudinary via multer storage engine
 // Images land in the "products" folder of the Cloudinary cloud, auto-
 // optimized (f_auto/q_auto), capped at 1200px on the long edge.
-// --------------------------------------------------
-
-let productImageUploader = null;
-
+// --------------------------------------------------let productImageUploader = null;
 export const getProductImageUploader = () => {
   if (productImageUploader) return productImageUploader;
 
@@ -101,6 +98,45 @@ export const getProductImageUploader = () => {
   });
 
   return productImageUploader;
+};
+
+// --------------------------------------------------
+// Category image upload — Cloudinary via multer storage engine
+// Images land in the "categories" folder of the Cloudinary cloud, auto-
+// optimized (f_auto/q_auto), capped at 1200px on the long edge.
+// --------------------------------------------------
+
+let categoryImageUploader = null;
+export const getCategoryImageUploader = () => {
+  if (categoryImageUploader) return categoryImageUploader;
+
+  ensureCloudinary();
+
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder: "categories",
+      allowed_formats: ["jpg", "png", "jpeg", "webp", "gif", "avif"],
+      public_id: `category-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+      transformation: [
+        { width: 1200, height: 1200, crop: "limit", quality: "auto", fetch_format: "auto" },
+      ],
+    }),
+  });
+
+  categoryImageUploader = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (req, file, cb) => {
+      if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only image files are allowed (JPG, PNG, WEBP, GIF, AVIF)"));
+      }
+    },
+  });
+
+  return categoryImageUploader;
 };
 
 // --------------------------------------------------

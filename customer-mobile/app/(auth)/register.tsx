@@ -85,7 +85,7 @@ const Register = () => {
       Alert.alert("Registration Successful", "Your account has been created.", [
         {
           text: "Login",
-          onPress: () => router.replace("/(customer)"),
+          onPress: () => router.replace("/(auth)/login"),
         },
       ]);
     } catch (error: any) {
@@ -111,6 +111,7 @@ const Register = () => {
           extraScrollHeight={30}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
         >
           {/* Header */}
           <View
@@ -459,6 +460,10 @@ const Register = () => {
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+  },
+
+  scrollView: {
     flex: 1,
   },
 

@@ -20,9 +20,10 @@ import {
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import api from "@/api/axios";
 import { useCart } from "@/context/CartContext";
+import { playTap } from "@/utils/sound";
 
 // --------------------------------------------------
 // TYPES
@@ -53,8 +54,11 @@ const Products = () => {
 
   const { addItem, totalCount, items } = useCart();
 
+  // Home screen deep-links here with a preselected category
+  const params = useLocalSearchParams<{ category?: string }>();
+
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState(params.category ?? "All");
   const [categories, setCategories] = useState<string[]>(["All"]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +100,7 @@ const Products = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
     fetchProducts();
   }, [fetchProducts]);
 
@@ -129,6 +134,8 @@ const Products = () => {
       price: product.price,
       image: product.image,
     });
+
+    playTap();
   };
 
   // --------------------------------------------------
@@ -183,7 +190,6 @@ const Products = () => {
               Our Products
             </Text>
           </View>
-
           <Pressable
             onPress={() => router.push("/(customer)/cart")}
             style={[
