@@ -1,19 +1,27 @@
-import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useState, useContext } from "react";
+import { StyleSheet, View, useColorScheme } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { CartProvider } from "@/context/CartContext";
-import { SettingsProvider } from "@/context/SettingsContext";
+import { SettingsProvider, SettingsContext } from "@/context/SettingsContext";
 import AppSplash from "@/components/AppSplash";
 
-// Keep the native splash screen (7-Eleven logo on brand background) visible
-// while the JS bundle loads, so devices never flash white before boot.
-// On web this call is a no-op (the SDK 54 web build is a stub) — the AppSplash
-// overlay below covers the boot experience there instead.
-SplashScreen.preventAutoHideAsync().catch(() => {
-  /* noop */
-});
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Reads the user's theme preference and renders the correct StatusBar style.
+// Must be rendered inside SettingsProvider.
+function ThemedStatusBar() {
+  const systemScheme = useColorScheme();
+  const settings = useContext(SettingsContext);
+  const resolved =
+    !settings || settings.themePreference === "system"
+      ? systemScheme
+      : settings.themePreference;
+  // "dark" style = dark icons (for light backgrounds)
+  // "light" style = light icons (for dark backgrounds)
+  return <StatusBar style={resolved === "dark" ? "light" : "dark"} />;
+}
 
 export default function RootLayout() {
   // The overlay stays mounted until (a) React has painted the first real frame
@@ -51,14 +59,13 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <CartProvider>
-        <StatusBar style="dark" />
+        <ThemedStatusBar />
 
         {!bootReady && <AppSplash />}
 
         <View style={bootReady ? styles.flex : styles.hidden}>
           <Stack>
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-
             <Stack.Screen name="(customer)" options={{ headerShown: false }} />
           </Stack>
         </View>

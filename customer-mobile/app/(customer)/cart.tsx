@@ -6,8 +6,6 @@ import {
   useColorScheme,
   Pressable,
   ScrollView,
-  ActivityIndicator,
-  Alert,
   Image,
 } from "react-native";
 import {
@@ -22,7 +20,6 @@ import {
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
-import api from "@/api/axios";
 import { useCart } from "@/context/CartContext";
 
 // --------------------------------------------------
@@ -34,112 +31,27 @@ const Cart = () => {
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
 
-  const { items, removeItem, increaseQuantity, decreaseQuantity, clearCart, subtotal, totalCount } =
+  const { items, removeItem, increaseQuantity, decreaseQuantity, subtotal, totalCount } =
     useCart();
 
-  const [checkingOut, setCheckingOut] = useState(false);
-  const [branchId, setBranchId] = useState<string | null>(null);
   const [deliveryFee, setDeliveryFee] = useState<number>(0);
 
-  // Fetch the first active branch + current delivery fee on mount
+  // Fetch delivery fee for the summary preview (the real snapshot happens on
+  // the checkout screen at order-creation time, so this is display-only).
   useEffect(() => {
-    api
-      .get("/customer/branches")
-      .then((res) => {
-        const first = res.data?.data?.[0];
-        if (first?._id) setBranchId(first._id);
-      })
-      .catch((err) => console.log("Fetch branches error:", err));
-
-    api
-      .get("/settings/delivery-fee")
-      .then((res) => {
-        const fee = res.data?.data?.fee;
-        if (typeof fee === "number") setDeliveryFee(fee);
-      })
-      .catch((err) => console.log("Fetch delivery fee error:", err));
+    import("@/api/axios").then(({ default: api }) => {
+      api
+        .get("/settings/delivery-fee")
+        .then((res) => {
+          const fee = res.data?.data?.fee;
+          if (typeof fee === "number") setDeliveryFee(fee);
+        })
+        .catch(() => {});
+    });
   }, []);
 
   const fee = subtotal > 0 ? deliveryFee : 0;
   const total = subtotal + fee;
-
-  // --------------------------------------------------
-  // CHECKOUT
-  // --------------------------------------------------
-
-  const handleCheckout = async () => {
-    if (items.length === 0) return;
-
-    if (!branchId) {
-      Alert.alert(
-        "No Branch Available",
-        "There are no active branches available right now. Please try again later.",
-      );
-      return;
-    }
-
-    try {
-      setCheckingOut(true);
-
-      // 1. Create the order
-      const orderRes = await api.post("/orders", { branch: branchId });
-      const orderId: string = orderRes.data?.data?._id;
-
-      if (!orderId) throw new Error("Failed to create order");
-
-      // 2. Add items one at a time and track which succeed, so a mid-flight
-      // failure (e.g. stock ran out) doesn't silently drop items — and the
-      // user retrying doesn't create a duplicate order.
-      const failures: { id: string; message?: string }[] = [];
-
-      for (const item of items) {
-        try {
-          await api.post(`/orders/${orderId}/items`, {
-            productId: item.id,
-            quantity: item.quantity,
-          });
-        } catch (itemErr: any) {
-          console.log("Add order item error:", itemErr);
-          failures.push({
-            id: item.id,
-            message: itemErr?.response?.data?.message,
-          });
-        }
-      }
-
-      if (failures.length === 0) {
-        clearCart();
-
-        Alert.alert(
-          "Order Placed!",
-          "Your order has been placed successfully.",
-          [{ text: "View Orders", onPress: () => router.push("/(customer)/orders") }],
-        );
-      } else {
-        // Keep only the failed items in the cart; the placed order holds the rest.
-        const failedIds = new Set(failures.map((f) => f.id));
-        items.filter((i) => !failedIds.has(i.id)).forEach((i) => removeItem(i.id));
-
-        Alert.alert(
-          "Partially Placed",
-          failures[0]?.message ??
-            "Some items couldn't be added (stock may have changed). They're still in your cart — you can place a new order for them.",
-        );
-      }
-    } catch (err: any) {
-      console.log("Checkout error:", err);
-
-      const message =
-        err?.response?.data?.message ?? "Could not place your order. Please try again.";
-      Alert.alert("Checkout Failed", message);
-
-      if (err?.response?.status === 401) {
-        router.replace("/(auth)/login");
-      }
-    } finally {
-      setCheckingOut(false);
-    }
-  };
 
   // --------------------------------------------------
   // RENDER
@@ -311,21 +223,14 @@ const Cart = () => {
 
             {/* Checkout */}
             <Pressable
-              onPress={handleCheckout}
-              disabled={checkingOut}
+              onPress={() => router.push("/(customer)/checkout")}
               style={[
                 styles.checkoutButton,
-                { backgroundColor: "#007A53", opacity: checkingOut ? 0.7 : 1 },
+                { backgroundColor: "#007A53" },
               ]}
             >
-              {checkingOut ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <ArrowRight size={20} color="#FFFFFF" />
-              )}
-              <Text style={styles.checkoutText}>
-                {checkingOut ? "Placing Order..." : "Proceed to Checkout"}
-              </Text>
+              <ArrowRight size={20} color="#FFFFFF" />
+              <Text style={styles.checkoutText}>Proceed to Checkout</Text>
             </Pressable>
           </>
         ) : (

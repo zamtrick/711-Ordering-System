@@ -11,24 +11,71 @@ import {
   Sun,
   Moon,
   MapPin,
+  Boxes,
+  MessageCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useState, useEffect, useRef } from "react";
+import { io, type Socket } from "socket.io-client";
+import api from "@/api/axios";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/branches", label: "Branches", icon: MapPin },
+  { to: "/branch-inventory", label: "Branch Inventory", icon: Boxes },
   { to: "/products", label: "Products", icon: Package },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/riders", label: "Riders", icon: Truck },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/chat", label: "Chat", icon: MessageCircle },
 ];
+
+const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
+
+  // Live unread count — shown on the Chat nav item
+  const [unreadChat, setUnreadChat] = useState(0);
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    // Seed unread count from REST
+    api
+      .get("/chat/conversations")
+      .then((res) => {
+        const convs: { unreadAdmin?: number }[] = res.data?.data ?? [];
+        setUnreadChat(convs.reduce((sum, c) => sum + (c.unreadAdmin ?? 0), 0));
+      })
+      .catch(() => {});
+
+    // Open a socket just for badge updates — the Chat page manages its own socket
+    const socket = io(socketURL, {
+      withCredentials: true,
+      transports: ["websocket"],
+    });
+    socketRef.current = socket;
+
+    socket.on("conversation_updated", (conv: { unreadAdmin?: number; _id?: string }) => {
+      // Re-fetch totals on any update for simplicity
+      api
+        .get("/chat/conversations")
+        .then((res) => {
+          const convs: { unreadAdmin?: number }[] = res.data?.data ?? [];
+          setUnreadChat(convs.reduce((sum, c) => sum + (c.unreadAdmin ?? 0), 0));
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -75,6 +122,11 @@ export default function Sidebar() {
           >
             <Icon size={18} />
             {label}
+            {label === "Chat" && unreadChat > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-[#DA291C] text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {unreadChat > 99 ? "99+" : unreadChat}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

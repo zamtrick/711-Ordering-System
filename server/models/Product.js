@@ -61,6 +61,11 @@ const productSchema = new mongoose.Schema(
   },
 );
 
+// Speed up the common customer query: active products sorted by creation date
+productSchema.index({ isActive: 1, createdAt: -1 });
+// Speed up category filtering
+productSchema.index({ isActive: 1, categoryId: 1, createdAt: -1 });
+
 const Product = mongoose.model("Product", productSchema);
 
 export default Product;

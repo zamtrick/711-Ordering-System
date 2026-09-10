@@ -1,5 +1,6 @@
 //packages
 import express from "express";
+import { createServer } from "http";
 import morgan from "morgan";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -8,6 +9,9 @@ import cookieParser from "cookie-parser";
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
+
+import { initSocket } from "./socket.js";
+import chatRoutes from "./routes/chat.routes.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import auth from "./middlewares/auth.middleware.js";
@@ -32,9 +36,11 @@ import manageCustomerProducts from "./routes/customer/product.routes.js";
 import manageCustomerBranches from "./routes/customer/branch.routes.js";
 import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
+import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
 
 dotenv.config();
 const app = express();
+const httpServer = createServer(app);
 const { PORT, DB_URI } = process.env;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -168,13 +174,19 @@ app.use("/api/orders", auth, authorize("customer", "admin"), manageOrders);
 // App settings (delivery fee etc.)
 app.use("/api/settings", manageSettings);
 
+// Chat (REST history endpoints — real-time handled by socket.io)
+app.use("/api/chat", chatRoutes);
+
+app.use("/api/admin/branch-inventory", auth, authorize("admin", "superadmin"), manageBranchInventory);
+
 // Rider routes
 app.use("/api/rider", auth, authorize("rider", "superadmin"), manageRiderRoutes);
 
 mongoose
   .connect(DB_URI)
   .then(() => {
-    app.listen(PORT, () => {
+    initSocket(httpServer);
+    httpServer.listen(PORT, () => {
       console.log(`Running on Port http://localhost:${PORT}`);
     });
   })

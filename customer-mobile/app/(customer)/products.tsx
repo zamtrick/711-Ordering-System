@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import {
   Plus,
   Star,
   PackageSearch,
+  Store,
+  ChevronDown,
 } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
@@ -28,6 +30,12 @@ import { playTap } from "@/utils/sound";
 // --------------------------------------------------
 // TYPES
 // --------------------------------------------------
+
+type Branch = {
+  _id: string;
+  name: string;
+  branchCode: string;
+};
 
 type Category = {
   _id: string;
@@ -63,49 +71,90 @@ const Products = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Branch filter
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  // "all" means no branchId filter — show full global catalogue
+  const ALL_BRANCHES_ID = "all";
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(ALL_BRANCHES_ID);
 
   // --------------------------------------------------
-  // FETCH PRODUCTS
+  // FETCH BRANCHES + PRODUCTS in parallel on mount,
+  // then re-fetch only products when branchId changes
   // --------------------------------------------------
-
-  const fetchProducts = useCallback(async () => {
-    try {
-      setError("");
-      setLoading(true);
-
-      const response = await api.get("/customer/products");
-
-      const data: Product[] = response.data?.data ?? [];
-      setProducts(data);
-
-      // Build category list from returned products
-      const unique = Array.from(
-        new Set(
-          data
-            .map((p) => p.categoryId?.name)
-            .filter((n): n is string => Boolean(n)),
-        ),
-      );
-      setCategories(["All", ...unique]);
-    } catch (err: any) {
-      console.log("Fetch products error:", err);
-      setError("Could not load products. Please try again.");
-
-      if (err?.response?.status === 401) {
-        router.replace("/(auth)/login");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
-    fetchProducts();
-  }, [fetchProducts]);
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setError("");
+        setLoading(true);
+
+        const params: Record<string, string> = {};
+        if (selectedBranchId !== ALL_BRANCHES_ID) {
+          params.branchId = selectedBranchId;
+        }
+
+        // Fire both requests at the same time — don't wait for branches
+        // to finish before starting the product fetch.
+        const [branchRes, productRes] = await Promise.all([
+          selectedBranchId === ALL_BRANCHES_ID
+            ? api.get("/customer/branches")
+            : Promise.resolve(null),
+          api.get("/customer/products", { params }),
+        ]);
+
+        if (cancelled) return;
+
+        if (branchRes) {
+          setBranches(branchRes.data?.data ?? []);
+        }
+
+        const data: Product[] = productRes.data?.data ?? [];
+        setProducts(data);
+
+        const unique = Array.from(
+          new Set(
+            data
+              .map((p) => p.categoryId?.name)
+              .filter((n): n is string => Boolean(n)),
+          ),
+        );
+        setCategories(["All", ...unique]);
+        setSelectedCategory((prev) =>
+          prev === "All" || unique.includes(prev) ? prev : "All",
+        );
+      } catch (err: any) {
+        if (cancelled) return;
+        console.log("Fetch products error:", err);
+        setError("Could not load products. Please try again.");
+        if (err?.response?.status === 401) {
+          router.replace("/(auth)/login");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [selectedBranchId, retryCount]);
+
+  // Keep selectedBranch object in sync with selectedBranchId
+  useEffect(() => {
+    if (selectedBranchId === ALL_BRANCHES_ID) {
+      setSelectedBranch(null);
+    } else {
+      const b = branches.find((b) => b._id === selectedBranchId) ?? null;
+      setSelectedBranch(b);
+    }
+  }, [selectedBranchId, branches]);
 
   // --------------------------------------------------
-  // FILTER
+  // CLIENT-SIDE FILTER (category + search)
   // --------------------------------------------------
 
   const filtered = products.filter((p) => {
@@ -120,12 +169,8 @@ const Products = () => {
   // --------------------------------------------------
 
   const handleAdd = (product: Product) => {
-    // Respect stock — don't let the cart exceed what's available.
-    // (The server enforces this too; this keeps the UI honest.)
     const inCart = items.find((i) => i.id === product._id)?.quantity ?? 0;
-    if (inCart >= product.stock) {
-      return;
-    }
+    if (inCart >= product.stock) return;
 
     addItem({
       id: product._id,
@@ -134,12 +179,11 @@ const Products = () => {
       price: product.price,
       image: product.image,
     });
-
     playTap();
   };
 
   // --------------------------------------------------
-  // LOADING
+  // LOADING / ERROR
   // --------------------------------------------------
 
   if (loading) {
@@ -153,17 +197,11 @@ const Products = () => {
     );
   }
 
-  // --------------------------------------------------
-  // ERROR
-  // --------------------------------------------------
-
   if (error) {
     return (
       <ThemedView style={styles.centered}>
-        <Text style={[styles.errorText, { color: colors.headline }]}>
-          {error}
-        </Text>
-        <Pressable style={styles.retryButton} onPress={fetchProducts}>
+        <Text style={[styles.errorText, { color: colors.headline }]}>{error}</Text>
+        <Pressable style={styles.retryButton} onPress={() => setRetryCount((c) => c + 1)}>
           <Text style={styles.retryText}>Retry</Text>
         </Pressable>
       </ThemedView>
@@ -180,15 +218,11 @@ const Products = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* Header */}
+        {/* ── HEADER ─────────────────────────────── */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.smallTitle, { color: colors.muted }]}>
-              Browse
-            </Text>
-            <Text style={[styles.title, { color: colors.headline }]}>
-              Our Products
-            </Text>
+            <Text style={[styles.smallTitle, { color: colors.muted }]}>Browse</Text>
+            <Text style={[styles.title, { color: colors.headline }]}>Our Products</Text>
           </View>
           <Pressable
             onPress={() => router.push("/(customer)/cart")}
@@ -198,7 +232,6 @@ const Products = () => {
             ]}
           >
             <ShoppingCart size={21} color="#007A53" />
-
             {totalCount > 0 && (
               <View style={styles.cartBadge}>
                 <Text style={styles.cartBadgeText}>
@@ -209,7 +242,7 @@ const Products = () => {
           </Pressable>
         </View>
 
-        {/* Search */}
+        {/* ── SEARCH ─────────────────────────────── */}
         <View
           style={[
             styles.searchContainer,
@@ -226,7 +259,91 @@ const Products = () => {
           />
         </View>
 
-        {/* Categories */}
+        {/* ── BRANCH FILTER ──────────────────────── */}
+        <Text style={[styles.sectionTitle, { color: colors.headline }]}>Branch</Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterList}
+        >
+          {/* "All Branches" chip */}
+          <Pressable
+            onPress={() => setSelectedBranchId(ALL_BRANCHES_ID)}
+            style={[
+              styles.branchChip,
+              {
+                backgroundColor:
+                  selectedBranchId === ALL_BRANCHES_ID ? "#007A53" : colors.surface,
+                borderColor:
+                  selectedBranchId === ALL_BRANCHES_ID ? "#007A53" : colors.border,
+              },
+            ]}
+          >
+            <Store
+              size={13}
+              color={selectedBranchId === ALL_BRANCHES_ID ? "#FFFFFF" : colors.muted}
+            />
+            <Text
+              style={[
+                styles.branchChipText,
+                {
+                  color:
+                    selectedBranchId === ALL_BRANCHES_ID ? "#FFFFFF" : colors.headline,
+                },
+              ]}
+            >
+              All Branches
+            </Text>
+          </Pressable>
+
+          {branches.map((branch) => {
+            const active = selectedBranchId === branch._id;
+            return (
+              <Pressable
+                key={branch._id}
+                onPress={() => setSelectedBranchId(branch._id)}
+                style={[
+                  styles.branchChip,
+                  {
+                    backgroundColor: active ? "#007A53" : colors.surface,
+                    borderColor: active ? "#007A53" : colors.border,
+                  },
+                ]}
+              >
+                <Store size={13} color={active ? "#FFFFFF" : colors.muted} />
+                <Text
+                  style={[
+                    styles.branchChipText,
+                    { color: active ? "#FFFFFF" : colors.headline },
+                  ]}
+                >
+                  {branch.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Branch availability notice */}
+        {selectedBranch && (
+          <View
+            style={[
+              styles.branchNotice,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Store size={14} color="#007A53" />
+            <Text style={[styles.branchNoticeText, { color: colors.muted }]}>
+              Showing products available at{" "}
+              <Text style={{ fontWeight: "700", color: colors.headline }}>
+                {selectedBranch.name}
+              </Text>
+            </Text>
+          </View>
+        )}
+
+        {/* ── CATEGORIES ─────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>
           Categories
         </Text>
@@ -234,7 +351,7 @@ const Products = () => {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryList}
+          contentContainerStyle={styles.filterList}
         >
           {categories.map((cat) => {
             const active = selectedCategory === cat;
@@ -263,10 +380,10 @@ const Products = () => {
           })}
         </ScrollView>
 
-        {/* Products */}
+        {/* ── PRODUCTS ───────────────────────────── */}
         <View style={styles.productHeader}>
           <Text style={[styles.sectionTitle, { color: colors.headline }]}>
-            All Products
+            {selectedBranch ? `${selectedBranch.name} Products` : "All Products"}
           </Text>
           <Text style={[styles.resultText, { color: colors.muted }]}>
             {filtered.length} products
@@ -331,7 +448,9 @@ const Products = () => {
                 <View style={styles.stockRow}>
                   <Star size={12} color="#FF6720" fill="#FF6720" />
                   <Text style={[styles.stockText, { color: colors.muted }]}>
-                    {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                    {product.stock > 0
+                      ? `${product.stock} in stock`
+                      : "Out of stock"}
                   </Text>
                 </View>
 
@@ -343,15 +462,25 @@ const Products = () => {
           ))}
         </View>
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !loading && (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>🔍</Text>
             <Text style={[styles.emptyTitle, { color: colors.headline }]}>
               No products found
             </Text>
             <Text style={[styles.emptyText, { color: colors.muted }]}>
-              Try searching for something else.
+              {selectedBranch
+                ? `${selectedBranch.name} has no products matching your filter yet.`
+                : "Try searching for something else."}
             </Text>
+            {selectedBranchId !== ALL_BRANCHES_ID && (
+              <Pressable
+                onPress={() => setSelectedBranchId(ALL_BRANCHES_ID)}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>View All Branches</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </ScrollView>
@@ -371,10 +500,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
+  loadingText: { marginTop: 12, fontSize: 14 },
 
   errorText: {
     fontSize: 15,
@@ -390,18 +516,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#007A53",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 12,
   },
 
-  retryText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
+  retryText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
-  content: {
-    padding: 20,
-    paddingBottom: 35,
-  },
+  content: { padding: 20, paddingBottom: 35 },
 
   header: {
     flexDirection: "row",
@@ -410,15 +530,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  smallTitle: {
-    fontSize: 14,
-    marginBottom: 3,
-  },
+  smallTitle: { fontSize: 14, marginBottom: 3 },
 
-  title: {
-    fontSize: 25,
-    fontWeight: "800",
-  },
+  title: { fontSize: 25, fontWeight: "800" },
 
   cartButton: {
     width: 46,
@@ -441,11 +555,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  cartBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "800",
-  },
+  cartBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
 
   searchContainer: {
     height: 53,
@@ -454,26 +564,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 22,
   },
 
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    marginLeft: 10,
-  },
+  searchInput: { flex: 1, fontSize: 14, marginLeft: 10 },
 
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
+  sectionTitle: { fontSize: 18, fontWeight: "800" },
 
-  categoryList: {
+  filterList: {
     gap: 9,
     paddingTop: 13,
-    paddingBottom: 27,
+    paddingBottom: 18,
   },
 
+  // Branch chips
+  branchChip: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  branchChipText: { fontSize: 13, fontWeight: "600" },
+
+  branchNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 18,
+  },
+
+  branchNoticeText: { fontSize: 12, flex: 1 },
+
+  // Category chips
   categoryButton: {
     height: 38,
     paddingHorizontal: 17,
@@ -483,10 +613,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  categoryText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  categoryText: { fontSize: 13, fontWeight: "600" },
 
   productHeader: {
     flexDirection: "row",
@@ -495,9 +622,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  resultText: {
-    fontSize: 12,
-  },
+  resultText: { fontSize: 12 },
 
   productGrid: {
     flexDirection: "row",
@@ -550,11 +675,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
 
-  outOfStockText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "800",
-  },
+  outOfStockText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
 
   productInfo: {
     paddingHorizontal: 3,
@@ -562,15 +683,9 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
   },
 
-  productCategory: {
-    fontSize: 11,
-    marginBottom: 3,
-  },
+  productCategory: { fontSize: 11, marginBottom: 3 },
 
-  productName: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  productName: { fontSize: 14, fontWeight: "700" },
 
   stockRow: {
     flexDirection: "row",
@@ -579,15 +694,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  stockText: {
-    fontSize: 11,
-  },
+  stockText: { fontSize: 11 },
 
-  price: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginTop: 7,
-  },
+  price: { fontSize: 16, fontWeight: "800", marginTop: 7 },
 
   emptyContainer: {
     alignItems: "center",
@@ -595,20 +704,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
 
-  emptyEmoji: {
-    fontSize: 42,
-    marginBottom: 12,
-  },
+  emptyEmoji: { fontSize: 42, marginBottom: 12 },
 
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
+  emptyTitle: { fontSize: 18, fontWeight: "800" },
 
-  emptyText: {
-    fontSize: 13,
-    marginTop: 5,
-  },
+  emptyText: { fontSize: 13, marginTop: 5, textAlign: "center", maxWidth: 260 },
 });
 
 export default Products;

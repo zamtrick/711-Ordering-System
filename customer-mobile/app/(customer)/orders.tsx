@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import {
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import api from "@/api/axios";
 
 // --------------------------------------------------
@@ -102,11 +103,15 @@ const Orders = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
+      console.log("[Orders] Fetching GET /orders...");
       const response = await api.get("/orders");
+      console.log("[Orders] Response status:", response.status);
+      console.log("[Orders] Response data keys:", Object.keys(response.data ?? {}));
+      console.log("[Orders] orders array length:", (response.data?.orders ?? []).length);
+      console.log("[Orders] Full response:", JSON.stringify(response.data));
       setOrders(response.data?.orders ?? []);
     } catch (err: any) {
-      console.log("Fetch orders error:", err);
-
+      console.log("[Orders] FETCH ERROR:", err?.response?.status, err?.response?.data ?? err?.message);
       if (err?.response?.status === 401) {
         router.replace("/(auth)/login");
       }
@@ -115,10 +120,13 @@ const Orders = () => {
     }
   }, []);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
-    fetchOrders();
-  }, [fetchOrders]);
+  // Re-fetch every time this screen comes into focus so a freshly placed
+  // order shows up immediately without requiring a manual refresh.
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [fetchOrders]),
+  );
 
   // --------------------------------------------------
   // CANCEL ORDER

@@ -9,6 +9,8 @@ import Products from "@/pages/Products";
 import Categories from "@/pages/Categories";
 import Riders from "@/pages/Riders";
 import Customers from "@/pages/Customers";
+import BranchInventory from "@/pages/BranchInventory";
+import Chat from "@/pages/Chat";
 import Orders from "@/pages/Orders";
 import type { JSX } from "react";
 
@@ -32,11 +34,13 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/branches" element={<Branches />} />
+        <Route path="/branch-inventory" element={<BranchInventory />} />
         <Route path="/products" element={<Products />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/riders" element={<Riders />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/chat" element={<Chat />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

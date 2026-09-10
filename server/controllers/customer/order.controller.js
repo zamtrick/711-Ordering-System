@@ -34,7 +34,7 @@ export const createOrder = async (req, res) => {
     // Get the authenticated user's ID from the JWT
     const user = req.user.userId;
 
-    const { branch } = req.body;
+    const { branch, deliveryAddress: clientDeliveryAddress } = req.body;
 
     /*
     |--------------------------------------------------------------------------
@@ -114,7 +114,11 @@ export const createOrder = async (req, res) => {
     const customer = await Customer.findOne({ user });
     let deliveryAddress = "";
 
-    if (customer && customer.addresses.length > 0) {
+    // Prefer the address explicitly chosen by the customer during checkout.
+    // Fall back to their saved default address if none was provided.
+    if (clientDeliveryAddress && typeof clientDeliveryAddress === "string" && clientDeliveryAddress.trim()) {
+      deliveryAddress = clientDeliveryAddress.trim();
+    } else if (customer && customer.addresses.length > 0) {
       const defaultAddr = customer.addresses.find((a) => a.isDefault);
       deliveryAddress = defaultAddr ? defaultAddr.address : customer.addresses[0].address;
     }
