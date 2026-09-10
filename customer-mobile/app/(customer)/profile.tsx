@@ -101,28 +101,30 @@ const Profile = () => {
   const [editAddressVisible, setEditAddressVisible] = useState(false);
   const [editAddressItemId, setEditAddressItemId] = useState<string | null>(null);
 
-  // --------------------------------------------------
+// --------------------------------------------------
   // FETCH PROFILE
   // --------------------------------------------------
 
-  const fetchProfile = async () => {
-    try {
-      const response = await api.get("/customer/profile/me");
-      if (response.data?.data) {
-        setProfile(response.data.data);
-      }
-    } catch (error: any) {
-      console.log("Get profile error:", error);
-      if (error?.response?.status === 401) {
-        router.replace("/(auth)/login");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchProfile();
+    let mounted = true;
+    async function loadProfile() {
+      try {
+        const res = await api.get("/customer/profile/me");
+        const profileData = res.data?.data;
+        if (profileData && mounted) {
+          setProfile(profileData);
+        }
+      } catch (err: any) {
+        console.log("Get profile error:", err);
+        if (err?.response?.status === 401) {
+          router.replace("/(auth)/login");
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadProfile();
+    return () => { mounted = false; };
   }, []);
 
   // --------------------------------------------------

@@ -41,7 +41,19 @@ export default function Sidebar() {
 
   // Live unread count — shown on the Chat nav item
   const [unreadChat, setUnreadChat] = useState(0);
+  // Pending customer orders — shown on the Orders nav item
+  const [pendingOrders, setPendingOrders] = useState(0);
   const socketRef = useRef<Socket | null>(null);
+
+  const refreshPendingOrders = () => {
+    api
+      .get("/orders")
+      .then((res) => {
+        const list: { status?: string }[] = res.data?.orders ?? [];
+        setPendingOrders(list.filter((o) => o.status === "pending").length);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     // Seed unread count from REST
@@ -53,6 +65,8 @@ export default function Sidebar() {
       })
       .catch(() => {});
 
+    refreshPendingOrders();
+
     // Open a socket just for badge updates — the Chat page manages its own socket
     const socket = io(socketURL, {
       withCredentials: true,
@@ -60,7 +74,7 @@ export default function Sidebar() {
     });
     socketRef.current = socket;
 
-    socket.on("conversation_updated", (conv: { unreadAdmin?: number; _id?: string }) => {
+    socket.on("conversation_updated", () => {
       // Re-fetch totals on any update for simplicity
       api
         .get("/chat/conversations")
@@ -69,6 +83,12 @@ export default function Sidebar() {
           setUnreadChat(convs.reduce((sum, c) => sum + (c.unreadAdmin ?? 0), 0));
         })
         .catch(() => {});
+    });
+
+    // Customer → admin: new order, item change, or cancellation.
+    // Recompute the pending badge so it stays correct without polling.
+    socket.on("order_updated", () => {
+      refreshPendingOrders();
     });
 
     return () => {
@@ -125,6 +145,11 @@ export default function Sidebar() {
             {label === "Chat" && unreadChat > 0 && (
               <span className="ml-auto text-[10px] font-bold bg-[#DA291C] text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                 {unreadChat > 99 ? "99+" : unreadChat}
+              </span>
+            )}
+            {label === "Orders" && pendingOrders > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-[#FF6720] text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {pendingOrders > 99 ? "99+" : pendingOrders}
               </span>
             )}
           </NavLink>

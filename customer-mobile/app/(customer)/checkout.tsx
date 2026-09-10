@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,13 +10,10 @@ import {
   Alert,
   TextInput,
   Modal,
-  KeyboardAvoidingView,
-  Platform,
   Image,
 } from "react-native";
 import {
   ChevronLeft,
-  ChevronRight,
   MapPin,
   Store,
   Clock,
@@ -122,38 +119,38 @@ export default function Checkout() {
   // LOAD DATA
   // --------------------------------------------------
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [branchRes, profileRes, feeRes] = await Promise.all([
-        api.get("/customer/branches"),
-        api.get("/customer/profile/me"),
-        api.get("/settings/delivery-fee"),
-      ]);
-
-      const branchList: Branch[] = branchRes.data?.data ?? [];
-      setBranches(branchList);
-      if (branchList.length > 0) setSelectedBranch(branchList[0]);
-
-      const addresses: SavedAddress[] =
-        profileRes.data?.data?.addresses ?? [];
-      setSavedAddresses(addresses);
-      const def = addresses.find((a) => a.isDefault) ?? addresses[0] ?? null;
-      setSelectedAddress(def);
-
-      const fee = feeRes.data?.data?.fee;
-      if (typeof fee === "number") setDeliveryFee(fee);
-    } catch (err: any) {
-      console.log("Checkout load error:", err);
-      if (err?.response?.status === 401) router.replace("/(auth)/login");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [branchRes, profileRes, feeRes] = await Promise.all([
+          api.get("/customer/branches"),
+          api.get("/customer/profile/me"),
+          api.get("/settings/delivery-fee"),
+        ]);
+
+        const branchList: Branch[] = branchRes.data?.data ?? [];
+        if (mounted) setBranches(branchList);
+        if (branchList.length > 0 && mounted) setSelectedBranch(branchList[0]);
+
+        const addresses: SavedAddress[] =
+          profileRes.data?.data?.addresses ?? [];
+        if (mounted) setSavedAddresses(addresses);
+        const def = addresses.find((a) => a.isDefault) ?? addresses[0] ?? null;
+        if (mounted) setSelectedAddress(def);
+
+        const fee = feeRes.data?.data?.fee;
+        if (typeof fee === "number" && mounted) setDeliveryFee(fee);
+      } catch (err: any) {
+        console.log("Checkout load error:", err);
+        if (err?.response?.status === 401) router.replace("/(auth)/login");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
 
   // --------------------------------------------------
   // PLACE ORDER

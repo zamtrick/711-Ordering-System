@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -123,34 +123,33 @@ export default function Chat() {
   // LOAD CONVERSATION + HISTORY
   // --------------------------------------------------
 
-  const loadConversation = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      // Get or create the customer's conversation
-      const convRes = await api.get("/chat/conversation");
-      const convo: Conversation = convRes.data?.data;
-      if (!convo?._id) throw new Error("No conversation");
-
-      setConversation(convo);
-      convIdRef.current = convo._id;
-
-      // Fetch message history
-      const msgRes = await api.get(
-        `/chat/conversations/${convo._id}/messages`,
-      );
-      setMessages(msgRes.data?.data ?? []);
-    } catch (err: any) {
-      console.log("Load chat error:", err);
-      if (err?.response?.status === 401) router.replace("/(auth)/login");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadConversation();
-  }, [loadConversation]);
+    let mounted = true;
+    async function load() {
+      try {
+        // Get or create the customer's conversation
+        const convRes = await api.get("/chat/conversation");
+        const convo: Conversation = convRes.data?.data;
+        if (!convo?._id) throw new Error("No conversation");
+
+        if (mounted) setConversation(convo);
+        convIdRef.current = convo?._id ?? "";
+
+        // Fetch message history
+        const msgRes = await api.get(
+          `/chat/conversations/${convo?._id}/messages`,
+        );
+        if (mounted) setMessages(msgRes.data?.data ?? []);
+      } catch (err: any) {
+        console.log("Load chat error:", err);
+        if (err?.response?.status === 401) router.replace("/(auth)/login");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, []);
 
   // --------------------------------------------------
   // JOIN CONVERSATION ROOM ONCE BOTH ARE READY

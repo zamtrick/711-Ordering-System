@@ -6,6 +6,7 @@ import User from "../../models/User.js";
 import Customer from "../../models/Customer.js";
 import { getCurrentDeliveryFee } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
+import { emitOrderUpdated } from "../../socket.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -164,6 +165,9 @@ export const createOrder = async (req, res) => {
         totalAmount: createdOrder.totalAmount,
       }).catch(() => {});
     }
+
+    // Push to admins live (admin_room) + back to the customer
+    emitOrderUpdated(createdOrder);
 
     return res.status(201).json({
       success: true,
@@ -453,6 +457,8 @@ export const cancelOrder = async (req, res) => {
         totalAmount: cancelledOrder.totalAmount,
       }).catch(() => {});
     }
+
+    emitOrderUpdated(cancelledOrder);
 
     return res.status(200).json({
       success: true,

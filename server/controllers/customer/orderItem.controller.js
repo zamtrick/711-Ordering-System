@@ -2,6 +2,22 @@ import mongoose from "mongoose";
 import OrderItem from "../../models/OrderItem.js";
 import Order from "../../models/Order.js";
 import Product from "../../models/Product.js";
+import { emitOrderUpdated } from "../../socket.js";
+
+// Emit the fully-populated order so admin/customer listeners stay in sync
+// without an extra refetch.
+const emitFullOrder = async (orderId) => {
+  try {
+    const full = await Order.findById(orderId)
+      .populate("user", "firstname lastname email")
+      .populate("branch")
+      .populate({ path: "orderItems", populate: { path: "product" } })
+      .populate("payment");
+    if (full) emitOrderUpdated(full);
+  } catch {
+    // never break the request path on socket errors
+  }
+};
 
 // ==========================================
 // Helpers
@@ -157,6 +173,10 @@ export const createOrderItem = async (req, res) => {
       "product",
     );
 
+    // Checkout adds items one-by-one — push each update live so the admin
+    // Orders board and the customer's tracker stay current.
+    emitFullOrder(orderId).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: "Order item added successfully",
@@ -294,6 +314,8 @@ export const updateOrderItemById = async (req, res) => {
 
     const updated = await OrderItem.findById(orderItem._id).populate("product");
 
+    emitFullOrder(orderId).catch(() => {});
+
     return res.status(200).json({
       success: true,
       message: "Order item updated",
@@ -353,6 +375,8 @@ export const deleteOrderItemById = async (req, res) => {
     });
 
     await orderItem.deleteOne();
+
+    emitFullOrder(orderId).catch(() => {});
 
     return res.status(200).json({
       success: true,

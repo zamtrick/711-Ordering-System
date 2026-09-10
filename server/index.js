@@ -37,6 +37,7 @@ import manageCustomerBranches from "./routes/customer/branch.routes.js";
 import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
 import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
+import manageAdminOrders from "./routes/admin/order.routes.js";
 
 dotenv.config();
 const app = express();
@@ -163,6 +164,7 @@ app.use(
   manageAdminBranches,
 );
 app.use("/api/admin/profile", auth, authorize("admin"), manageAdminProfile);
+app.use("/api/admin/orders", auth, authorize("admin", "superadmin"), manageAdminOrders);
 
 //manage by customer
 app.use("/api/customer/profile", auth, manageProfileCustomer);

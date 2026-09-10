@@ -3,6 +3,7 @@ import Rider from "../../models/Rider.js";
 import Order from "../../models/Order.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyDeliveryAssigned, notifyDeliveryCompleted } from "../../services/email.service.js";
+import { emitOrderUpdated } from "../../socket.js";
 
 /* -------------------------------------------------------------------------- */
 /* GET RIDER PROFILE                                                          */
@@ -313,6 +314,8 @@ export const acceptDelivery = async (req, res) => {
       }).catch(() => {});
     }
 
+    emitOrderUpdated(updated);
+
     return res.status(200).json({
       success: true,
       message: "Delivery accepted",
@@ -406,6 +409,8 @@ export const updateDeliveryStatus = async (req, res) => {
         totalAmount: updated.totalAmount,
       }).catch(() => {});
     }
+
+    emitOrderUpdated(updated);
 
     return res.status(200).json({
       success: true,

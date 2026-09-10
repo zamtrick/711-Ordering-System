@@ -194,6 +194,15 @@ const CustomerTabs = () => {
           headerShown: false,
         }}
       />
+
+      {/* Hidden screen — order detail, no tab button */}
+      <Tabs.Screen
+        name="orders/[id]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 };

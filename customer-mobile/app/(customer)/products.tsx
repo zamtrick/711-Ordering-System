@@ -17,7 +17,6 @@ import {
   Star,
   PackageSearch,
   Store,
-  ChevronDown,
 } from "lucide-react-native";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";

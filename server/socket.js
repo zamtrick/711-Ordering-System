@@ -11,6 +11,30 @@ import Message from "./models/Message.js";
 // admin_room          — all connected admins join this
 // conv:{convId}       — both sides join when the conversation is open
 
+// --------------------------------------------------
+// Shared io instance + order update emitter
+// --------------------------------------------------
+
+let ioInstance = null;
+
+export const getIo = () => ioInstance;
+
+export const emitOrderUpdated = (order) => {
+  try {
+    if (!ioInstance || !order) return;
+    const rawUser = order.user?._id ?? order.user;
+    const userId = rawUser?.toString?.() ?? rawUser;
+    const payload =
+      typeof order.toJSON === "function" ? order.toJSON() : order;
+    if (userId) {
+      ioInstance.to(`customer:${userId}`).emit("order_updated", payload);
+    }
+    ioInstance.to("admin_room").emit("order_updated", payload);
+  } catch {
+    // never break the request path on socket errors
+  }
+};
+
 export const initSocket = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
@@ -169,5 +193,6 @@ export const initSocket = (httpServer) => {
     });
   });
 
+  ioInstance = io;
   return io;
 };

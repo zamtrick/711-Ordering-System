@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search, Eye } from "lucide-react";
+import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
@@ -15,20 +16,100 @@ type Order = {
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
 };
 
+const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
+
 export default function Orders() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, error: toastError } = useToast();
+  const { toasts, removeToast, success: toastSuccess, error: toastError } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
+  const [live, setLive] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+
+  const NEXT_ACTIONS: Record<string, { status: string; label: string; className: string }[]> = {
+    pending: [
+      { status: "processing", label: "Accept", className: "bg-[#007A53] hover:bg-[#006045] text-white" },
+      { status: "cancelled", label: "Cancel", className: "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C] hover:bg-[#FFE0E0]" },
+    ],
+    processing: [
+      { status: "completed", label: "Complete", className: "bg-[#007A53] hover:bg-[#006045] text-white" },
+      { status: "cancelled", label: "Cancel", className: "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C] hover:bg-[#FFE0E0]" },
+      { status: "refunded", label: "Refund", className: "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#555] dark:text-[#A0A0A0] hover:bg-[#E5E5E5]" },
+    ],
+    completed: [
+      { status: "refunded", label: "Refund", className: "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#555] dark:text-[#A0A0A0] hover:bg-[#E5E5E5]" },
+    ],
+    cancelled: [],
+    refunded: [],
+  };
+
+  const handleStatusUpdate = async (orderId: string, status: string) => {
+    try {
+      setUpdating(true);
+      const res = await api.patch(`/admin/orders/${orderId}/status`, { status });
+      const updated: Order = res.data?.data;
+      if (updated?._id) {
+        setOrders((prev) => prev.map((o) => (o._id === updated._id ? { ...o, ...updated } : o)));
+        setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
+        toastSuccess(`Order → ${status}`);
+      }
+    } catch (err: any) {
+      toastError(err?.response?.data?.message ?? "Failed to update order.");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try { const res = await api.get("/orders"); setOrders(res.data?.orders ?? []); } catch { toastError("Failed."); } finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); }, []);
+
+  // Live customer → admin updates: new orders, item changes, cancellations.
+  // The server emits `order_updated` to admin_room on every mutation.
+  useEffect(() => {
+    const socket = io(socketURL, {
+      withCredentials: true,
+      transports: ["websocket"],
+    });
+    socketRef.current = socket;
+
+    socket.on("connect", () => setLive(true));
+    socket.on("disconnect", () => setLive(false));
+
+    socket.on("order_updated", (updated: Order) => {
+      if (!updated?._id) return;
+      setOrders((prev) => {
+        const exists = prev.some((o) => o._id === updated._id);
+        if (!exists) {
+          const name = updated.user ? `${updated.user.firstname} ${updated.user.lastname}` : "Customer";
+          toastSuccess(`New order from ${name} — ₱${updated.totalAmount}`);
+          return [updated, ...prev];
+        }
+        const prevStatus = prev.find((o) => o._id === updated._id)?.status;
+        if (prevStatus && prevStatus !== updated.status) {
+          if (updated.status === "cancelled") {
+            toastError(`Order #${updated._id.slice(-6).toUpperCase()} cancelled by customer`);
+          } else {
+            toastSuccess(`Order #${updated._id.slice(-6).toUpperCase()} → ${updated.status}`);
+          }
+        }
+        return prev.map((o) => (o._id === updated._id ? { ...o, ...updated } : o));
+      });
+      // Keep the open detail modal in sync too
+      setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
 
   const filtered = orders.filter((o) => {
     const name = o.user ? `${o.user.firstname} ${o.user.lastname}`.toLowerCase() : "";
@@ -51,9 +132,19 @@ export default function Orders() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#232323] dark:text-white">Orders</h1>
-        <p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">View and manage customer orders</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#232323] dark:text-white">Orders</h1>
+          <p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">View and manage customer orders</p>
+        </div>
+        <span
+          className={`flex items-center gap-2 text-xs font-semibold px-2.5 py-1.5 rounded-full ${
+            live ? "bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]" : "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#777]"
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full ${live ? "bg-[#007A53]" : "bg-[#999]"}`} />
+          {live ? "Live" : "Connecting…"}
+        </span>
       </div>
 
       <div className="flex gap-3 mb-4">
@@ -134,6 +225,21 @@ export default function Orders() {
                 <span className={`font-bold ${isDark ? "text-white" : "text-[#232323]"}`}>Total</span>
                 <span className="font-bold text-[#007A53] dark:text-[#4CAF50]">₱{viewOrder.totalAmount}</span>
               </div>
+              {/* Admin actions — only valid transitions for the current status */}
+              {(NEXT_ACTIONS[viewOrder.status] ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {(NEXT_ACTIONS[viewOrder.status] ?? []).map((action) => (
+                    <button
+                      key={action.status}
+                      disabled={updating}
+                      onClick={() => handleStatusUpdate(viewOrder._id, action.status)}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${action.className}`}
+                    >
+                      {updating ? "Updating…" : action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,8 +18,8 @@ import {
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
-import { router } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useSocket } from "@/context/SocketContext";
 import api from "@/api/axios";
 
 // --------------------------------------------------
@@ -96,6 +96,8 @@ const Orders = () => {
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  const { socket } = useSocket();
+
   // --------------------------------------------------
   // FETCH ORDERS
   // --------------------------------------------------
@@ -103,12 +105,7 @@ const Orders = () => {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      console.log("[Orders] Fetching GET /orders...");
       const response = await api.get("/orders");
-      console.log("[Orders] Response status:", response.status);
-      console.log("[Orders] Response data keys:", Object.keys(response.data ?? {}));
-      console.log("[Orders] orders array length:", (response.data?.orders ?? []).length);
-      console.log("[Orders] Full response:", JSON.stringify(response.data));
       setOrders(response.data?.orders ?? []);
     } catch (err: any) {
       console.log("[Orders] FETCH ERROR:", err?.response?.status, err?.response?.data ?? err?.message);
@@ -127,6 +124,24 @@ const Orders = () => {
       fetchOrders();
     }, [fetchOrders]),
   );
+
+  // Live status updates pushed by the server (rider accept / delivery /
+  // customer cancel). Merge into the list without a full refetch.
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (updated: Order) => {
+      if (!updated?._id) return;
+      setOrders((prev) => {
+        const exists = prev.some((o) => o._id === updated._id);
+        if (!exists) return [updated, ...prev];
+        return prev.map((o) => (o._id === updated._id ? { ...o, ...updated } : o));
+      });
+    };
+    socket.on("order_updated", handler);
+    return () => {
+      socket.off("order_updated", handler);
+    };
+  }, [socket]);
 
   // --------------------------------------------------
   // CANCEL ORDER
@@ -262,8 +277,14 @@ const Orders = () => {
               order.status === "pending" || order.status === "processing";
 
             return (
-              <View
+              <Pressable
                 key={order._id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(customer)/orders/[id]",
+                    params: { id: order._id },
+                  })
+                }
                 style={[
                   styles.orderCard,
                   { backgroundColor: colors.surface, borderColor: colors.border },
@@ -365,7 +386,13 @@ const Orders = () => {
                   {order.status === "completed" ? (
                     <Pressable
                       style={[styles.actionButton, { borderColor: "#007A53" }]}
-                      onPress={() => router.push("/(customer)/products")}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        router.push({
+                          pathname: "/(customer)/orders/[id]",
+                          params: { id: order._id },
+                        });
+                      }}
                     >
                       <RotateCcw size={16} color="#007A53" />
                       <Text style={[styles.actionText, { color: "#007A53" }]}>
@@ -381,7 +408,10 @@ const Orders = () => {
                           opacity: cancelling ? 0.6 : 1,
                         },
                       ]}
-                      onPress={() => handleCancel(order._id)}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        handleCancel(order._id);
+                      }}
                       disabled={cancelling}
                     >
                       {cancelling ? (
@@ -399,13 +429,13 @@ const Orders = () => {
                   ) : (
                     <View style={styles.viewOrder}>
                       <Text style={[styles.viewOrderText, { color: "#007A53" }]}>
-                        {STATUS_LABEL[order.status]}
+                        View details
                       </Text>
                       <ChevronRight size={17} color="#007A53" />
                     </View>
                   )}
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </View>
