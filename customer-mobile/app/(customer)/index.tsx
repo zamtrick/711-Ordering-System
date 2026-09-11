@@ -34,6 +34,7 @@ import { useCart } from "@/context/CartContext";
 type Category = {
   _id: string;
   name: string;
+  image?: string;
 };
 
 type Product = {
@@ -110,7 +111,7 @@ const Home = () => {
         const c = p.categoryId;
         if (c?._id && !seen.has(c._id)) {
           seen.add(c._id);
-          uniqueCats.push({ _id: c._id, name: c.name });
+          uniqueCats.push({ _id: c._id, name: c.name, image: c.image });
         }
       }
 
@@ -371,7 +372,15 @@ const Home = () => {
                 },
               ]}
             >
-              <Text style={styles.categoryIcon}>{iconFor(category.name)}</Text>
+              {category.image ? (
+                <Image
+                  source={{ uri: category.image }}
+                  style={styles.categoryImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={styles.categoryIcon}>{iconFor(category.name)}</Text>
+              )}
 
               <Text
                 style={[styles.categoryName, { color: colors.headline }]}
@@ -714,6 +723,13 @@ const styles = StyleSheet.create({
 
   categoryIcon: {
     fontSize: 28,
+    marginBottom: 7,
+  },
+
+  categoryImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginBottom: 7,
   },
 

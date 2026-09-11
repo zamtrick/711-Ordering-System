@@ -6,11 +6,13 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "customermobile",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F8F5F2",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -25,6 +27,14 @@
     },
     "plugins": [
       "expo-router",
+      "expo-system-ui",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow customer-mobile to use your location to pick your delivery address.",
+          "locationAlwaysAndWhenInUsePermission": "Allow customer-mobile to use your location to pick your delivery address."
+        }
+      ],
       [
         "expo-splash-screen",
         {

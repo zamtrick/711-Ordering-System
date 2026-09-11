@@ -39,6 +39,12 @@ type Branch = {
 type Category = {
   _id: string;
   name: string;
+  image?: string;
+};
+
+type CategoryFilter = {
+  name: string;
+  image?: string;
 };
 
 type Product = {
@@ -66,7 +72,7 @@ const Products = () => {
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(params.category ?? "All");
-  const [categories, setCategories] = useState<string[]>(["All"]);
+  const [categories, setCategories] = useState<CategoryFilter[]>([{ name: "All" }]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -115,16 +121,17 @@ const Products = () => {
         const data: Product[] = productRes.data?.data ?? [];
         setProducts(data);
 
-        const unique = Array.from(
-          new Set(
-            data
-              .map((p) => p.categoryId?.name)
-              .filter((n): n is string => Boolean(n)),
-          ),
-        );
-        setCategories(["All", ...unique]);
+        const seen = new Map<string, CategoryFilter>();
+        for (const p of data) {
+          const c = p.categoryId;
+          if (c?.name && !seen.has(c.name)) {
+            seen.set(c.name, { name: c.name, image: c.image });
+          }
+        }
+        const unique = [...seen.values()];
+        setCategories([{ name: "All" }, ...unique]);
         setSelectedCategory((prev) =>
-          prev === "All" || unique.includes(prev) ? prev : "All",
+          prev === "All" || seen.has(prev) ? prev : "All",
         );
       } catch (err: any) {
         if (cancelled) return;
@@ -353,11 +360,11 @@ const Products = () => {
           contentContainerStyle={styles.filterList}
         >
           {categories.map((cat) => {
-            const active = selectedCategory === cat;
+            const active = selectedCategory === cat.name;
             return (
               <Pressable
-                key={cat}
-                onPress={() => setSelectedCategory(cat)}
+                key={cat.name}
+                onPress={() => setSelectedCategory(cat.name)}
                 style={[
                   styles.categoryButton,
                   {
@@ -366,13 +373,20 @@ const Products = () => {
                   },
                 ]}
               >
+                {cat.image ? (
+                  <Image
+                    source={{ uri: cat.image }}
+                    style={styles.categoryChipImage}
+                    resizeMode="cover"
+                  />
+                ) : null}
                 <Text
                   style={[
                     styles.categoryText,
                     { color: active ? "#FFFFFF" : colors.headline },
                   ]}
                 >
-                  {cat}
+                  {cat.name}
                 </Text>
               </Pressable>
             );
@@ -608,8 +622,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     borderRadius: 20,
     borderWidth: 1,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 7,
+  },
+
+  categoryChipImage: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
 
   categoryText: { fontSize: 13, fontWeight: "600" },

@@ -19,7 +19,7 @@ router.get("/", async (req, res) => {
     if (search) query.name = { $regex: search, $options: "i" };
 
     const products = await Product.find(query)
-      .populate("categoryId", "name")
+      .populate("categoryId", "name image")
       .sort({ createdAt: -1 });
 
     // ── Branch filter ──────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ router.get("/:id", async (req, res) => {
     const product = await Product.findOne({
       _id: req.params.id,
       isActive: true,
-    }).populate("categoryId", "name");
+    }).populate("categoryId", "name image");
 
     if (!product) {
       return res.status(404).json({

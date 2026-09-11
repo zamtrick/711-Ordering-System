@@ -6,21 +6,61 @@ import * as SplashScreen from "expo-splash-screen";
 import { CartProvider } from "@/context/CartContext";
 import { SettingsProvider, SettingsContext } from "@/context/SettingsContext";
 import AppSplash from "@/components/AppSplash";
+import * as SystemUI from "expo-system-ui";
+
+import { LightTheme, DarkTheme } from "@/constants/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// Reads the user's theme preference and renders the correct StatusBar style.
+function resolveScheme(
+  themePreference: "system" | "light" | "dark" | undefined,
+  systemScheme: string | null | undefined
+) {
+  if (!themePreference || themePreference === "system")
+    return systemScheme === "dark" ? "dark" : "light";
+  return themePreference;
+}
+
+// Reads the user's theme preference and renders the correct StatusBar.
 // Must be rendered inside SettingsProvider.
+// SDK 57 is edge-to-edge: the status bar is transparent and the app draws
+// under it, so there is no backgroundColor prop. The bar's background is
+// whatever the root view paints behind it (ThemedRoot below + SystemUI
+// root-view background). Style only controls icon/text color.
 function ThemedStatusBar() {
   const systemScheme = useColorScheme();
   const settings = useContext(SettingsContext);
-  const resolved =
-    !settings || settings.themePreference === "system"
-      ? systemScheme
-      : settings.themePreference;
+  const resolved = resolveScheme(settings?.themePreference, systemScheme);
   // "dark" style = dark icons (for light backgrounds)
   // "light" style = light icons (for dark backgrounds)
   return <StatusBar style={resolved === "dark" ? "light" : "dark"} />;
+}
+
+function ThemedRoot({ bootReady }: { bootReady: boolean }) {
+  const systemScheme = useColorScheme();
+  const settings = useContext(SettingsContext);
+  const resolved = resolveScheme(settings?.themePreference, systemScheme);
+  const theme = resolved === "dark" ? DarkTheme : LightTheme;
+
+  // Keep the native window background in sync with the theme so the
+  // translucent status-bar area never shows a black flash.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(theme.colors.background).catch(() => {});
+  }, [theme.colors.background]);
+
+  return (
+    <View
+      style={[
+        bootReady ? styles.flex : styles.hidden,
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <Stack>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(customer)" options={{ headerShown: false }} />
+      </Stack>
+    </View>
+  );
 }
 
 export default function RootLayout() {
@@ -63,12 +103,7 @@ export default function RootLayout() {
 
         {!bootReady && <AppSplash />}
 
-        <View style={bootReady ? styles.flex : styles.hidden}>
-          <Stack>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(customer)" options={{ headerShown: false }} />
-          </Stack>
-        </View>
+        <ThemedRoot bootReady={bootReady} />
       </CartProvider>
     </SettingsProvider>
   );

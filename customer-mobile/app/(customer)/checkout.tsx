@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  TextInput,
   Modal,
   Image,
 } from "react-native";
@@ -28,6 +27,9 @@ import { router } from "expo-router";
 
 import { LightTheme, DarkTheme } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
+import DeliveryMapPicker, {
+  type DeliveryCoords,
+} from "@/components/DeliveryMapPicker";
 import { useCart } from "@/context/CartContext";
 import api from "@/api/axios";
 
@@ -99,6 +101,7 @@ export default function Checkout() {
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
   const [customAddress, setCustomAddress] = useState("");
+  const [customCoords, setCustomCoords] = useState<DeliveryCoords | null>(null);
   const [useCustomAddress, setUseCustomAddress] = useState(false);
 
   // ── modals ───────────────────────────────────────
@@ -114,6 +117,16 @@ export default function Checkout() {
   const resolvedDeliveryAddress = useCustomAddress
     ? customAddress.trim()
     : selectedAddress?.address ?? "";
+
+  // Map picker auto-fills the text field via reverse geocoding. Manual edits
+  // keep the last known pin coords so the order still carries them.
+  const handleMapAddress = useCallback(
+    (address: string, coords: DeliveryCoords | null) => {
+      setCustomAddress(address);
+      if (coords) setCustomCoords(coords);
+    },
+    []
+  );
 
   // --------------------------------------------------
   // LOAD DATA
@@ -175,6 +188,11 @@ export default function Checkout() {
       const orderRes = await api.post("/orders", {
         branch: selectedBranch._id,
         deliveryAddress: resolvedDeliveryAddress,
+        // Forward-compatible: backend currently stores the address string
+        // and ignores this until Order.deliveryLocation lands.
+        ...(useCustomAddress && customCoords
+          ? { deliveryLocation: customCoords }
+          : {}),
       });
       console.log("[Checkout] Create order response:", JSON.stringify(orderRes.data));
 
@@ -443,22 +461,11 @@ export default function Checkout() {
         </Pressable>
 
         {useCustomAddress && (
-          <View
-            style={[
-              styles.customInputWrap,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <MapPin size={18} color={colors.muted} />
-            <TextInput
-              value={customAddress}
-              onChangeText={setCustomAddress}
-              placeholder="Enter full delivery address…"
-              placeholderTextColor={colors.muted}
-              style={[styles.customInput, { color: colors.headline }]}
-              multiline
-            />
-          </View>
+          <DeliveryMapPicker
+            value={customAddress}
+            onChange={handleMapAddress}
+            colors={colors}
+          />
         )}
 
         {/* ── ORDER SUMMARY ────────────────────────── */}
