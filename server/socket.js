@@ -9,6 +9,7 @@ import Message from "./models/Message.js";
 // --------------------------------------------------
 // customer:{userId}   — the customer's private room
 // admin_room          — all connected admins join this
+// riders_room         — all connected riders join this
 // conv:{convId}       — both sides join when the conversation is open
 
 // --------------------------------------------------
@@ -30,6 +31,7 @@ export const emitOrderUpdated = (order) => {
       ioInstance.to(`customer:${userId}`).emit("order_updated", payload);
     }
     ioInstance.to("admin_room").emit("order_updated", payload);
+    ioInstance.to("riders_room").emit("order_updated", payload);
   } catch {
     // never break the request path on socket errors
   }
@@ -77,6 +79,12 @@ export const initSocket = (httpServer) => {
     // Customers join their own private room so the server can push to them
     if (role === "customer") {
       socket.join(`customer:${userId}`);
+    }
+
+    // Riders share one room for new/cancelled delivery broadcasts.
+    // Assignment-specific routing is done client-side via order.rider.
+    if (role === "rider") {
+      socket.join("riders_room");
     }
 
     // ── join_conversation ──────────────────────────

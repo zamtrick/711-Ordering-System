@@ -14,6 +14,7 @@ import Riders from "@/pages/Riders";
 import Customers from "@/pages/Customers";
 import Orders from "@/pages/Orders";
 import Settings from "@/pages/Settings";
+import Promos from "@/pages/Promos";
 import type { JSX } from "react";
 
 // Route guard: redirects to /login if not authenticated
@@ -59,12 +60,18 @@ function AppRoutes() {
         {/* Shared routes */}
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/riders" element={<Riders />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/settings" element={<Settings />} />
 
         {/* Superadmin-only routes */}
         {isSuperadmin && (
           <>
             <Route path="/branches" element={<Branches />} />
             <Route path="/admins" element={<Admins />} />
+            <Route path="/promos" element={<Promos />} />
             <Route path="/activity-log" element={<ActivityLog />} />
           </>
         )}
@@ -72,12 +79,7 @@ function AppRoutes() {
         {/* Admin-only routes */}
         {!isSuperadmin && (
           <>
-            <Route path="/products" element={<Products />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/riders" element={<Riders />} />
             <Route path="/customers" element={<Customers />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/settings" element={<Settings />} />
           </>
         )}
       </Route>

@@ -11,6 +11,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ToastContainer from "@/components/ui/Toast";
 import { usePagination } from "@/hooks/usePagination";
 import Pagination from "@/components/ui/Pagination";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 
 type Category = { _id: string; name: string; description: string; isActive: boolean; createdAt: string };
 
@@ -29,6 +30,8 @@ function SkeletonRow() {
 export default function Categories() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
+  const { can } = useAdminPermissions();
+  const readOnly = !can("canManageCategories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -99,8 +102,13 @@ export default function Categories() {
         <div>
           <h1 className="text-2xl font-bold text-[#232323] dark:text-white">Categories</h1>
           <p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">Manage product categories</p>
+          {readOnly && (
+            <p className="text-xs font-semibold text-[#B45309] bg-[#FEF3C7] dark:bg-[#3A2A0A] dark:text-[#FCD34D] px-2.5 py-1 rounded-full inline-block mt-2">
+              Read-only — managing categories is disabled by superadmin
+            </p>
+          )}
         </div>
-        <Button variant="primary" icon={<Plus size={16} />} onClick={() => { setName(""); setDescription(""); setEditCat(null); setShowForm(true); }}>Add Category</Button>
+        <Button variant="primary" icon={<Plus size={16} />} onClick={() => { setName(""); setDescription(""); setEditCat(null); setShowForm(true); }} disabled={readOnly}>Add Category</Button>
       </div>
 
       {/* Search */}

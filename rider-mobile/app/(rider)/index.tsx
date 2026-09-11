@@ -25,6 +25,7 @@ import { LightTheme, DarkTheme } from "@/constants/Theme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import { useAuth } from "@/context/AuthContext";
+import { useSocket } from "@/context/SocketContext";
 
 type Stats = {
   activeDeliveries: number;
@@ -56,6 +57,8 @@ const Home = () => {
   const [togglingAvailability, setTogglingAvailability] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
+  const { socket, connected } = useSocket();
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -79,6 +82,30 @@ const Home = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Live: new customer orders appear here instantly; orders taken by
+  // another rider or cancelled disappear without a manual refresh.
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (updated: Delivery) => {
+      if (!updated?._id) return;
+      const isAvailable =
+        updated.deliveryStatus === "unassigned" &&
+        (updated.status === "pending" || updated.status === "processing");
+      setDeliveries((prev) => {
+        const exists = prev.some((d) => d._id === updated._id);
+        if (isAvailable) {
+          if (exists) return prev.map((d) => (d._id === updated._id ? { ...d, ...updated } : d));
+          return [updated, ...prev];
+        }
+        return prev.filter((d) => d._id !== updated._id);
+      });
+    };
+    socket.on("order_updated", handler);
+    return () => {
+      socket.off("order_updated", handler);
+    };
+  }, [socket]);
 
   const toggleAvailability = async () => {
     if (!stats) return;
@@ -215,9 +242,17 @@ const Home = () => {
           <Text style={[styles.sectionTitle, { color: colors.headline }]}>
             Available Deliveries
           </Text>
-          <Text style={[styles.count, { color: colors.muted }]}>
-            {deliveries.length}
-          </Text>
+          <View style={styles.liveRow}>
+            <View
+              style={[
+                styles.liveDot,
+                { backgroundColor: connected ? "#007A53" : "#999" },
+              ]}
+            />
+            <Text style={[styles.count, { color: colors.muted }]}>
+              {connected ? "Live" : "Offline"} · {deliveries.length}
+            </Text>
+          </View>
         </View>
 
         {deliveries.length === 0 ? (
@@ -419,6 +454,18 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 14,
     fontWeight: "600",
+  },
+
+  liveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 
   emptyCard: {

@@ -103,6 +103,24 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
+    // Refunds are superadmin-only (audited). Admins get 403.
+    if (status === "refunded" && req.user?.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only superadmin can refund orders.",
+      });
+    }
+
+    // Completed is only allowed after the rider marks delivery as delivered.
+    // Rider delivery already auto-completes (rider.controller), this guards
+    // manual admin completion from racing the rider.
+    if (status === "completed" && order.deliveryStatus !== "delivered") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot complete order before rider marks it as delivered.",
+      });
+    }
+
     order.status = status;
     await order.save();
 

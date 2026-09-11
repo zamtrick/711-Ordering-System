@@ -7,12 +7,14 @@ import {
   deleteRiderById,
 } from "../../controllers/admin/rider.controller.js";
 
+import { requireAdminPermission } from "../../middlewares/adminPermissions.middleware.js";
+
 const router = express.Router();
 
 router.get("/", getRiders);
 router.get("/:id", getRiderById);
-router.post("/", createRider);
-router.patch("/:id", updateRiderById);
-router.delete("/:id", deleteRiderById);
+router.post("/", requireAdminPermission("canManageRiders"), createRider);
+router.patch("/:id", requireAdminPermission("canManageRiders"), updateRiderById);
+router.delete("/:id", requireAdminPermission("canManageRiders"), deleteRiderById);
 
 export default router;

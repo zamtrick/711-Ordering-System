@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -22,12 +22,14 @@ import { LightTheme, DarkTheme } from "@/constants/Theme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import { router } from "expo-router";
+import { useSocket } from "@/context/SocketContext";
 
 type Delivery = {
   _id: string;
   totalAmount: number;
   status: string;
   deliveryStatus: string;
+  rider?: string | { _id?: string };
   createdAt: string;
   user?: { firstname: string; lastname: string; email: string };
   branch?: { name: string; branchCode: string; location: string; address: string };
@@ -66,6 +68,20 @@ const Deliveries = () => {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const { socket, connected } = useSocket();
+  const myRiderIdRef = useRef<string | null>(null);
+
+  // Resolve my rider document id once so socket events can tell
+  // assignments to me apart from other riders' pickups.
+  useEffect(() => {
+    api
+      .get("/rider/profile/me")
+      .then((res) => {
+        myRiderIdRef.current = res.data?.data?._id ?? null;
+      })
+      .catch(() => {});
+  }, []);
+
   const fetchDeliveries = useCallback(async () => {
     try {
       setLoading(true);
@@ -84,6 +100,43 @@ const Deliveries = () => {
   useEffect(() => {
     fetchDeliveries();
   }, [fetchDeliveries]);
+
+  // Live: status changes merge in place; delivered/cancelled orders drop
+  // off; orders newly assigned to me appear without refetching.
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (updated: Delivery) => {
+      if (!updated?._id) return;
+      const ACTIVE = ["assigned", "picked_up", "in_transit"];
+      const rawRider =
+        typeof updated.rider === "object" ? updated.rider?._id : updated.rider;
+      const assignedToMe =
+        rawRider != null && myRiderIdRef.current != null
+          ? rawRider.toString() === myRiderIdRef.current.toString()
+          : false;
+      const gone =
+        updated.deliveryStatus === "delivered" ||
+        updated.status === "cancelled" ||
+        updated.status === "refunded" ||
+        updated.status === "completed";
+
+      setDeliveries((prev) => {
+        const exists = prev.some((d) => d._id === updated._id);
+        if (exists) {
+          if (gone) return prev.filter((d) => d._id !== updated._id);
+          return prev.map((d) => (d._id === updated._id ? { ...d, ...updated } : d));
+        }
+        if (!gone && assignedToMe && ACTIVE.includes(updated.deliveryStatus)) {
+          return [updated, ...prev];
+        }
+        return prev;
+      });
+    };
+    socket.on("order_updated", handler);
+    return () => {
+      socket.off("order_updated", handler);
+    };
+  }, [socket]);
 
   const updateStatus = async (orderId: string, newStatus: string) => {
     const labels: Record<string, string> = {
@@ -155,7 +208,7 @@ const Deliveries = () => {
         <View style={styles.header}>
           <View>
             <Text style={[styles.smallTitle, { color: colors.muted }]}>
-              Your assigned orders
+              Your assigned orders {connected ? "· Live" : "· Offline"}
             </Text>
             <Text style={[styles.title, { color: colors.headline }]}>
               My Deliveries
@@ -163,6 +216,12 @@ const Deliveries = () => {
           </View>
           <View style={[styles.headerIcon, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <PackageCheck size={21} color="#007A53" />
+            <View
+              style={[
+                styles.liveDotBadge,
+                { backgroundColor: connected ? "#007A53" : "#999" },
+              ]}
+            />
           </View>
         </View>
 
@@ -326,6 +385,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  liveDotBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
   },
 
   card: {

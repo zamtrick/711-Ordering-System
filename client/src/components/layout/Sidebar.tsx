@@ -13,6 +13,7 @@ import {
   Tags,
   Truck,
   ShoppingBag,
+  Megaphone,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -21,6 +22,12 @@ const superadminNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/branches", label: "Branches", icon: GitBranch },
   { to: "/admins", label: "Admins", icon: Users },
+  { to: "/products", label: "Products", icon: Package },
+  { to: "/categories", label: "Categories", icon: Tags },
+  { to: "/riders", label: "Riders", icon: Truck },
+  { to: "/orders", label: "Orders", icon: ShoppingBag },
+  { to: "/promos", label: "Promos", icon: Megaphone },
+  { to: "/settings", label: "Settings", icon: Settings },
   { to: "/activity-log", label: "Activity Log", icon: Activity },
   { to: "/profile", label: "Profile & Settings", icon: Settings },
 ];

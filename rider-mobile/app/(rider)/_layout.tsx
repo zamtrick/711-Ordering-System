@@ -9,6 +9,7 @@ import {
 } from "lucide-react-native";
 import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { SocketProvider } from "@/context/SocketContext";
 
 const Layout = () => {
   const colorScheme = useColorScheme();
@@ -17,6 +18,8 @@ const Layout = () => {
 
   useEffect(() => {
     if (!loading && !user) {
+      router.replace("/(auth)/login");
+    } else if (!loading && user && user.role !== "rider") {
       router.replace("/(auth)/login");
     }
   }, [user, loading]);
@@ -27,6 +30,18 @@ const Layout = () => {
   if (user.role !== "rider") {
     return null;
   }
+
+  // Auth confirmed — mount the socket inside so /auth/token succeeds
+  return (
+    <SocketProvider>
+      <RiderTabs />
+    </SocketProvider>
+  );
+};
+
+const RiderTabs = () => {
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
 
   return (
     <Tabs

@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Search, Upload, X, Tags } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
 
 type Category = { _id: string; name: string; description: string; isActive: boolean; image?: string; createdAt: string };
@@ -11,6 +12,8 @@ type Category = { _id: string; name: string; description: string; isActive: bool
 export default function Categories() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
+  const { can } = useAdminPermissions();
+  const readOnly = !can("canManageCategories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -131,7 +134,7 @@ export default function Categories() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold text-[#232323] dark:text-white">Categories</h1><p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">Manage product categories</p></div>
-        <button onClick={() => { setName(""); setDescription(""); setEditCat(null); setImageFile(null); setImagePreview(""); setRemoveImage(false); setShowForm(true); }} className="flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white bg-[#007A53] dark:bg-[#078080] hover:opacity-90 cursor-pointer"><Plus size={16} /> Add Category</button>
+        <button onClick={() => { setName(""); setDescription(""); setEditCat(null); setImageFile(null); setImagePreview(""); setRemoveImage(false); setShowForm(true); }} disabled={readOnly} className="flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white bg-[#007A53] dark:bg-[#078080] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Plus size={16} /> Add Category</button>
       </div>
 
       <div className="mb-4 max-w-sm">

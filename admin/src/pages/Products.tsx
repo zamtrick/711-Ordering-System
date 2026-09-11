@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Search, Upload, X, PackageSearch } from "lucide-r
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
 
 type Product = {
@@ -62,6 +63,8 @@ const revokePreview = (url: string) => {
 export default function Products() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
+  const { can } = useAdminPermissions();
+  const readOnly = !can("canManageProducts");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -310,8 +313,13 @@ export default function Products() {
         <div>
           <h1 className="text-2xl font-bold text-[#232323] dark:text-white">Products</h1>
           <p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">Manage your product catalog</p>
+          {readOnly && (
+            <p className="text-xs font-semibold text-[#B45309] bg-[#FEF3C7] dark:bg-[#3A2A0A] dark:text-[#FCD34D] px-2.5 py-1 rounded-full inline-block mt-2">
+              Read-only — managing products is disabled by superadmin
+            </p>
+          )}
         </div>
-        <button onClick={() => { setForm(defaultForm()); setShowCreate(true); }} className="flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white bg-[#007A53] dark:bg-[#078080] hover:opacity-90 cursor-pointer"><Plus size={16} /> Add Product</button>
+        <button onClick={() => { setForm(defaultForm()); setShowCreate(true); }} disabled={readOnly} className="flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white bg-[#007A53] dark:bg-[#078080] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Plus size={16} /> Add Product</button>
       </div>
 
       <div className="mb-4 max-w-sm">

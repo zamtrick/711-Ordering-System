@@ -11,22 +11,23 @@ import {
 import express from "express";
 import multer from "multer";
 import { getProductImageUploader, isCloudinaryConfigured } from "../../utils/uploads.js";
+import { requireAdminPermission } from "../../middlewares/adminPermissions.middleware.js";
 
 // In-memory storage for the CSV/Excel product import
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = express.Router();
 router.get("/", getProducts);
-router.post("/", createProduct);
-router.post("/import", upload.single("file"), importProducts);
+router.post("/", requireAdminPermission("canManageProducts"), createProduct);
+router.post("/import", upload.single("file"), requireAdminPermission("canManageProducts"), importProducts);
 router.get("/:id", getProductById);
-router.patch("/:id", updateProductById);
-router.delete("/:id", deleteProductById);
+router.patch("/:id", requireAdminPermission("canManageProducts"), updateProductById);
+router.delete("/:id", requireAdminPermission("canManageProducts"), deleteProductById);
 
 // Product image upload/removal — stored on Cloudinary.
 // The uploader is created lazily on first request (env vars must be loaded
 // first) and a missing config returns a clear 503 instead of a crash.
-router.post("/:id/image", (req, res) => {
+router.post("/:id/image", requireAdminPermission("canManageProducts"), (req, res) => {
   if (!isCloudinaryConfigured()) {
     return res.status(503).json({
       success: false,
@@ -46,6 +47,6 @@ router.post("/:id/image", (req, res) => {
     return res.status(503).json({ success: false, message: err.message });
   }
 });
-router.delete("/:id/image", deleteProductImage);
+router.delete("/:id/image", requireAdminPermission("canManageProducts"), deleteProductImage);
 
 export default router;

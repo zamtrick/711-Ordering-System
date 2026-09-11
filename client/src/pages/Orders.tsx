@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, Eye, Ban } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/useToast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -45,6 +46,8 @@ function orderStatusVariant(s: string): "green" | "blue" | "orange" | "red" | "g
 
 export default function Orders() {
   const { isDark } = useTheme();
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === "superadmin";
   const { toasts, removeToast, success, error: toastError } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,15 +55,37 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState("");
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/orders");
+      // Superadmin manages via admin endpoints (can refund); admin views via /orders.
+      const url = isSuperadmin ? "/admin/orders" : "/orders";
+      const res = await api.get(url);
       setOrders(res.data?.orders ?? []);
     } catch { toastError("Failed to load orders."); } finally { setLoading(false); }
   };
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [isSuperadmin]);
+
+  const handleStatusUpdate = async (o: Order, status: string) => {
+    if (status === "completed" && o.deliveryStatus !== "delivered") {
+      toastError("Cannot complete before rider marks it as delivered.");
+      return;
+    }
+    setUpdatingId(o._id);
+    try {
+      const res = await api.patch(`/admin/orders/${o._id}/status`, { status });
+      const updated = res.data?.data;
+      if (updated?._id) {
+        setOrders((prev) => prev.map((x) => (x._id === updated._id ? { ...x, ...updated } : x)));
+        setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
+        success(`Order → ${status}`);
+      }
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to update order.");
+    } finally { setUpdatingId(null); }
+  };
 
   const handleCancel = async (o: Order) => {
     setCancellingId(o._id);
@@ -136,8 +161,29 @@ export default function Orders() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" icon={<Eye size={14} />} onClick={() => setViewOrder(o)}>View</Button>
-                      {(o.status === "pending" || o.status === "processing") && (
+                      {(o.status === "pending" || o.status === "processing") && !isSuperadmin && (
                         <Button variant="danger" size="sm" icon={<Ban size={14} />} loading={cancellingId === o._id} onClick={() => handleCancel(o)}>Cancel</Button>
+                      )}
+                      {isSuperadmin && o.status === "pending" && (
+                        <Button variant="primary" size="sm" loading={updatingId === o._id} onClick={() => handleStatusUpdate(o, "processing")}>Accept</Button>
+                      )}
+                      {isSuperadmin && o.status === "processing" && (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            loading={updatingId === o._id}
+                            disabled={o.deliveryStatus !== "delivered"}
+                            title={o.deliveryStatus !== "delivered" ? "Waiting for rider delivery" : "Mark completed"}
+                            onClick={() => handleStatusUpdate(o, "completed")}
+                          >
+                            Complete
+                          </Button>
+                          <Button variant="secondary" size="sm" loading={updatingId === o._id} onClick={() => handleStatusUpdate(o, "refunded")}>Refund</Button>
+                        </>
+                      )}
+                      {isSuperadmin && o.status === "completed" && (
+                        <Button variant="secondary" size="sm" loading={updatingId === o._id} onClick={() => handleStatusUpdate(o, "refunded")}>Refund</Button>
                       )}
                     </div>
                   </td>

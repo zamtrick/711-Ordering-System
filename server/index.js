@@ -36,6 +36,8 @@ import manageCustomerProducts from "./routes/customer/product.routes.js";
 import manageCustomerBranches from "./routes/customer/branch.routes.js";
 import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
+import managePromos from "./routes/superadmin/promo.routes.js";
+import manageCustomerPromos from "./routes/customer/promo.routes.js";
 import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
 import manageAdminOrders from "./routes/admin/order.routes.js";
 
@@ -150,11 +152,12 @@ app.use(
 app.use("/api/superadmin/audit", auth, authorize("superadmin"), manageAudit);
 app.use("/api/superadmin/profile", auth, authorize("superadmin"), manageProfile);
 app.use("/api/superadmin/analytics", auth, authorize("superadmin"), manageAnalytics);
+app.use("/api/superadmin/promos", auth, authorize("superadmin"), managePromos);
 
 //manage by admin
-app.use("/api/admin/riders", auth, authorize("admin"), manageRiders);
-app.use("/api/admin/products", auth, authorize("admin"), manageProducts);
-app.use("/api/admin/categories", auth, authorize("admin"), manageCategories);
+app.use("/api/admin/riders", auth, authorize("admin", "superadmin"), manageRiders);
+app.use("/api/admin/products", auth, authorize("admin", "superadmin"), manageProducts);
+app.use("/api/admin/categories", auth, authorize("admin", "superadmin"), manageCategories);
 app.use("/api/admin/customers", auth, authorize("admin"), manageCustomer);
 app.use("/api/admin/analytics", auth, authorize("admin"), manageAdminAnalytics);
 app.use(
@@ -169,6 +172,7 @@ app.use("/api/admin/orders", auth, authorize("admin", "superadmin"), manageAdmin
 //manage by customer
 app.use("/api/customer/profile", auth, manageProfileCustomer);
 app.use("/api/customer/products", auth, manageCustomerProducts);
+app.use("/api/customer/promos", auth, manageCustomerPromos);
 app.use("/api/customer/branches", auth, manageCustomerBranches);
 app.use("/api/orders", auth, authorize("customer", "admin"), manageOrderItems);
 app.use("/api/orders", auth, authorize("customer", "admin"), manageOrders);

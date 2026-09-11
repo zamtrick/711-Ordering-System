@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Truck, Save, RefreshCw } from "lucide-react";
+import { Truck, Save, RefreshCw, ShieldCheck } from "lucide-react";
 import api from "@/api/axios";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ToastContainer from "@/components/ui/Toast";
 import { useToast } from "@/hooks/useToast";
+import { useAuth } from "@/context/AuthContext";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -17,12 +18,22 @@ function is401(err: unknown): boolean {
 
 export default function Settings() {
   const { toasts, removeToast, success, error: toastError } = useToast();
+  const { user } = useAuth();
+  const isSuperadmin = user?.role === "superadmin";
 
   const [fee, setFee] = useState<string>("");
   const [currentFee, setCurrentFee] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
+
+  const [perms, setPerms] = useState({
+    canManageProducts: true,
+    canManageCategories: true,
+    canManageRiders: true,
+  });
+  const [permsLoading, setPermsLoading] = useState(false);
+  const [permsSaving, setPermsSaving] = useState(false);
 
   // ── Fetch current fee ─────────────────────────────────────────────────────
 
@@ -49,8 +60,50 @@ export default function Settings() {
 
   useEffect(() => {
     fetchFee();
+    if (isSuperadmin) fetchPerms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isSuperadmin]);
+
+  const fetchPerms = async () => {
+    setPermsLoading(true);
+    try {
+      const res = await api.get("/settings/admin-permissions");
+      const d = res.data?.data;
+      if (d) setPerms({
+        canManageProducts: d.canManageProducts ?? true,
+        canManageCategories: d.canManageCategories ?? true,
+        canManageRiders: d.canManageRiders ?? true,
+      });
+    } catch {
+      // keep defaults
+    } finally {
+      setPermsLoading(false);
+    }
+  };
+
+  const togglePerm = async (key: keyof typeof perms) => {
+    const next = { ...perms, [key]: !perms[key] };
+    setPerms(next);
+    setPermsSaving(true);
+    try {
+      const res = await api.put("/settings/admin-permissions", next);
+      const d = res.data?.data;
+      if (d) setPerms({
+        canManageProducts: d.canManageProducts ?? true,
+        canManageCategories: d.canManageCategories ?? true,
+        canManageRiders: d.canManageRiders ?? true,
+      });
+      success("Admin permissions updated!");
+    } catch (err: unknown) {
+      setPerms({ ...perms });
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to update permissions.";
+      toastError(message);
+    } finally {
+      setPermsSaving(false);
+    }
+  };
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +162,58 @@ export default function Settings() {
           existing orders keep the fee they were placed with.
         </p>
       </div>
+
+      {isSuperadmin && (
+        <div className={`${cardBg} border ${borderColor} rounded-2xl p-6 mb-6`}>
+          <div className="flex items-start gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-[#4F46E5] flex items-center justify-center shrink-0">
+              <ShieldCheck size={20} className="text-white" />
+            </div>
+            <div>
+              <h2 className={`text-base font-bold ${headingText}`}>Admin Permissions</h2>
+              <p className={`text-xs mt-0.5 ${mutedText}`}>
+                Toggle whether branch admins can manage each section. OFF = read-only (view only). You always keep full access.
+              </p>
+            </div>
+          </div>
+
+          {permsLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-8 h-8 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {(
+                [
+                  { key: "canManageProducts", label: "Products", desc: "Create, edit, delete products and images" },
+                  { key: "canManageCategories", label: "Categories", desc: "Create, edit, delete categories" },
+                  { key: "canManageRiders", label: "Riders", desc: "Create, edit, delete riders" },
+                ] as const
+              ).map(({ key, label, desc }) => (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={permsSaving}
+                  onClick={() => togglePerm(key)}
+                  className={`flex items-center justify-between gap-4 px-4 py-3 rounded-xl border ${borderColor} transition-colors cursor-pointer ${perms[key] ? "" : "opacity-80"}`}
+                >
+                  <div className="text-left">
+                    <p className={`text-sm font-bold ${headingText}`}>{label}</p>
+                    <p className={`text-xs ${mutedText}`}>{desc} — {perms[key] ? "Admin can manage" : "Read-only for admin"}</p>
+                  </div>
+                  <span
+                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${perms[key] ? "bg-[#007A53]" : "bg-[#D1D5DB] dark:bg-[#3A3A3A]"}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${perms[key] ? "left-[22px]" : "left-0.5"}`}
+                    />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delivery Fee Card */}
       <div className={`${cardBg} border ${borderColor} rounded-2xl p-6`}>

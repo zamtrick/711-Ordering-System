@@ -11,6 +11,7 @@ type Order = {
   user: { firstname: string; lastname: string; email: string } | null;
   branch: { name: string; branchCode: string } | null;
   status: string;
+  deliveryStatus?: string;
   totalAmount: number;
   createdAt: string;
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
@@ -35,14 +36,13 @@ export default function Orders() {
       { status: "processing", label: "Accept", className: "bg-[#007A53] hover:bg-[#006045] text-white" },
       { status: "cancelled", label: "Cancel", className: "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C] hover:bg-[#FFE0E0]" },
     ],
+    // Complete is only enabled once rider marks delivered (guarded below + backend).
+    // Refund removed — superadmin-only, done in client superadmin Orders.
     processing: [
       { status: "completed", label: "Complete", className: "bg-[#007A53] hover:bg-[#006045] text-white" },
       { status: "cancelled", label: "Cancel", className: "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C] hover:bg-[#FFE0E0]" },
-      { status: "refunded", label: "Refund", className: "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#555] dark:text-[#A0A0A0] hover:bg-[#E5E5E5]" },
     ],
-    completed: [
-      { status: "refunded", label: "Refund", className: "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#555] dark:text-[#A0A0A0] hover:bg-[#E5E5E5]" },
-    ],
+    completed: [],
     cancelled: [],
     refunded: [],
   };
@@ -228,17 +228,27 @@ export default function Orders() {
               {/* Admin actions — only valid transitions for the current status */}
               {(NEXT_ACTIONS[viewOrder.status] ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {(NEXT_ACTIONS[viewOrder.status] ?? []).map((action) => (
-                    <button
-                      key={action.status}
-                      disabled={updating}
-                      onClick={() => handleStatusUpdate(viewOrder._id, action.status)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${action.className}`}
-                    >
-                      {updating ? "Updating…" : action.label}
-                    </button>
-                  ))}
+                  {(NEXT_ACTIONS[viewOrder.status] ?? []).map((action) => {
+                    const needsDelivery =
+                      action.status === "completed" && viewOrder.deliveryStatus !== "delivered";
+                    return (
+                      <button
+                        key={action.status}
+                        disabled={updating || needsDelivery}
+                        title={needsDelivery ? "Waiting for rider to mark delivered" : action.label}
+                        onClick={() => handleStatusUpdate(viewOrder._id, action.status)}
+                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 ${action.className}`}
+                      >
+                        {updating ? "Updating…" : action.label}
+                      </button>
+                    );
+                  })}
                 </div>
+              )}
+              {viewOrder.status === "processing" && viewOrder.deliveryStatus !== "delivered" && (
+                <p className="text-xs text-[#B45309] dark:text-[#FCD34D]">
+                  Complete unlocks after rider marks delivered (currently: {viewOrder.deliveryStatus ?? "unassigned"}). Refunds are superadmin-only.
+                </p>
               )}
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ const Login = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
-  const { login } = useAuth();
+  const { login, user } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,13 +48,15 @@ const Login = () => {
 
       const response = await login(cleanEmail, password);
       console.log("Login response:", response);
-
-      router.replace("/(rider)");
+      // Navigation happens in the effect below once `user` state
+      // has propagated — navigating here immediately can mount
+      // (rider) before context updates and bounce back to login.
     } catch (error: any) {
       console.log("Login error:", error);
 
       const message =
         error?.response?.data?.message ||
+        error?.message ||
         "Unable to login. Please check your email and password.";
 
       Alert.alert("Login Failed", message);
@@ -62,6 +64,13 @@ const Login = () => {
       setLoading(false);
     }
   };
+
+  // Navigate only after AuthContext.user is actually set.
+  useEffect(() => {
+    if (user && user.role === "rider") {
+      router.replace("/(rider)");
+    }
+  }, [user]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

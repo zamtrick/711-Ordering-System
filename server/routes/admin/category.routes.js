@@ -10,6 +10,7 @@ import {
   deleteCategoryImage,
 } from "../../controllers/admin/category.controller.js";
 import { getCategoryImageUploader, isCloudinaryConfigured } from "../../utils/uploads.js";
+import { requireAdminPermission } from "../../middlewares/adminPermissions.middleware.js";
 
 const router = express.Router();
 
@@ -17,21 +18,21 @@ const router = express.Router();
 router.get("/", getCategories);
 
 // Create category
-router.post("/", createCategory);
+router.post("/", requireAdminPermission("canManageCategories"), createCategory);
 
 // Get category by ID
 router.get("/:id", getCategoryById);
 
 // Update category by ID
-router.patch("/:id", updateCategoryById);
+router.patch("/:id", requireAdminPermission("canManageCategories"), updateCategoryById);
 
 // Delete category by ID
-router.delete("/:id", deleteCategoryById);
+router.delete("/:id", requireAdminPermission("canManageCategories"), deleteCategoryById);
 
 // Category image upload/removal — stored on Cloudinary.
 // The uploader is created lazily on first request (env vars must be loaded
 // first) and a missing config returns a clear 503 instead of a crash.
-router.post("/:id/image", (req, res) => {
+router.post("/:id/image", requireAdminPermission("canManageCategories"), (req, res) => {
   if (!isCloudinaryConfigured()) {
     return res.status(503).json({
       success: false,
@@ -55,6 +56,6 @@ router.post("/:id/image", (req, res) => {
     return res.status(503).json({ success: false, message: err.message });
   }
 });
-router.delete("/:id/image", deleteCategoryImage);
+router.delete("/:id/image", requireAdminPermission("canManageCategories"), deleteCategoryImage);
 
 export default router;

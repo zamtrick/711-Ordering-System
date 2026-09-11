@@ -2,6 +2,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import {
   View,
@@ -12,6 +13,10 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  FlatList,
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import { Search, ShoppingCart, ChevronRight, PackageSearch } from "lucide-react-native";
 import { playTap } from "@/utils/sound";
@@ -38,6 +43,13 @@ type Product = {
   image?: string;
   categoryId?: Category;
   stock: number;
+};
+
+type Promo = {
+  _id: string;
+  title: string;
+  subtitle?: string;
+  image?: string;
 };
 
 // Home screen category chips — emoji chosen per known category name, with a
@@ -72,6 +84,9 @@ const Home = () => {
   // ── data ──────────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
   const [popular, setPopular] = useState<Product[]>([]);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [activePromo, setActivePromo] = useState(0);
+  const promoListRef = useRef<FlatList<Promo>>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -81,9 +96,10 @@ const Home = () => {
       setError("");
       setLoading(true);
 
-      const [catRes, prodRes] = await Promise.all([
+      const [catRes, prodRes, promoRes] = await Promise.all([
         api.get("/customer/branches"), // keepalive warm-up (also validates auth)
         api.get("/customer/products"),
+        api.get("/customer/promos").catch(() => ({ data: { data: [] } })),
       ]);
       void catRes;
 
@@ -101,6 +117,8 @@ const Home = () => {
       setCategories(uniqueCats);
       // "Popular" = 2 newest products (same sort the backend already returns)
       setPopular(products.slice(0, 2));
+      setPromos(promoRes.data?.data ?? []);
+      setActivePromo(0);
     } catch (err: any) {
       console.log("Fetch home data error:", err);
       setError("Could not load the store. Please try again.");
@@ -117,6 +135,29 @@ const Home = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
     fetchData();
   }, [fetchData]);
+
+  // ── promo carousel auto-play ────────────────────────────────────────────
+  useEffect(() => {
+    if (promos.length <= 1) return;
+    const timer = setInterval(() => {
+      setActivePromo((prev) => {
+        const next = (prev + 1) % promos.length;
+        try {
+          promoListRef.current?.scrollToIndex({ index: next, animated: true });
+        } catch {
+          // index out of range during fast updates — safe to ignore
+        }
+        return next;
+      });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [promos.length]);
+
+  const onPromoScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const width = Dimensions.get("window").width - 40;
+    const index = Math.round(e.nativeEvent.contentOffset.x / width);
+    if (index >= 0 && index < promos.length) setActivePromo(index);
+  };
 
   // ── actions (all keep the homepage design; they just go somewhere) ───────
   const goProducts = () => router.push("/(customer)/products");
@@ -225,30 +266,82 @@ const Home = () => {
           </View>
         </Pressable>
 
-        {/* Promo */}
-        <View style={[styles.promo, { backgroundColor: "#007A53" }]}>
-          <View style={styles.promoContent}>
-            <Text style={styles.promoSmall}>SPECIAL OFFER</Text>
+        {/* Promo carousel — superadmin-managed slides, fallback to static card */}
+        {promos.length === 0 ? (
+          <View style={[styles.promo, { backgroundColor: "#007A53" }]}>
+            <View style={styles.promoContent}>
+              <Text style={styles.promoSmall}>SPECIAL OFFER</Text>
 
-            <Text style={styles.promoTitle}>Fresh deals{"\n"}just for you</Text>
+              <Text style={styles.promoTitle}>Fresh deals{"\n"}just for you</Text>
 
-            <Pressable style={styles.shopButton} onPress={goProducts}>
-              <Text style={[styles.shopButtonText, { color: "#007A53" }]}>
-                Shop Now
-              </Text>
+              <Pressable style={styles.shopButton} onPress={goProducts}>
+                <Text style={[styles.shopButtonText, { color: "#007A53" }]}>
+                  Shop Now
+                </Text>
 
-              <ChevronRight size={16} color="#007A53" />
-            </Pressable>
+                <ChevronRight size={16} color="#007A53" />
+              </Pressable>
+            </View>
+
+            <View style={styles.promoAccent}>
+              <View
+                style={[styles.orangeAccent, { backgroundColor: "#FF6720" }]}
+              />
+
+              <View style={[styles.redAccent, { backgroundColor: "#DA291C" }]} />
+            </View>
           </View>
+        ) : (
+          <View style={styles.carouselWrap}>
+            <FlatList
+              ref={promoListRef}
+              data={promos}
+              keyExtractor={(item) => item._id}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={onPromoScroll}
+              renderItem={({ item }) => (
+                <View style={[styles.promoSlide, { backgroundColor: "#007A53" }]}>
+                  {item.image ? (
+                    <Image source={{ uri: item.image }} style={styles.promoImage} resizeMode="cover" />
+                  ) : null}
+                  <View style={styles.promoOverlay} />
+                  <View style={styles.promoContent}>
+                    <Text style={styles.promoSmall}>
+                      {(item.subtitle || "SPECIAL OFFER").toUpperCase()}
+                    </Text>
 
-          <View style={styles.promoAccent}>
-            <View
-              style={[styles.orangeAccent, { backgroundColor: "#FF6720" }]}
+                    <Text style={styles.promoTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+
+                    <Pressable style={styles.shopButton} onPress={goProducts}>
+                      <Text style={[styles.shopButtonText, { color: "#007A53" }]}>
+                        Shop Now
+                      </Text>
+
+                      <ChevronRight size={16} color="#007A53" />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             />
-
-            <View style={[styles.redAccent, { backgroundColor: "#DA291C" }]} />
+            {promos.length > 1 && (
+              <View style={styles.dots}>
+                {promos.map((p, i) => (
+                  <View
+                    key={p._id}
+                    style={[
+                      styles.dot,
+                      { backgroundColor: i === activePromo ? "#FFFFFF" : "rgba(255,255,255,0.45)", width: i === activePromo ? 22 : 8 },
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
         {/* Categories */}
         <View style={styles.sectionHeader}>
@@ -478,6 +571,51 @@ const styles = StyleSheet.create({
     padding: 20,
     overflow: "hidden",
     marginBottom: 28,
+  },
+
+  carouselWrap: {
+    marginBottom: 28,
+  },
+
+  promoSlide: {
+    width: Dimensions.get("window").width - 40,
+    height: 170,
+    borderRadius: 22,
+    padding: 20,
+    overflow: "hidden",
+    marginRight: 12,
+  },
+
+  promoImage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+  },
+
+  promoOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+  },
+
+  dot: {
+    height: 8,
+    borderRadius: 4,
   },
 
   promoContent: {

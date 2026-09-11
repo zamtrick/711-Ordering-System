@@ -13,6 +13,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ToastContainer from "@/components/ui/Toast";
 import { usePagination } from "@/hooks/usePagination";
 import Pagination from "@/components/ui/Pagination";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 
 type Product = { _id: string; sku: string; barcode: string; name: string; description: string; categoryId: { _id: string; name: string } | string; price: number; stock: number; image?: string; isActive: boolean; createdAt: string };
 type Category = { _id: string; name: string };
@@ -84,6 +85,8 @@ export default function Products() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { can } = useAdminPermissions();
+  const readOnly = !can("canManageProducts");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -237,13 +240,18 @@ export default function Products() {
         <div>
           <h1 className="text-2xl font-bold text-[#232323] dark:text-white">Products</h1>
           <p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">Manage your product catalog</p>
+          {readOnly && (
+            <p className="text-xs font-semibold text-[#B45309] bg-[#FEF3C7] dark:bg-[#3A2A0A] dark:text-[#FCD34D] px-2.5 py-1 rounded-full inline-block mt-2">
+              Read-only — managing products is disabled by superadmin
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" icon={<Download size={16} />} onClick={exportTemplate}>Template</Button>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelImport} className="hidden" />
           <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={handleImageUpload} className="hidden" />
-          <Button variant="primary" icon={<Upload size={16} />} onClick={() => fileInputRef.current?.click()} loading={importing}>{importing ? "Importing..." : "Import Excel"}</Button>
-          <Button variant="primary" icon={<Plus size={16} />} onClick={() => { setForm(defaultForm()); setFormErrors({}); setShowCreate(true); }}>Add Product</Button>
+          <Button variant="primary" icon={<Upload size={16} />} onClick={() => fileInputRef.current?.click()} loading={importing} disabled={readOnly}>{importing ? "Importing..." : "Import Excel"}</Button>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={() => { setForm(defaultForm()); setFormErrors({}); setShowCreate(true); }} disabled={readOnly}>Add Product</Button>
         </div>
       </div>
 
@@ -288,12 +296,12 @@ export default function Products() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" icon={<Pencil size={14} />} onClick={() => openEdit(p)}>Edit</Button>
-                      <Button variant="ghost" size="sm" icon={<ImagePlus size={14} />} loading={uploadingImageFor === p._id} onClick={() => openImagePicker(p)}>Image</Button>
+                      <Button variant="ghost" size="sm" icon={<Pencil size={14} />} onClick={() => openEdit(p)} disabled={readOnly}>Edit</Button>
+                      <Button variant="ghost" size="sm" icon={<ImagePlus size={14} />} loading={uploadingImageFor === p._id} onClick={() => openImagePicker(p)} disabled={readOnly}>Image</Button>
                       {p.image && (
-                        <Button variant="ghost" size="sm" icon={<ImageOff size={14} />} onClick={() => handleImageRemove(p)}>Remove</Button>
+                        <Button variant="ghost" size="sm" icon={<ImageOff size={14} />} onClick={() => handleImageRemove(p)} disabled={readOnly}>Remove</Button>
                       )}
-                      <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setDeleteProduct(p)}>Delete</Button>
+                      <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setDeleteProduct(p)} disabled={readOnly}>Delete</Button>
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,11 @@
 import mongoose from "mongoose";
 import Setting from "../models/Setting.js";
 import { logAction } from "./superadmin/audit.controller.js";
+import {
+  ADMIN_PERMISSIONS_KEY,
+  DEFAULT_ADMIN_PERMISSIONS,
+  getAdminPermissionsMap,
+} from "../middlewares/adminPermissions.middleware.js";
 
 // --------------------------------------------------
 // Constants
@@ -103,5 +108,63 @@ export const updateDeliveryFeeHandler = async (req, res) => {
       success: false,
       message: "Internal Server Error",
     });
+  }
+};
+
+// --------------------------------------------------
+// GET ADMIN PERMISSIONS (admin reads for read-only UI, superadmin manages)
+// GET /api/settings/admin-permissions
+// --------------------------------------------------
+
+export const getAdminPermissionsHandler = async (req, res) => {
+  try {
+    const permissions = await getAdminPermissionsMap();
+    return res.status(200).json({ success: true, data: permissions });
+  } catch (err) {
+    console.error("Get admin permissions error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// --------------------------------------------------
+// UPDATE ADMIN PERMISSIONS (superadmin-only)
+// PUT /api/settings/admin-permissions
+// Body: { canManageProducts?: boolean, canManageCategories?: boolean, canManageRiders?: boolean }
+// --------------------------------------------------
+
+export const updateAdminPermissionsHandler = async (req, res) => {
+  try {
+    const { canManageProducts, canManageCategories, canManageRiders } = req.body ?? {};
+    const current = await getAdminPermissionsMap();
+
+    const next = {
+      canManageProducts:
+        typeof canManageProducts === "boolean" ? canManageProducts : current.canManageProducts,
+      canManageCategories:
+        typeof canManageCategories === "boolean"
+          ? canManageCategories
+          : current.canManageCategories,
+      canManageRiders:
+        typeof canManageRiders === "boolean" ? canManageRiders : current.canManageRiders,
+    };
+
+    const setting = await Setting.findOneAndUpdate(
+      { key: ADMIN_PERMISSIONS_KEY },
+      { value: JSON.stringify(next), updatedBy: req.user?.userId ?? null },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+
+    logAction(
+      req.user?.userId,
+      "update_admin_permissions",
+      "setting",
+      setting._id,
+      next,
+    ).catch(() => {});
+
+    return res.status(200).json({ success: true, message: "Permissions updated", data: next });
+  } catch (err) {
+    console.error("Update admin permissions error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };

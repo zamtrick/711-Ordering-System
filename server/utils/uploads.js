@@ -140,6 +140,45 @@ export const getCategoryImageUploader = () => {
 };
 
 // --------------------------------------------------
+// Promo image upload — Cloudinary via multer storage engine
+// Images land in the "promos" folder of the Cloudinary cloud, auto-
+// optimized (f_auto/q_auto), capped at 1600px on the long edge.
+// --------------------------------------------------
+
+let promoImageUploader = null;
+export const getPromoImageUploader = () => {
+  if (promoImageUploader) return promoImageUploader;
+
+  ensureCloudinary();
+
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder: "promos",
+      allowed_formats: ["jpg", "png", "jpeg", "webp", "gif", "avif"],
+      public_id: `promo-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+      transformation: [
+        { width: 1600, height: 900, crop: "limit", quality: "auto", fetch_format: "auto" },
+      ],
+    }),
+  });
+
+  promoImageUploader = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (req, file, cb) => {
+      if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only image files are allowed (JPG, PNG, WEBP, GIF, AVIF)"));
+      }
+    },
+  });
+
+  return promoImageUploader;
+};
+
+// --------------------------------------------------
 // Delete an image belonging to a product.
 // Works in two modes:
 //  - Cloudinary URL (https://res.cloudinary.com/...) → destroy by public_id
