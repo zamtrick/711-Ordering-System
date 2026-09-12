@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Eye } from "lucide-react";
+import { Search, Eye, Printer } from "lucide-react";
 import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
+import { printReceipt, type ReceiptOrder } from "@/utils/receipt";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
 
@@ -13,6 +14,8 @@ type Order = {
   status: string;
   deliveryStatus?: string;
   totalAmount: number;
+  deliveryFee?: number;
+  deliveryAddress?: string;
   createdAt: string;
   payment?: {
     paymentMethod: string;
@@ -108,6 +111,10 @@ export default function Orders() {
   const fetchData = async () => {
     setLoading(true);
     try { const res = await api.get("/orders"); setOrders(res.data?.orders ?? []); } catch { toastError("Failed."); } finally { setLoading(false); }
+  };
+
+  const handlePrintReceipt = (order: Order) => {
+    printReceipt(order as unknown as ReceiptOrder);
   };
   useEffect(() => { fetchData(); }, []);
 
@@ -240,7 +247,17 @@ export default function Orders() {
           <div className={`relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl z-10 p-6 ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-bold ${isDark ? "text-white" : "text-[#232323]"}`}>Order Details</h3>
-              <button onClick={() => setViewOrder(null)} className={`text-sm cursor-pointer ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Close</button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handlePrintReceipt(viewOrder)}
+                  title="Print receipt (hardcopy for the rider pouch)"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold cursor-pointer bg-[#007A53] hover:bg-[#006045] text-white"
+                >
+                  <Printer size={14} />
+                  Print Receipt
+                </button>
+                <button onClick={() => setViewOrder(null)} className={`text-sm cursor-pointer ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Close</button>
+              </div>
             </div>
             <div className="space-y-3">
               <div className={`p-3 rounded-xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
