@@ -80,11 +80,13 @@ export const getAdminDashboard = async (req, res) => {
       Order.countDocuments({ ...orderFilter, status: "completed" }),
       Order.countDocuments({ ...orderFilter, status: "cancelled" }),
       Order.aggregate([
-        { $match: orderFilter },
+        // Revenue only accrues from delivered (completed) orders —
+        // pending, cancelled and refunded orders add nothing to sales.
+        { $match: { ...orderFilter, status: "completed" } },
         { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
       ]),
       Order.aggregate([
-        { $match: { ...orderFilter, createdAt: { $gte: startOfDay } } },
+        { $match: { ...orderFilter, status: "completed", createdAt: { $gte: startOfDay } } },
         { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
       ]),
       // Payment method split. For branch admins, payments are attributed via
@@ -115,7 +117,12 @@ export const getAdminDashboard = async (req, res) => {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
             orders: { $sum: 1 },
-            revenue: { $sum: "$totalAmount" },
+            // Chart revenue counts delivered (completed) orders only
+            revenue: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
+              },
+            },
           },
         },
         { $sort: { _id: 1 } },

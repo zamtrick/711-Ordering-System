@@ -17,11 +17,11 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import { Search, ShoppingCart, ChevronRight, PackageSearch, Heart } from "lucide-react-native";
+import { Search, ShoppingCart, ChevronRight, PackageSearch } from "lucide-react-native";
 import { playTap } from "@/utils/sound";
 
 import useTheme from "@/hooks/useTheme";
-import { useFavorites } from "@/context/FavoriteContext";
+import FavoriteHeartButton from "@/components/FavoriteHeartButton";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
 import api from "@/api/axios";
@@ -80,7 +80,6 @@ const Home = () => {
   const { colors } = theme;
 
   const { addItem, items, totalCount } = useCart();
-  const { isFavorite, toggleFavorite } = useFavorites();
 
   // ── data ──────────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
@@ -407,6 +406,11 @@ const Home = () => {
           {popular.map((product) => (
             <Pressable
               key={product._id}
+              onPress={() => {
+                playTap();
+                // Cast: route is valid once Expo regenerates typed routes on next dev start
+                router.push(`/(customer)/product/${product._id}` as never);
+              }}
               style={[
                 styles.productCard,
                 {
@@ -440,17 +444,7 @@ const Home = () => {
                   </Pressable>
                 )}
 
-                <Pressable
-                  onPress={() => toggleFavorite(product)}
-                  style={styles.heartButton}
-                  hitSlop={8}
-                >
-                  <Heart
-                    size={18}
-                    color={isFavorite(product._id) ? "#DA291C" : "#FFFFFF"}
-                    fill={isFavorite(product._id) ? "#DA291C" : "rgba(0,0,0,0.25)"}
-                  />
-                </Pressable>
+                <FavoriteHeartButton product={product} size={17} />
               </View>
 
               <Text
@@ -777,18 +771,6 @@ const styles = StyleSheet.create({
     width: "100%" as const,
     height: "100%" as const,
     borderRadius: 12,
-  },
-
-  heartButton: {
-    position: "absolute" as const,
-    left: 6,
-    top: 6,
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: "rgba(0,0,0,0.25)",
   },
 
   addButton: {

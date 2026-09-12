@@ -15,7 +15,7 @@ import { usePagination } from "@/hooks/usePagination";
 import Pagination from "@/components/ui/Pagination";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 
-type Product = { _id: string; sku: string; barcode: string; name: string; description: string; categoryId: { _id: string; name: string } | string; price: number; stock: number; image?: string; isActive: boolean; createdAt: string };
+type Product = { _id: string; sku: string; barcode: string; name: string; description: string; categoryId: { _id: string; name: string } | string | null; price: number; stock: number; image?: string; isActive: boolean; createdAt: string };
 type Category = { _id: string; name: string };
 type FormData = { sku: string; barcode: string; name: string; description: string; categoryId: string; price: string; stock: string };
 const defaultForm = (): FormData => ({ sku: "", barcode: "", name: "", description: "", categoryId: "", price: "", stock: "" });
@@ -204,7 +204,7 @@ export default function Products() {
 
   const openEdit = (p: Product) => {
     setEditProduct(p);
-    setEditForm({ sku: p.sku, barcode: p.barcode, name: p.name, description: p.description ?? "", categoryId: typeof p.categoryId === "object" ? p.categoryId._id : p.categoryId, price: String(p.price), stock: String(p.stock) });
+    setEditForm({ sku: p.sku, barcode: p.barcode, name: p.name, description: p.description ?? "", categoryId: p.categoryId && typeof p.categoryId === "object" ? p.categoryId._id : (p.categoryId ?? ""), price: String(p.price), stock: String(p.stock) });
     setEditErrors({});
   };
 
@@ -280,7 +280,7 @@ export default function Products() {
                 <tr key={p._id} className="border-b border-[#F0F0F0] hover:bg-[#FAFAFA] dark:hover:bg-[#2A2A2A] transition-colors">
                   <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{p.name}</td>
                   <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.sku}</td>
-                  <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{typeof p.categoryId === "object" ? p.categoryId.name : "—"}</td>
+                  <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.categoryId && typeof p.categoryId === "object" ? p.categoryId.name : "—"}</td>
                   <td className="px-4 py-3 font-semibold text-[#007A53] dark:text-[#4CAF50]">₱{p.price}</td>
                   <td className="px-4 py-3">
                     <Badge variant={p.stock <= 5 ? "red" : "green"}>{p.stock}</Badge>

@@ -68,6 +68,7 @@ export const DarkTheme = {
 
     success: "#4CAF50",
     error: "#FF5C5C",
+    red: "#FF5C5C",
 
     tabBar: "#1E1E1E",
   },

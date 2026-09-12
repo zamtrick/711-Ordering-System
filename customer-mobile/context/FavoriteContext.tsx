@@ -32,7 +32,7 @@ type ProductInput = {
   price: number;
   image?: string;
   stock?: number;
-  categoryId?: { _id: string; name: string };
+  categoryId?: { _id: string; name: string } | string | null;
 };
 
 type FavoriteContextType = {
@@ -48,7 +48,7 @@ type FavoriteContextType = {
     price: number;
     image?: string;
     stock?: number;
-    categoryId?: { _id: string; name: string };
+    categoryId?: { _id: string; name: string } | string | null;
   }) => Promise<void>;
   refresh: () => Promise<void>;
   removeFavorite: (productId: string) => Promise<void>;
@@ -116,7 +116,11 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
             price: product.price,
             image: product.image,
             stock: product.stock ?? 0,
-            categoryId: product.categoryId,
+            // Keep FavoriteItem strict — only object categories are stored
+            categoryId:
+              product.categoryId && typeof product.categoryId === "object"
+                ? product.categoryId
+                : undefined,
           },
         },
         ...prev,

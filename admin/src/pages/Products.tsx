@@ -14,7 +14,7 @@ type Product = {
   barcode: string;
   name: string;
   description: string;
-  categoryId: { _id: string; name: string } | string;
+  categoryId: { _id: string; name: string } | string | null;
   price: number;
   stock: number;
   isActive: boolean;
@@ -222,7 +222,8 @@ export default function Products() {
       barcode: p.barcode,
       name: p.name,
       description: p.description ?? "",
-      categoryId: typeof p.categoryId === "object" ? p.categoryId._id : p.categoryId,
+      // categoryId is null when a product has no category (and typeof null === "object"!)
+      categoryId: p.categoryId && typeof p.categoryId === "object" ? p.categoryId._id : (p.categoryId ?? ""),
       price: String(p.price),
       stock: String(p.stock),
       imageFile: null,
@@ -358,7 +359,7 @@ export default function Products() {
                   </td>
                   <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{p.name}</td>
                   <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.sku}</td>
-                  <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{typeof p.categoryId === "object" ? p.categoryId.name : "—"}</td>
+                  <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.categoryId && typeof p.categoryId === "object" ? p.categoryId.name : "—"}</td>
                   <td className="px-4 py-3 text-[#007A53] dark:text-[#4CAF50] font-semibold">₱{p.price}</td>
                   <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.stock <= 5 ? "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C]" : "bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]"}`}>{p.stock}</span></td>
                   <td className="px-4 py-3">

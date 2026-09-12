@@ -159,7 +159,12 @@ async function getOrderAnalytics({ startOfDay, startOfWeek, startOfMonth, sevenD
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           orders: { $sum: 1 },
-          revenue: { $sum: "$totalAmount" },
+          // Chart revenue counts delivered (completed) orders only
+          revenue: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
+            },
+          },
         },
       },
       { $sort: { _id: 1 } },
@@ -169,7 +174,12 @@ async function getOrderAnalytics({ startOfDay, startOfWeek, startOfMonth, sevenD
         $group: {
           _id: "$branch",
           orderCount: { $sum: 1 },
-          totalRevenue: { $sum: "$totalAmount" },
+          // Branch revenue counts delivered (completed) orders only
+          totalRevenue: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "completed"] }, "$totalAmount", 0],
+            },
+          },
         },
       },
       {
@@ -213,18 +223,30 @@ async function getOrderAnalytics({ startOfDay, startOfWeek, startOfMonth, sevenD
 async function getRevenueAnalytics({ startOfDay, startOfWeek, startOfMonth }) {
   const [totalAgg, todayAgg, weekAgg, monthAgg, byPaymentMethod] = await Promise.all([
     Order.aggregate([
+      // Revenue only accrues from delivered (completed) orders —
+      // pending, cancelled and refunded orders add nothing to sales.
+      { $match: { status: "completed" } },
       { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
     ]),
     Order.aggregate([
       { $match: { createdAt: { $gte: startOfDay } } },
+      // Revenue only accrues from delivered (completed) orders —
+      // pending, cancelled and refunded orders add nothing to sales.
+      { $match: { status: "completed" } },
       { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
     ]),
     Order.aggregate([
       { $match: { createdAt: { $gte: startOfWeek } } },
+      // Revenue only accrues from delivered (completed) orders —
+      // pending, cancelled and refunded orders add nothing to sales.
+      { $match: { status: "completed" } },
       { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
     ]),
     Order.aggregate([
       { $match: { createdAt: { $gte: startOfMonth } } },
+      // Revenue only accrues from delivered (completed) orders —
+      // pending, cancelled and refunded orders add nothing to sales.
+      { $match: { status: "completed" } },
       { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
     ]),
     Payment.aggregate([

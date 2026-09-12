@@ -210,6 +210,15 @@ const CustomerTabs = () => {
           headerShown: false,
         }}
       />
+
+      {/* Hidden screen — product detail, opened by tapping a product card */}
+      <Tabs.Screen
+        name="product/[id]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 };

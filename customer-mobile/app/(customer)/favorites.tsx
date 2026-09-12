@@ -127,8 +127,13 @@ const Favorites = () => {
         </View>
 
         {items.map(({ product }) => (
-          <View
+          <Pressable
             key={product._id}
+            onPress={() => {
+              playTap();
+              // Cast: route is valid once Expo regenerates typed routes on next dev start
+              router.push(`/(customer)/product/${product._id}` as never);
+            }}
             style={[
               styles.card,
               { backgroundColor: colors.surface, borderColor: colors.border },
@@ -177,7 +182,7 @@ const Favorites = () => {
                 style={styles.heartButton}
                 hitSlop={8}
               >
-                <Heart size={20} color="#DA291C" fill="#DA291C" />
+                <Heart size={20} color={colors.red} fill={colors.red} />
               </Pressable>
 
               {product.stock > 0 ? (
@@ -200,7 +205,7 @@ const Favorites = () => {
                 </Pressable>
               ) : null}
             </View>
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </ThemedView>
