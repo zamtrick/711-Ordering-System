@@ -248,14 +248,16 @@ export default function Orders() {
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-bold ${isDark ? "text-white" : "text-[#232323]"}`}>Order Details</h3>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handlePrintReceipt(viewOrder)}
-                  title="Print receipt (hardcopy for the rider pouch)"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold cursor-pointer bg-[#007A53] hover:bg-[#006045] text-white"
-                >
-                  <Printer size={14} />
-                  Print Receipt
-                </button>
+                {viewOrder.status !== "cancelled" && viewOrder.status !== "refunded" && (
+                  <button
+                    onClick={() => handlePrintReceipt(viewOrder)}
+                    title="Print receipt (hardcopy for the rider pouch)"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold cursor-pointer bg-[#007A53] hover:bg-[#006045] text-white"
+                  >
+                    <Printer size={14} />
+                    Print Receipt
+                  </button>
+                )}
                 <button onClick={() => setViewOrder(null)} className={`text-sm cursor-pointer ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Close</button>
               </div>
             </div>

@@ -615,7 +615,7 @@ export default function OrderDetailScreen() {
             )}
           </Pressable>
         )}
-        {/* Receipt actions — delivered orders only */}
+        {/* Receipt actions — delivered orders only, hidden once terminal */}
         {isDelivered && (
           <View style={styles.receiptRow}>
             <Pressable
