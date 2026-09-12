@@ -52,7 +52,8 @@ export const initSocket = (httpServer) => {
     try {
       const raw =
         socket.handshake.headers.cookie ?? socket.handshake.auth.cookie ?? "";
-      const cookies = cookie.parse(raw);
+      // cookie v1.x renamed `parse` → `parseCookie` (and parse no longer exists)
+      const cookies = typeof cookie.parse === "function" ? cookie.parse(raw) : cookie.parseCookie(raw);
       const token = cookies.accessToken ?? socket.handshake.auth.token;
 
       if (!token) return next(new Error("Authentication required"));
