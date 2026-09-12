@@ -14,7 +14,29 @@ type Order = {
   deliveryStatus?: string;
   totalAmount: number;
   createdAt: string;
+  payment?: {
+    paymentMethod: string;
+    status: "pending" | "paid" | "failed" | "cancelled" | "refunded";
+  } | null;
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash on Delivery",
+  card: "Card",
+  gcash: "GCash",
+  maya: "Maya",
+  bank_transfer: "Bank Transfer",
+  other: "Other",
+};
+
+const paymentStatusColor = (s: string) => {
+  switch (s) {
+    case "paid": return "bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]";
+    case "pending": return "bg-[#FFF3E8] dark:bg-[#3D2A15] text-[#FF6720]";
+    case "refunded": return "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#777] dark:text-[#A0A0A0]";
+    default: return "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C]"; // failed / cancelled
+  }
 };
 
 const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
@@ -210,6 +232,19 @@ export default function Orders() {
                 <p className={`text-xs ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Status</p>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(viewOrder.status)}`}>{viewOrder.status}</span>
               </div>
+              {viewOrder.payment && (
+                <div className={`p-3 rounded-xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
+                  <p className={`text-xs ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Payment</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-sm font-medium ${isDark ? "text-white" : "text-[#232323]"}`}>
+                      {PAYMENT_METHOD_LABELS[viewOrder.payment.paymentMethod] ?? viewOrder.payment.paymentMethod}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${paymentStatusColor(viewOrder.payment.status)}`}>
+                      {viewOrder.payment.status}
+                    </span>
+                  </div>
+                </div>
+              )}
               {viewOrder.orderItems?.length > 0 && (
                 <div className={`p-3 rounded-xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
                   <p className={`text-xs mb-2 ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Items</p>

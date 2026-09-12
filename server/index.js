@@ -1,9 +1,13 @@
 //packages
+// Load .env FIRST — before any module that reads env vars at import time
+// (e.g. email.service.js captures SMTP_* at load to decide log-only vs SMTP).
+// ES module imports are hoisted and evaluated before this module body runs,
+// so dotenv.config() further down would be too late.
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import morgan from "morgan";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import os from "os";
@@ -41,7 +45,6 @@ import manageCustomerPromos from "./routes/customer/promo.routes.js";
 import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
 import manageAdminOrders from "./routes/admin/order.routes.js";
 
-dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 const { PORT, DB_URI } = process.env;

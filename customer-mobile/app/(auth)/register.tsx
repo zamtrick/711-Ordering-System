@@ -82,12 +82,11 @@ const Register = () => {
 
       console.log("Register response:", response.data);
 
-      Alert.alert("Registration Successful", "Your account has been created.", [
-        {
-          text: "Login",
-          onPress: () => router.replace("/(auth)/login"),
-        },
-      ]);
+      // Accounts start unverified — the server already emailed the OTP.
+      router.replace({
+        pathname: "/(auth)/verify",
+        params: { email: cleanEmail, purpose: "verify" },
+      });
     } catch (error: any) {
       console.log("Register error:", error);
 

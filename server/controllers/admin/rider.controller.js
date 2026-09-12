@@ -274,6 +274,8 @@ export const createRider = async (req, res) => {
       password: hashedPassword,
       role: "rider",
       isActive: true,
+      // Admin-created accounts are trusted — no email OTP needed.
+      isVerified: true,
     });
 
     try {

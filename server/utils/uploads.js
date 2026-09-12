@@ -67,7 +67,9 @@ const ensureCloudinary = () => {
 // Product image upload — Cloudinary via multer storage engine
 // Images land in the "products" folder of the Cloudinary cloud, auto-
 // optimized (f_auto/q_auto), capped at 1200px on the long edge.
-// --------------------------------------------------let productImageUploader = null;
+// --------------------------------------------------
+
+let productImageUploader = null;
 export const getProductImageUploader = () => {
   if (productImageUploader) return productImageUploader;
 

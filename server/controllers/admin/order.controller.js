@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import Order from "../../models/Order.js";
+import Payment from "../../models/Payment.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyOrderStatusChanged } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
@@ -123,6 +124,12 @@ export const updateOrderStatus = async (req, res) => {
 
     order.status = status;
     await order.save();
+
+    // Keep the linked payment in sync with the order lifecycle:
+    // cancelled → nothing was charged; refunded → money went back.
+    if (order.payment && (status === "cancelled" || status === "refunded")) {
+      await Payment.findByIdAndUpdate(order.payment, { status });
+    }
 
     try {
       await AuditLog.create({

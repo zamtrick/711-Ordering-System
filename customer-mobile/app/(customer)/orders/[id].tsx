@@ -52,6 +52,10 @@ type OrderDetail = {
   createdAt: string;
   updatedAt?: string;
   branch?: { _id?: string; name?: string; branchCode?: string; location?: string };
+  payment?: {
+    paymentMethod: string;
+    status: "pending" | "paid" | "failed" | "cancelled" | "refunded";
+  } | null;
   orderItems: OrderItem[];
 };
 
@@ -89,6 +93,31 @@ const DELIVERY_LABEL: Record<string, string> = {
   picked_up: "Picked up",
   in_transit: "On the way",
   delivered: "Delivered",
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "Cash on Delivery",
+  card: "Card",
+  gcash: "GCash",
+  maya: "Maya",
+  bank_transfer: "Bank Transfer",
+  other: "Other",
+};
+
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  pending: "Pending",
+  paid: "Paid",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+};
+
+const PAYMENT_STATUS_COLOR: Record<string, string> = {
+  pending: "#FF6720",
+  paid: "#007A53",
+  failed: "#DA291C",
+  cancelled: "#DA291C",
+  refunded: "#888888",
 };
 
 const formatDate = (iso: string) =>
@@ -362,6 +391,28 @@ export default function OrderDetailScreen() {
 
         {/* Totals */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {order.payment && (
+            <>
+              <View style={styles.totalRow}>
+                <Text style={[styles.totalLabel, { color: colors.muted }]}>Payment</Text>
+                <Text style={[styles.totalValue, { color: colors.headline }]}>
+                  {PAYMENT_LABELS[order.payment.paymentMethod] ?? order.payment.paymentMethod}
+                </Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={[styles.totalLabel, { color: colors.muted }]}>Payment Status</Text>
+                <Text
+                  style={[
+                    styles.totalValue,
+                    { color: PAYMENT_STATUS_COLOR[order.payment.status] ?? colors.headline, fontWeight: "700" },
+                  ]}
+                >
+                  {PAYMENT_STATUS_LABEL[order.payment.status] ?? order.payment.status}
+                </Text>
+              </View>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            </>
+          )}
           <View style={styles.totalRow}>
             <Text style={[styles.totalLabel, { color: colors.muted }]}>Subtotal</Text>
             <Text style={[styles.totalValue, { color: colors.headline }]}>₱{subtotal.toFixed(2)}</Text>

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Rider from "../../models/Rider.js";
 import Order from "../../models/Order.js";
+import Payment from "../../models/Payment.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyDeliveryAssigned, notifyDeliveryCompleted } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
@@ -382,6 +383,15 @@ export const updateDeliveryStatus = async (req, res) => {
 
     await order.save();
     await rider.save();
+
+    // Delivery completed — settle the payment. COD-style methods are paid
+    // in person at the door; prepaid gateways would already be "paid".
+    if (deliveryStatus === "delivered" && order.payment) {
+      await Payment.findByIdAndUpdate(order.payment, {
+        status: "paid",
+        paidAt: new Date(),
+      });
+    }
 
     // Audit log
     await AuditLog.create({

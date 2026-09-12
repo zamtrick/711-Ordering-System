@@ -61,6 +61,17 @@ type SavedAddress = {
   isDefault: boolean;
 };
 
+type PaymentMethod = "cash" | "card" | "gcash" | "maya" | "bank_transfer" | "other";
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: "cash", label: "Cash on Delivery" },
+  { value: "gcash", label: "GCash" },
+  { value: "maya", label: "Maya" },
+  { value: "card", label: "Card" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "other", label: "Other" },
+];
+
 // --------------------------------------------------
 // HELPERS
 // --------------------------------------------------
@@ -79,6 +90,8 @@ const PAYMENT_LABELS: Record<string, string> = {
   bank_transfer: "Bank Transfer",
   other: "Other",
 };
+
+const paymentLabel = (m: string) => PAYMENT_LABELS[m] ?? m;
 
 // --------------------------------------------------
 // SCREEN
@@ -103,6 +116,7 @@ export default function Checkout() {
   const [customAddress, setCustomAddress] = useState("");
   const [customCoords, setCustomCoords] = useState<DeliveryCoords | null>(null);
   const [useCustomAddress, setUseCustomAddress] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
 
   // ── modals ───────────────────────────────────────
   const [branchModalVisible, setBranchModalVisible] = useState(false);
@@ -143,8 +157,12 @@ export default function Checkout() {
         ]);
 
         const branchList: Branch[] = branchRes.data?.data ?? [];
-        if (mounted) setBranches(branchList);
-        if (branchList.length > 0 && mounted) setSelectedBranch(branchList[0]);
+        if (mounted) {
+          setBranches(branchList);
+          setSelectedBranch(branchList[0] ?? null);
+          // Default to the first method the branch accepts (usually cash).
+          setPaymentMethod(((branchList[0]?.paymentMethods as PaymentMethod[] | undefined) ?? [])[0] ?? null);
+        }
 
         const addresses: SavedAddress[] =
           profileRes.data?.data?.addresses ?? [];
@@ -165,6 +183,17 @@ export default function Checkout() {
     return () => { mounted = false; };
   }, []);
 
+  // ── payment methods available at the selected branch ──
+  const acceptedMethods = (selectedBranch?.paymentMethods ?? []) as PaymentMethod[];
+
+  // Switching branch resets the method if the new branch doesn't take it.
+  useEffect(() => {
+    if (paymentMethod && !acceptedMethods.includes(paymentMethod)) {
+      setPaymentMethod(acceptedMethods[0] ?? null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when branch changes
+  }, [selectedBranch?._id]);
+
   // --------------------------------------------------
   // PLACE ORDER
   // --------------------------------------------------
@@ -178,6 +207,10 @@ export default function Checkout() {
       Alert.alert("Delivery Address", "Please enter or select a delivery address.");
       return;
     }
+    if (!paymentMethod) {
+      Alert.alert("Payment Method", "Please select how you'd like to pay.");
+      return;
+    }
     if (items.length === 0) return;
 
     try {
@@ -188,6 +221,7 @@ export default function Checkout() {
       const orderRes = await api.post("/orders", {
         branch: selectedBranch._id,
         deliveryAddress: resolvedDeliveryAddress,
+        paymentMethod,
         // Forward-compatible: backend currently stores the address string
         // and ignores this until Order.deliveryLocation lands.
         ...(useCustomAddress && customCoords
@@ -242,6 +276,30 @@ export default function Checkout() {
       }
     } catch (err: any) {
       console.log("Place order error:", err);
+      // Browse-not-buy backstop: unverified emails can't order. Route to
+      // OTP, then resume checkout via returnTo.
+      if (
+        err?.response?.status === 403 &&
+        err?.response?.data?.code === "EMAIL_NOT_VERIFIED"
+      ) {
+        try {
+          const me = await api.get("/auth/me");
+          const email = me.data?.data?.email;
+          if (email) {
+            router.push({
+              pathname: "/(auth)/verify",
+              params: {
+                email,
+                purpose: "verify",
+                returnTo: "/(customer)/checkout",
+              },
+            });
+            return;
+          }
+        } catch {
+          // fall through to the generic alert
+        }
+      }
       const message =
         err?.response?.data?.message ?? "Could not place your order. Please try again.";
       Alert.alert("Order Failed", message);
@@ -371,7 +429,68 @@ export default function Checkout() {
           </View>
         )}
 
-        {/* ── DELIVERY ADDRESS ────────────────────── */}
+        {/* ── PAYMENT METHOD ───────────────────────── */}
+        <SectionHeader
+          icon={<CreditCard size={15} color="#007A53" />}
+          title="Payment Method"
+        />
+
+        {acceptedMethods.length === 0 ? (
+          <View
+            style={[
+              styles.pickerCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.pickerPlaceholder, { color: colors.muted }]}>
+              This branch has no payment methods configured.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.paymentGrid}>
+            {PAYMENT_METHODS.filter((m) => acceptedMethods.includes(m.value)).map(
+              (method) => {
+                const active = paymentMethod === method.value;
+                return (
+                  <Pressable
+                    key={method.value}
+                    onPress={() => setPaymentMethod(method.value)}
+                    style={[
+                      styles.paymentOption,
+                      {
+                        backgroundColor: active ? "#E8F5EF" : colors.surface,
+                        borderColor: active ? "#007A53" : colors.border,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.paymentRadio,
+                        {
+                          borderColor: active ? "#007A53" : colors.border,
+                          backgroundColor: active ? "#007A53" : "transparent",
+                        },
+                      ]}
+                    >
+                      {active && <Check size={12} color="#fff" />}
+                    </View>
+                    <View style={styles.paymentOptionText}>
+                      <Text
+                        style={[
+                          styles.paymentOptionLabel,
+                          { color: active ? "#007A53" : colors.headline },
+                        ]}
+                      >
+                        {method.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              },
+            )}
+          </View>
+        )}
+
         <SectionHeader
           icon={<MapPin size={15} color="#007A53" />}
           title="Delivery Address"
@@ -937,6 +1056,35 @@ const styles = StyleSheet.create({
   },
 
   paymentLabel: { fontSize: 11 },
+
+  // Payment method picker
+  paymentGrid: {
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  paymentOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1.2,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+
+  paymentRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  paymentOptionText: { flex: 1 },
+
+  paymentOptionLabel: { fontSize: 14, fontWeight: "600" },
 
   // Custom address
   customToggle: {

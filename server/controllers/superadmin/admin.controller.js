@@ -105,6 +105,8 @@ export const createAdmin = async (req, res) => {
       password: hashedPassword,
       role: "admin",
       isActive: true,
+      // Superadmin-created accounts are trusted — no email OTP needed.
+      isVerified: true,
     });
 
     try {

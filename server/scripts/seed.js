@@ -33,6 +33,7 @@ const seed = async () => {
         password: hashedPassword,
         role: "superadmin",
         isActive: true,
+        isVerified: true,
       });
 
       console.log("Superadmin created successfully");

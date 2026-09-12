@@ -4,6 +4,7 @@ import Order from "../../models/Order.js";
 import Branch from "../../models/Branch.js";
 import User from "../../models/User.js";
 import Customer from "../../models/Customer.js";
+import Payment from "../../models/Payment.js";
 import { getCurrentDeliveryFee } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
@@ -30,6 +31,23 @@ import { emitOrderUpdated } from "../../socket.js";
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| PAYMENT METHOD LABELS
+|--------------------------------------------------------------------------
+| Human-readable names for confirmation emails and order summaries.
+|--------------------------------------------------------------------------
+*/
+
+const PAYMENT_LABELS = {
+  cash: "Cash on Delivery",
+  card: "Card",
+  gcash: "GCash",
+  maya: "Maya",
+  bank_transfer: "Bank Transfer",
+  other: "Other",
+};
+
 export const createOrder = async (req, res) => {
   try {
     // Get the authenticated user's ID from the JWT
@@ -47,6 +65,25 @@ export const createOrder = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: "Authentication required",
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECK EMAIL VERIFICATION
+    |--------------------------------------------------------------------------
+    | Browse-before-buy: unverified accounts can shop, but only verified
+    | emails may place orders. The app routes these users to OTP first —
+    | this is the server-side backstop if the client is bypassed.
+    |--------------------------------------------------------------------------
+    */
+
+    const orderUser = await User.findById(user).select("isVerified");
+    if (orderUser && !orderUser.isVerified) {
+      return res.status(403).json({
+        success: false,
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Please verify your email before placing an order.",
       });
     }
 
@@ -108,6 +145,36 @@ export const createOrder = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
+    | VALIDATE PAYMENT METHOD
+    |--------------------------------------------------------------------------
+    | The method must be one the branch actually accepts. A temporary Payment
+    | record (status: pending) is created and linked to the order so admins
+    | know how the customer intends to pay. For COD-style methods it flips to
+    | "paid" when the rider completes delivery; cancellations/refunds mark it
+    | accordingly. Nothing is charged here — no gateway integration yet.
+    |--------------------------------------------------------------------------
+    */
+
+    const { paymentMethod } = req.body;
+
+    const acceptedMethods = branchData.paymentMethods ?? ["cash"];
+    if (!paymentMethod) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment method is required",
+      });
+    }
+    if (!acceptedMethods.includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: `This branch does not accept ${PAYMENT_LABELS[paymentMethod] ?? paymentMethod}. Accepted: ${acceptedMethods
+          .map((m) => PAYMENT_LABELS[m] ?? m)
+          .join(", ")}`,
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | GET CUSTOMER'S DEFAULT ADDRESS
     |--------------------------------------------------------------------------
     */
@@ -145,6 +212,25 @@ export const createOrder = async (req, res) => {
       deliveryAddress,
     });
 
+    // Record how the customer intends to pay. Created after the order so it
+    // can reference it; if this fails we roll the order back — an order
+    // without a payment method is an invalid checkout in this system.
+    let payment = null;
+    try {
+      payment = await Payment.create({
+        order: order._id,
+        paymentReference: `PAY-${order._id.toString().slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+        amount: deliveryFee, // grows via order totals below
+        paymentMethod,
+        status: "pending",
+      });
+      order.payment = payment._id;
+      await order.save();
+    } catch (paymentError) {
+      await Order.findByIdAndDelete(order._id);
+      throw paymentError;
+    }
+
     /*
     |--------------------------------------------------------------------------
     | RETURN CREATED ORDER
@@ -153,7 +239,8 @@ export const createOrder = async (req, res) => {
 
     const createdOrder = await Order.findById(order._id)
       .populate("user", "firstname lastname email")
-      .populate("branch");
+      .populate("branch")
+      .populate("payment");
 
     /* Email notification (non-blocking) */
     if (createdOrder?.user?.email) {
@@ -429,6 +516,11 @@ export const cancelOrder = async (req, res) => {
     order.status = "cancelled";
 
     await order.save();
+
+    // Keep the linked payment in sync — nothing was charged, so it dies too.
+    if (order.payment) {
+      await Payment.findByIdAndUpdate(order.payment, { status: "cancelled" });
+    }
 
     /*
     |--------------------------------------------------------------------------

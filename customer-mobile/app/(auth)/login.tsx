@@ -62,6 +62,18 @@ const Login = () => {
     } catch (error: any) {
       console.log("Login error:", error);
 
+      // Unverified accounts get a session-less 403 — send them to OTP.
+      if (error?.response?.status === 403 && error?.response?.data?.email) {
+        router.replace({
+          pathname: "/(auth)/verify",
+          params: {
+            email: error.response.data.email,
+            purpose: "verify",
+          },
+        });
+        return;
+      }
+
       const message =
         error?.response?.data?.message ||
         "Unable to login. Please check your email and password.";
@@ -206,9 +218,11 @@ const Login = () => {
 
             {/* Forgot Password */}
             <View style={styles.forgotRow}>
-              <Text style={[styles.forgot, { color: "#007A53" }]}>
-                Forgot password?
-              </Text>
+              <Pressable onPress={() => router.push("/(auth)/forgot")}>
+                <Text style={[styles.forgot, { color: "#007A53" }]}>
+                  Forgot password?
+                </Text>
+              </Pressable>
             </View>
 
             {/* Login Button */}

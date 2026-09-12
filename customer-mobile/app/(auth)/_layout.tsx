@@ -16,6 +16,27 @@ export default function AuthLayout() {
           headerShown: false,
         }}
       />
+
+      <Stack.Screen
+        name="verify"
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="forgot"
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="reset"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

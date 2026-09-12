@@ -221,6 +221,42 @@ export async function notifyAdminCreated(admin) {
   );
 }
 
+export async function sendOtpEmail({ to, name, code, purpose }) {
+  const isReset = purpose === "reset";
+  const subject = isReset
+    ? "Reset your 7-Eleven password"
+    : "Your 7-Eleven verification code";
+  const intro = isReset
+    ? "Use this code to reset your password:"
+    : "Use this code to verify your email address:";
+
+  // Spaced digits read better on phones: "482916" -> "4 8 2 9 1 6"
+  const spaced = String(code).split("").join(" ");
+
+  await sendMail(
+    to,
+    subject,
+    `
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+      <div style="background: #007A53; color: white; padding: 20px; text-align: center; border-radius: 12px 12px 0 0;">
+        <h1 style="margin: 0; font-size: 22px;">7-Eleven Online Ordering</h1>
+      </div>
+      <div style="padding: 24px; background: #f8f5f2;">
+        <p style="color: #555;">Hi ${name},</p>
+        <p style="color: #555;">${intro}</p>
+        <div style="background: white; border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center;">
+          <p style="margin: 0; color: #232323; font-size: 32px; font-weight: bold; letter-spacing: 8px;">${spaced}</p>
+        </div>
+        <p style="color: #777; font-size: 13px;">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+      </div>
+      <div style="text-align: center; padding: 12px; color: #aaa; font-size: 11px;">
+        © 7-Eleven Online Ordering System
+      </div>
+    </div>
+    `,
+  );
+}
+
 export async function notifyRiderCreated(rider) {
   await sendMail(
     rider.email,

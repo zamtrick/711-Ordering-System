@@ -1,7 +1,15 @@
 // End-to-end audit of the customer mobile app flow against the live API.
-// Simulates exactly what customer-mobile does: register → products → branches →
-// cart → checkout (order + items) → orders → cancel → profile → logout.
-// No direct DB access — everything through the API, so it works with any env.
+// Simulates exactly what customer-mobile does: register → verify OTP →
+// products → branches → cart → checkout (order + items) → orders → cancel
+// → profile → logout.
+// Everything through the API, so it works with any env — with one documented
+// exception: OTP codes are hashed + emailed by design (unreadable via API),
+// so the test flips isVerified directly to simulate entering the code.
+
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+
+dotenv.config();
 
 const B = process.env.API_BASE || "http://localhost:5000/api";
 
@@ -113,10 +121,44 @@ const SET_FEE = 25; // fee we set for the test run (restored to 20 after)
   );
   if (r.data?.data?.id) cleanupIds.users.push(r.data.data.id);
 
-  // ensure we have a session (register auto-logs-in; 409 needs explicit login)
-  if (r.status === 409) {
+  if (r.status === 201) {
+    // Fresh accounts start unverified — the browse-not-buy gate must refuse
+    // order creation (register session is already in the jar).
+    const gated = await call("POST", "/orders", {});
+    ok(
+      "  unverified POST /orders → 403 EMAIL_NOT_VERIFIED",
+      gated.status === 403 && gated.data?.code === "EMAIL_NOT_VERIFIED",
+      `got ${gated.status}`,
+    );
+  } else {
+    // 409: account reused from an earlier run — login (200 if that run
+    // verified it, 403 if the run died before verification).
     const l = await call("POST", "/auth/login", { email: TEST_EMAIL, password: TEST_PASS });
-    ok("POST /auth/login → 200", l.status === 200, `got ${l.status} ${JSON.stringify(l.data?.message ?? "")}`);
+    ok(
+      "POST /auth/login → 200 (or 403 if never verified)",
+      l.status === 200 || l.status === 403,
+      `got ${l.status} ${JSON.stringify(l.data?.message ?? "")}`,
+    );
+  }
+
+  // Test setup only: flip the flag directly to simulate entering the OTP.
+  await mongoose.connect(process.env.DB_URI);
+  await mongoose.connection.db
+    .collection("users")
+    .updateOne({ email: TEST_EMAIL.toLowerCase() }, { $set: { isVerified: true } });
+  await mongoose.disconnect();
+
+  // Re-establish the session in case we never had one (403 login path).
+  const meCheck = await call("GET", "/auth/me");
+  if (meCheck.status === 401) {
+    const l2 = await call("POST", "/auth/login", { email: TEST_EMAIL, password: TEST_PASS });
+    ok("  login after verification → 200", l2.status === 200, `got ${l2.status}`);
+  } else {
+    ok(
+      "  /auth/me shows isVerified",
+      meCheck.data?.data?.isVerified === true,
+      `got ${JSON.stringify(meCheck.data?.data?.isVerified)}`,
+    );
   }
 }
 
@@ -172,13 +214,30 @@ let orderId;
       stock: p.stock,
     }));
 
-  const r = await call("POST", "/orders", { branch: branchId });
+  const r = await call("POST", "/orders", { branch: branchId, paymentMethod: "cash" });
   ok(
     "POST /orders → 201",
     r.status === 201,
     r.status !== 201 ? `got ${r.status} ${JSON.stringify(r.data)}` : "",
   );
   orderId = r.data?.data?._id;
+
+  // Payment method is validated against the branch and recorded as a
+  // pending Payment linked to the order.
+  ok(
+    "  order carries paymentMethod=cash (status pending)",
+    r.data?.data?.payment?.paymentMethod === "cash" &&
+      r.data?.data?.payment?.status === "pending",
+    `got ${JSON.stringify(r.data?.data?.payment?.paymentMethod)}/${JSON.stringify(r.data?.data?.payment?.status)}`,
+  );
+
+  // Rejected method → 400 with a helpful message
+  const badPay = await call("POST", "/orders", { branch: branchId, paymentMethod: "bitcoin" });
+  ok(
+    "  unknown paymentMethod → 400",
+    badPay.status === 400,
+    `got ${badPay.status}`,
+  );
 
   // New empty order starts at exactly the delivery fee
   ok(

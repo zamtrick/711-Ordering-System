@@ -196,6 +196,8 @@ export const createCustomer = async (req, res) => {
       role: "customer",
 
       isActive: true,
+      // Admin-created accounts are trusted — no email OTP needed.
+      isVerified: true,
     });
 
     try {

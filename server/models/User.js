@@ -33,6 +33,12 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Email ownership confirmed via OTP. New self-registrations start
+    // unverified; admin-created accounts and backfilled users are true.
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );
