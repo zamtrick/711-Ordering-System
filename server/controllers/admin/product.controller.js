@@ -1,17 +1,30 @@
 import mongoose from "mongoose";
 import Product from "../../models/Product.js";
+import BranchProduct from "../../models/BranchProduct.js";
 import XLSX from "xlsx";
 import { removeUploadedFile, isCloudinaryConfigured } from "../../utils/uploads.js";
+import {
+  branchQuery,
+  isBranchScoped,
+} from "../../middlewares/branchScope.middleware.js";
 
-export const getProducts = async (req, res) => {
-  try {
-    const products = await Product.find().populate("categoryId");
-    return res.status(200).json({ success: true, message: "View all products", products });
-  } catch (err) {
-    console.error(err.message);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-};
+// --------------------------------------------------
+// PRODUCT CATALOGUE + BRANCH STOCK SEPARATION
+// --------------------------------------------------
+// The Product collection is the chain-wide catalogue. Branch-specific data
+// (availability + stock) lives in BranchProduct, managed through the
+// Branch Inventory screen.
+//
+//   Regular admin  → GETs return the catalogue MERGED with their branch's
+//                    availability/stock (stock column shows branch stock);
+//                    writes (create/update/delete/import) are superadmin-only
+//                    because the catalogue is global — enforced here in the
+//                    controller, independent of route middleware.
+//   Superadmin     → GETs return the plain global catalogue and writes pass.
+// --------------------------------------------------
+
+const SUPERADMIN_ONLY_MESSAGE =
+  "The product catalogue is managed by the superadmin. Use Branch Inventory to manage your branch's availability and stock.";
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleProductError = (err, res) => {
@@ -27,6 +40,43 @@ const handleProductError = (err, res) => {
   }
   console.error(err.message);
   return res.status(500).json({ success: false, message: "Internal Server Error" });
+};
+
+export const getProducts = async (req, res) => {
+  try {
+    const products = await Product.find().populate("categoryId");
+
+    // Branch admins get the catalogue merged with their branch inventory:
+    //   - stock shows the branch-local value (falls back to global)
+    //   - unavailable-at-branch products are flagged so the UI can grey them
+    if (isBranchScoped(req)) {
+      const records = await BranchProduct.find({
+        branch: req.adminBranchId,
+      }).lean();
+      const recordMap = new Map(records.map((r) => [r.product.toString(), r]));
+
+      const merged = products.map((p) => {
+        const record = recordMap.get(p._id.toString());
+        return {
+          ...p.toObject(),
+          branchStock: record?.stock ?? null,
+          isAvailableAtBranch: record?.isAvailable ?? false,
+          configuredAtBranch: Boolean(record),
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "View all products",
+        products: merged,
+      });
+    }
+
+    return res.status(200).json({ success: true, message: "View all products", products });
+  } catch (err) {
+    console.error(err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
 };
 
 export const getProductById = async (req, res) => {
@@ -46,7 +96,14 @@ export const getProductById = async (req, res) => {
   }
 };
 
+// --------------------------------------------------
+// WRITES — superadmin only (the catalogue is chain-wide)
+// --------------------------------------------------
+
 export const createProduct = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
+  }
   try {
     const { sku, barcode, name, description, categoryId, price, stock } = req.body;
     if (!sku || !barcode || !name || !categoryId || price === undefined || stock === undefined) {
@@ -68,6 +125,9 @@ export const createProduct = async (req, res) => {
 };
 
 export const updateProductById = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
+  }
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -94,6 +154,9 @@ export const updateProductById = async (req, res) => {
 };
 
 export const deleteProductById = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
+  }
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -114,15 +177,10 @@ export const deleteProductById = async (req, res) => {
   }
 };
 
-// ==========================================
-// UPLOAD / REPLACE PRODUCT IMAGE
-// ==========================================
-// POST /api/admin/products/:id/image
-// multipart/form-data with field "image"
-// Images are uploaded straight to Cloudinary via multer-storage-cloudinary;
-// the DB stores the full https://res.cloudinary.com/... URL, so every client
-// (web admin, customer mobile app) renders it directly — no host rewriting.
 export const uploadProductImage = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
+  }
   try {
     const { id } = req.params;
 
@@ -156,11 +214,10 @@ export const uploadProductImage = async (req, res) => {
   }
 };
 
-// ==========================================
-// REMOVE PRODUCT IMAGE
-// ==========================================
-// DELETE /api/admin/products/:id/image
 export const deleteProductImage = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
+  }
   try {
     const { id } = req.params;
 
@@ -185,10 +242,10 @@ export const deleteProductImage = async (req, res) => {
   }
 };
 
-// ==========================================
-// IMPORT PRODUCTS FROM EXCEL/CSV
-// ==========================================
 export const importProducts = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
+  }
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No file uploaded" });

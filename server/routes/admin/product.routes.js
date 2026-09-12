@@ -13,11 +13,16 @@ import multer from "multer";
 import { getProductImageUploader, isCloudinaryConfigured } from "../../utils/uploads.js";
 import { requireAdminPermission } from "../../middlewares/adminPermissions.middleware.js";
 import { requireDeleteConfirmation } from "../../middlewares/deleteConfirm.middleware.js";
+import { resolveAdminBranch } from "../../middlewares/branchScope.middleware.js";
 
 // In-memory storage for the CSV/Excel product import
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = express.Router();
+
+// Branch scoping: admins get catalogue + their branch stock (read-only);
+// catalogue writes are superadmin-only (enforced in the controller).
+router.use(resolveAdminBranch);
 router.get("/", getProducts);
 router.post("/", requireAdminPermission("canManageProducts"), createProduct);
 router.post("/import", upload.single("file"), requireAdminPermission("canManageProducts"), importProducts);

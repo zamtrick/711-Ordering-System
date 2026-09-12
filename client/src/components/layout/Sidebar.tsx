@@ -1,4 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
 import {
   LayoutDashboard,
   Users,
@@ -14,16 +16,23 @@ import {
   Truck,
   ShoppingBag,
   Megaphone,
+  Boxes,
+  MessageCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import api from "@/api/axios";
+
+const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 
 const superadminNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/branches", label: "Branches", icon: GitBranch },
   { to: "/admins", label: "Admins", icon: Users },
   { to: "/products", label: "Products", icon: Package },
+  { to: "/branch-inventory", label: "Branch Inventory", icon: Boxes },
   { to: "/categories", label: "Categories", icon: Tags },
+  { to: "/chat", label: "Chat", icon: MessageCircle },
   { to: "/riders", label: "Riders", icon: Truck },
   { to: "/orders", label: "Orders", icon: ShoppingBag },
   { to: "/promos", label: "Promos", icon: Megaphone },
@@ -35,6 +44,7 @@ const superadminNav = [
 const adminNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/products", label: "Products", icon: Package },
+  { to: "/branch-inventory", label: "Branch Inventory", icon: Boxes },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/riders", label: "Riders", icon: Truck },
   { to: "/customers", label: "Customers", icon: Users },
@@ -50,6 +60,52 @@ export default function Sidebar() {
 
   const isSuperadmin = user?.role === "superadmin";
   const navItems = isSuperadmin ? superadminNav : adminNav;
+
+  // Live badges — unread chat on the Chat nav, pending orders on Orders.
+  // A dedicated socket just for badges; the pages manage their own sockets.
+  const [unreadChat, setUnreadChat] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const socketRef = useRef<Socket | null>(null);
+
+  const refreshPendingOrders = () => {
+    api
+      .get("/orders")
+      .then((res) => {
+        const list: { status?: string }[] = res.data?.orders ?? [];
+        setPendingOrders(list.filter((o) => o.status === "pending").length);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    const refreshUnread = () => {
+      api
+        .get("/chat/conversations")
+        .then((res) => {
+          const convs: { unreadAdmin?: number }[] = res.data?.data ?? [];
+          setUnreadChat(convs.reduce((sum, c) => sum + (c.unreadAdmin ?? 0), 0));
+        })
+        .catch(() => {});
+    };
+
+    refreshUnread();
+    refreshPendingOrders();
+
+    const socket = io(socketURL, {
+      withCredentials: true,
+      transports: ["websocket"],
+    });
+    socketRef.current = socket;
+    socket.on("conversation_updated", refreshUnread);
+
+    // New orders, item changes, cancellations — recompute the pending badge
+    socket.on("order_updated", refreshPendingOrders);
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -109,6 +165,16 @@ export default function Sidebar() {
           >
             <Icon size={18} />
             {label}
+            {label === "Chat" && unreadChat > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-[#DA291C] text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {unreadChat > 99 ? "99+" : unreadChat}
+              </span>
+            )}
+            {label === "Orders" && pendingOrders > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-[#FF6720] text-white px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {pendingOrders > 99 ? "99+" : pendingOrders}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

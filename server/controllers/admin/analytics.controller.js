@@ -4,6 +4,8 @@ import Rider from "../../models/Rider.js";
 import Customer from "../../models/Customer.js";
 import Order from "../../models/Order.js";
 import Payment from "../../models/Payment.js";
+import BranchProduct from "../../models/BranchProduct.js";
+import Branch from "../../models/Branch.js";
 import {
   branchQuery,
   isBranchScoped,
@@ -19,6 +21,44 @@ export const getAdminDashboard = async (req, res) => {
     // customers are global catalog/accounting entities and stay unscoped.
     const orderFilter = branchQuery(req, "branch");
     const riderFilter = branchQuery(req, "assignedBranch");
+
+    const scoped = isBranchScoped(req);
+
+    // Customer counts: branch admins only count customers who ordered at
+    // their branch; superadmins count everyone.
+    let customerFilter = {};
+    if (scoped) {
+      const rows = await Order.find({ branch: req.adminBranchId })
+        .select("user")
+        .lean();
+      const userIds = [...new Set(rows.map((o) => o.user.toString()))];
+      const customers = userIds.length
+        ? await Customer.find({ user: { $in: userIds } })
+            .select("_id createdAt")
+            .lean()
+        : [];
+      customerFilter = { _id: { $in: customers.map((c) => c._id) } };
+      var customerCreatedAt = customers.map((c) => c.createdAt);
+    } else {
+      var customerCreatedAt = null;
+    }
+
+    // Low stock: branch admins see stock from their branch inventory
+    // (BranchProduct overrides); superadmins see the global catalogue.
+    let lowStockWhere = { stock: { $lte: 5 }, isActive: true };
+    if (scoped) {
+      const recs = await BranchProduct.find({
+        branch: req.adminBranchId,
+        isAvailable: true,
+        stock: { $ne: null, $lte: 5 },
+      })
+        .select("product")
+        .lean();
+      lowStockWhere = {
+        _id: { $in: recs.map((r) => r.product) },
+        isActive: true,
+      };
+    }
 
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -53,7 +93,7 @@ export const getAdminDashboard = async (req, res) => {
       ordersOverTime,
     ] = await Promise.all([
       Product.countDocuments(),
-      Product.countDocuments({ stock: { $lte: 5 }, isActive: true }),
+      lowStockWhere === null ? 0 : Product.countDocuments(lowStockWhere),
       Category.countDocuments(),
       Product.aggregate([
         { $group: { _id: "$categoryId", count: { $sum: 1 } } },
@@ -62,7 +102,7 @@ export const getAdminDashboard = async (req, res) => {
         { $project: { _id: 1, count: 1, name: "$category.name" } },
         { $sort: { count: -1 } },
       ]),
-      Product.find({ stock: { $lte: 5 }, isActive: true })
+      lowStockWhere === null ? [] : Product.find(lowStockWhere)
         .populate("categoryId", "name")
         .sort({ stock: 1 })
         .limit(5)
@@ -71,8 +111,13 @@ export const getAdminDashboard = async (req, res) => {
       Rider.countDocuments({ ...riderFilter, availabilityStatus: "available" }),
       Rider.countDocuments({ ...riderFilter, availabilityStatus: "offline" }),
       Rider.countDocuments({ ...riderFilter, availabilityStatus: "delivering" }),
-      Customer.countDocuments(),
-      Customer.countDocuments({ createdAt: { $gte: startOfMonth } }),
+      Customer.countDocuments(customerFilter),
+      // New this month — computed from the same scoped customer set
+      customerCreatedAt === null
+        ? Customer.countDocuments({ createdAt: { $gte: startOfMonth } })
+        : customerCreatedAt.filter(
+            (d) => new Date(d) >= startOfMonth,
+          ).length,
       Order.countDocuments(orderFilter),
       Order.countDocuments({ ...orderFilter, createdAt: { $gte: startOfDay } }),
       Order.countDocuments({ ...orderFilter, status: "pending" }),
@@ -129,12 +174,21 @@ export const getAdminDashboard = async (req, res) => {
       ]),
     ]);
 
+    // Branch display name so branch admins see which branch the numbers
+    // belong to (superadmins get a platform-wide label).
+    let branchInfo = null;
+    if (scoped) {
+      const b = await Branch.findById(req.adminBranchId).select("name branchCode");
+      branchInfo = b ? { _id: b._id, name: b.name, branchCode: b.branchCode } : null;
+    }
+
     const revenue = revenueAgg[0] || { total: 0, count: 0 };
     const todayRevenue = todayRevenueAgg[0] || { total: 0, count: 0 };
 
     return res.status(200).json({
       success: true,
       data: {
+        branch: branchInfo,
         overview: {
           totalProducts,
           totalCategories,

@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 
 import User from "../../models/User.js";
 import Customer from "../../models/Customer.js";
+import Order from "../../models/Order.js";
+import { isBranchScoped } from "../../middlewares/branchScope.middleware.js";
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleCustomerError = (err, res) => {
@@ -20,11 +22,48 @@ const handleCustomerError = (err, res) => {
   return res.status(500).json({ success: false, message: "Internal Server Error" });
 };
 
+// --------------------------------------------------
+// BRANCH SCOPING
+// --------------------------------------------------
+// Customers are global accounts, but each branch admin only manages the
+// customers who have actually ordered from their branch (via the Order
+// collection's branch field). Superadmins see everyone.
+// --------------------------------------------------
+
+// Distinct customer ids that have ordered from the requester's branch
+const branchCustomerIds = async (branchId) => {
+  const rows = await Order.find({ branch: branchId })
+    .select("user")
+    .lean();
+  return [...new Set(rows.map((o) => o.user.toString()))];
+};
+
+// Guard for document-addressing routes. Returns the customer when allowed,
+// otherwise null (and a 403/404 has already been sent).
+const findAccessibleCustomer = async (req, res) => {
+  const customer = await Customer.findById(req.params.id);
+  if (!customer) {
+    res.status(404).json({ success: false, message: "Customer not found" });
+    return null;
+  }
+  if (isBranchScoped(req)) {
+    const ids = await branchCustomerIds(req.adminBranchId);
+    if (!ids.includes(customer.user.toString())) {
+      res.status(403).json({
+        success: false,
+        message: "You can only manage customers who ordered from your branch.",
+      });
+      return null;
+    }
+  }
+  return customer;
+};
+
 /*
 |--------------------------------------------------------------------------
 | GET ALL CUSTOMERS
 |--------------------------------------------------------------------------
-| Retrieves all customers.
+| Retrieves all customers (superadmin) or the branch's customers (admin).
 |
 | Populates:
 | - user → firstname, lastname, email
@@ -35,15 +74,22 @@ const handleCustomerError = (err, res) => {
 
 export const getCustomers = async (req, res) => {
   try {
-    // Get all customers and populate User information
-    const customers = await Customer.find()
+    let query = {};
+    if (isBranchScoped(req)) {
+      const ids = await branchCustomerIds(req.adminBranchId);
+      // No orders yet at this branch → no customers visible (valid empty state)
+      query = { _id: { $in: ids } };
+    }
+
+    // Get customers and populate User information
+    const customers = await Customer.find(query)
       .populate("user", "firstname lastname email isActive")
       .sort({ createdAt: -1 });
 
     // An empty list is a valid 200 — the UI shows its own empty state.
     // (A 404 here made the client fire a false "Failed to load" toast.)
 
-    // Return all customers
+    // Return customers
     return res.status(200).json({
       success: true,
       message: "Customers retrieved successfully",
@@ -79,24 +125,19 @@ export const getCustomerById = async (req, res) => {
       });
     }
 
+    const customer = await findAccessibleCustomer(req, res);
+    if (!customer) return;
+
     // Find customer and populate User information
-    const customer = await Customer.findById(id).populate(
+    const populated = await Customer.findById(customer._id).populate(
       "user",
       "firstname lastname email isActive",
     );
 
-    // Check if customer exists
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Customer not found",
-      });
-    }
-
     return res.status(200).json({
       success: true,
       message: "Customer found",
-      data: customer,
+      data: populated,
     });
   } catch (err) {
     console.error("Get customer error:", err.message);
@@ -285,18 +326,12 @@ export const updateCustomerById = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
-    | FIND CUSTOMER
+    | FIND CUSTOMER + ENFORCE BRANCH SCOPE
     |--------------------------------------------------------------------------
     */
 
-    const customer = await Customer.findById(id);
-
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Customer not found",
-      });
-    }
+    const customer = await findAccessibleCustomer(req, res);
+    if (!customer) return;
 
     /*
     |--------------------------------------------------------------------------
@@ -453,18 +488,12 @@ export const toggleCustomerStatus = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
-    | FIND CUSTOMER
+    | FIND CUSTOMER + ENFORCE BRANCH SCOPE
     |--------------------------------------------------------------------------
     */
 
-    const customer = await Customer.findById(id);
-
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Customer not found",
-      });
-    }
+    const customer = await findAccessibleCustomer(req, res);
+    if (!customer) return;
 
     /*
     |--------------------------------------------------------------------------
@@ -518,10 +547,21 @@ export const toggleCustomerStatus = async (req, res) => {
 | 2. Associated User account
 |
 | This prevents orphaned User documents.
+|
+| Deletion is a chain-wide action (the account may have orders at other
+| branches), so it is restricted to superadmin.
 |--------------------------------------------------------------------------
 */
 
 export const deleteCustomerById = async (req, res) => {
+  if (isBranchScoped(req)) {
+    return res.status(403).json({
+      success: false,
+      message:
+        "Deleting customers is done by the superadmin. You can deactivate customers who ordered from your branch instead.",
+    });
+  }
+
   try {
     const { id } = req.params;
 

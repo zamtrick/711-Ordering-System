@@ -20,6 +20,7 @@ import chatRoutes from "./routes/chat.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import auth from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
+import { resolveAdminBranch } from "./middlewares/branchScope.middleware.js";
 
 import manageBranches from "./routes/superadmin/branch.routes.js";
 import manageAdmins from "./routes/superadmin/admin.routes.js";
@@ -68,7 +69,7 @@ app.use(
         "http://127.0.0.1:8081",        // Expo web (ipv4)
         "http://localhost:5173",        // Vite admin client
         "http://localhost:5174",        // Vite admin client (alt port)
-        "exp://192.168.254.181:8081",   // Expo Go (legacy dev client)
+
       ]);
 
       // The server host's own LAN IPs — covers http://<lan-ip>:8081 (Expo web)
@@ -183,8 +184,11 @@ app.use("/api/customer/favorites", auth, manageCustomerFavorites);
 app.use("/api/customer/reviews", auth, manageCustomerReviews);
 app.use("/api/admin/reviews", auth, authorize("admin", "superadmin"), manageAdminReviews);
 app.use("/api/customer/branches", auth, manageCustomerBranches);
-app.use("/api/orders", auth, authorize("customer", "admin"), manageOrderItems);
-app.use("/api/orders", auth, authorize("customer", "admin"), manageOrders);
+// resolveAdminBranch passes customers through untouched; for staff it sets
+// req.adminBranchId (admins → their branch, superadmins → null) so the order
+// controllers can scope branch-bound admins to their branch's orders.
+app.use("/api/orders", auth, authorize("customer", "admin"), resolveAdminBranch, manageOrderItems);
+app.use("/api/orders", auth, authorize("customer", "admin"), resolveAdminBranch, manageOrders);
 
 // App settings (delivery fee etc.)
 app.use("/api/settings", manageSettings);

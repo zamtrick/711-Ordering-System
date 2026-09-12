@@ -8,6 +8,7 @@ import Payment from "../../models/Payment.js";
 import { getCurrentDeliveryFee } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
+import { canAccessBranchDoc } from "../../middlewares/branchScope.middleware.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -286,9 +287,14 @@ export const getOrders = async (req, res) => {
     // Get logged-in customer ID from JWT
     const userId = req.user.userId;
 
-    // Customers may only view their own orders. Admins are allowed by the
-    // route middleware and can view all orders.
-    const orderQuery = req.user.role === "admin" ? {} : { user: userId };
+    // Customers may only view their own orders.
+    // Branch admins see only their branch's orders; superadmins see all.
+    const orderQuery =
+      req.user.role === "admin"
+        ? { branch: req.adminBranchId }
+        : req.user.role === "superadmin"
+          ? {}
+          : { user: userId };
 
     /*
     |--------------------------------------------------------------------------
@@ -373,7 +379,9 @@ export const getOrderById = async (req, res) => {
     */
 
     const orderQuery = { _id: id };
-    if (req.user.role !== "admin") {
+    if (req.user.role === "admin") {
+      orderQuery.branch = req.adminBranchId;
+    } else if (req.user.role !== "superadmin") {
       orderQuery.user = userId;
     }
 
@@ -467,7 +475,9 @@ export const cancelOrder = async (req, res) => {
     */
 
     const orderQuery = { _id: id };
-    if (req.user.role !== "admin") {
+    if (req.user.role === "admin") {
+      orderQuery.branch = req.adminBranchId;
+    } else if (req.user.role !== "superadmin") {
       orderQuery.user = userId;
     }
 

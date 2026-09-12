@@ -3,13 +3,11 @@ import {
   useContext,
   useState,
   useEffect,
-  useRef,
   useCallback,
   ReactNode,
 } from "react";
-import { io, Socket } from "socket.io-client";
-import Constants from "expo-constants";
 import api from "@/api/axios";
+import { useSocket } from "@/context/SocketContext";
 
 // --------------------------------------------------
 // TYPES
@@ -52,52 +50,27 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 // --------------------------------------------------
 // PROVIDER
 // --------------------------------------------------
+// Reuses the single authenticated socket from SocketProvider
+// (which fetches the JWT via /auth/token and passes it in the
+// handshake auth). This context no longer opens its own socket.
 
 export const ChatProvider = ({ children }: { children: ReactNode }) => {
-  const socketRef = useRef<Socket | null>(null);
+  const { socket, connected } = useSocket();
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [connected, setConnected] = useState(false);
   const [unread, setUnread] = useState(0);
 
   // --------------------------------------------------
-  // Init socket + conversation on mount
+  // Load or create the conversation
   // --------------------------------------------------
   useEffect(() => {
-    const serverUrl = (
-      Constants.expoConfig?.extra?.apiUrl as string | undefined
-    )?.replace(/\/api\/?$/, "") ?? "http://localhost:5000";
+    let cancelled = false;
 
-    const socket = io(serverUrl, {
-      withCredentials: true,
-      transports: ["websocket"],
-      autoConnect: true,
-    });
-
-    socketRef.current = socket;
-
-    socket.on("connect", () => setConnected(true));
-    socket.on("disconnect", () => setConnected(false));
-
-    // Server pushes an updated conversation object when a message arrives
-    socket.on("conversation_updated", (updated: Conversation) => {
-      setConversation(updated);
-      setUnread(updated.unreadCustomer ?? 0);
-    });
-
-    // New message while the chat pane is open
-    socket.on("new_message", (msg: ChatMessage) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m._id === msg._id)) return prev;
-        return [...prev, msg];
-      });
-    });
-
-    // Load or create the conversation
     api
       .get("/chat/conversation")
       .then((res) => {
+        if (cancelled) return;
         const convo: Conversation = res.data?.data;
         if (convo) {
           setConversation(convo);
@@ -107,38 +80,66 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       .catch(() => {});
 
     return () => {
-      socket.disconnect();
+      cancelled = true;
     };
   }, []);
+
+  // --------------------------------------------------
+  // Real-time — conversation updates + new messages
+  // (attached to the shared authenticated socket)
+  // --------------------------------------------------
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleConversationUpdated = (updated: Conversation) => {
+      setConversation(updated);
+      setUnread(updated.unreadCustomer ?? 0);
+    };
+
+    const handleNewMessage = (msg: ChatMessage) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
+      });
+    };
+
+    socket.on("conversation_updated", handleConversationUpdated);
+    socket.on("new_message", handleNewMessage);
+
+    return () => {
+      socket.off("conversation_updated", handleConversationUpdated);
+      socket.off("new_message", handleNewMessage);
+    };
+  }, [socket]);
 
   // --------------------------------------------------
   // Load messages + join room
   // --------------------------------------------------
   const loadMessages = useCallback(async () => {
-    if (!conversation) return;
+    if (!conversation || !socket) return;
     try {
       const res = await api.get(
         `/chat/conversations/${conversation._id}/messages`,
       );
       setMessages(res.data?.data ?? []);
       setUnread(0);
-      socketRef.current?.emit("join_conversation", {
+      socket.emit("join_conversation", {
         conversationId: conversation._id,
       });
     } catch {}
-  }, [conversation]);
+  }, [conversation, socket]);
 
   // --------------------------------------------------
   // Mark opened (reset unread without fetching messages again)
   // --------------------------------------------------
   const markOpened = useCallback(() => {
     setUnread(0);
-    if (conversation) {
-      socketRef.current?.emit("join_conversation", {
+    if (conversation && socket) {
+      socket.emit("join_conversation", {
         conversationId: conversation._id,
       });
     }
-  }, [conversation]);
+  }, [conversation, socket]);
 
   // --------------------------------------------------
   // Send message
@@ -148,7 +149,12 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       if (!text.trim() || !conversation) return;
 
       return new Promise<void>((resolve, reject) => {
-        socketRef.current?.emit(
+        if (!socket) {
+          reject(new Error("Socket not connected"));
+          return;
+        }
+
+        socket.emit(
           "send_message",
           { conversationId: conversation._id, text: text.trim() },
           (ack: { success: boolean; data?: ChatMessage }) => {
@@ -165,7 +171,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         );
       });
     },
-    [conversation],
+    [conversation, socket],
   );
 
   return (

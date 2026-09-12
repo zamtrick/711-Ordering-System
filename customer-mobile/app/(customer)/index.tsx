@@ -17,7 +17,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import { Search, ShoppingCart, ChevronRight, PackageSearch } from "lucide-react-native";
+import { Search, ShoppingCart, ChevronRight, PackageSearch, Plus } from "lucide-react-native";
 import { playTap } from "@/utils/sound";
 
 import useTheme from "@/hooks/useTheme";
@@ -76,8 +76,11 @@ const iconFor = (name: string) =>
 // --------------------------------------------------
 
 const Home = () => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors } = theme;
+
+  // Soft brand tint for accents (theme-aware) — matches products.tsx
+  const primaryTint = isDark ? "rgba(7,128,128,0.16)" : "rgba(0,122,83,0.08)";
 
   const { addItem, items, totalCount } = useCart();
 
@@ -229,13 +232,11 @@ const Home = () => {
             onPress={() => router.push("/(customer)/cart")}
             style={[
               styles.cartButton,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
+              { backgroundColor: colors.surface },
+              isDark ? { borderColor: colors.border } : styles.softShadow,
             ]}
           >
-            <ShoppingCart size={22} color="#007A53" />
+            <ShoppingCart size={22} color={colors.primary} />
 
             {totalCount > 0 && (
               <View style={styles.cartBadge}>
@@ -252,10 +253,8 @@ const Home = () => {
           <View
             style={[
               styles.searchContainer,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
+              { backgroundColor: colors.surface },
+              isDark ? { borderColor: colors.border } : styles.softShadow,
             ]}
           >
             <Search size={20} color={colors.muted} />
@@ -350,7 +349,7 @@ const Home = () => {
           </Text>
 
           <Pressable onPress={goProducts}>
-            <Text style={[styles.seeAll, { color: "#007A53" }]}>See all</Text>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
           </Pressable>
         </View>
 
@@ -363,27 +362,31 @@ const Home = () => {
             <Pressable
               key={category._id}
               onPress={() => goCategory(category.name)}
-              style={[
-                styles.category,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
+              style={styles.categoryTile}
             >
-              {category.image ? (
-                <Image
-                  source={{ uri: category.image }}
-                  style={styles.categoryImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.categoryIcon}>{iconFor(category.name)}</Text>
-              )}
+              <View
+                style={[
+                  styles.categoryCircle,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                {category.image ? (
+                  <Image
+                    source={{ uri: category.image }}
+                    style={styles.categoryImageContent}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.categoryIcon}>{iconFor(category.name)}</Text>
+                )}
+              </View>
 
               <Text
                 style={[styles.categoryName, { color: colors.headline }]}
-                numberOfLines={2}
+                numberOfLines={1}
               >
                 {category.name}
               </Text>
@@ -398,7 +401,7 @@ const Home = () => {
           </Text>
 
           <Pressable onPress={goProducts}>
-            <Text style={[styles.seeAll, { color: "#007A53" }]}>See all</Text>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
           </Pressable>
         </View>
 
@@ -413,10 +416,8 @@ const Home = () => {
               }}
               style={[
                 styles.productCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
+                { backgroundColor: colors.surface },
+                isDark ? { borderColor: colors.border } : styles.softShadow,
               ]}
             >
               <View
@@ -438,14 +439,21 @@ const Home = () => {
                 {product.stock > 0 && (
                   <Pressable
                     onPress={() => handleAdd(product)}
-                    style={[styles.addButton, { backgroundColor: "#007A53" }]}
+                    style={[styles.addButton, { backgroundColor: colors.primary }]}
                   >
-                    <Text style={styles.addButtonText}>+</Text>
+                    <Plus size={17} color="#FFFFFF" strokeWidth={2.6} />
                   </Pressable>
                 )}
 
-                <FavoriteHeartButton product={product} size={17} />
+                <FavoriteHeartButton product={product} size={17} placement="top-right" />
               </View>
+
+              <Text
+                style={[styles.productCategory, { color: colors.muted }]}
+                numberOfLines={1}
+              >
+                {product.categoryId?.name?.toUpperCase() ?? "PRODUCT"}
+              </Text>
 
               <Text
                 style={[styles.productName, { color: colors.headline }]}
@@ -454,7 +462,30 @@ const Home = () => {
                 {product.name}
               </Text>
 
-              <Text style={[styles.productPrice, { color: "#007A53" }]}>
+              <View style={styles.stockRow}>
+                <View
+                  style={[
+                    styles.stockDot,
+                    {
+                      backgroundColor:
+                        product.stock <= 0
+                          ? colors.red
+                          : product.stock <= 5
+                            ? "#FF6720"
+                            : "#2E8B57",
+                    },
+                  ]}
+                />
+                <Text style={[styles.stockText, { color: colors.muted }]}>
+                  {product.stock > 0
+                    ? product.stock <= 5
+                      ? `Only ${product.stock} left`
+                      : `${product.stock} in stock`
+                    : "Out of stock"}
+                </Text>
+              </View>
+
+              <Text style={[styles.productPrice, { color: colors.primary }]}>
                 ₱{product.price.toFixed(2)}
               </Text>
             </Pressable>
@@ -463,7 +494,9 @@ const Home = () => {
 
         {popular.length === 0 && (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🛒</Text>
+            <View style={[styles.emptyIcon, { backgroundColor: primaryTint }]}>
+              <PackageSearch size={34} color={colors.primary} />
+            </View>
             <Text style={[styles.emptyTitle, { color: colors.headline }]}>
               No products yet
             </Text>
@@ -537,8 +570,7 @@ const styles = StyleSheet.create({
   cartButton: {
     width: 46,
     height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -567,11 +599,10 @@ const styles = StyleSheet.create({
 
   searchContainer: {
     height: 52,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 26,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     marginBottom: 20,
   },
 
@@ -703,7 +734,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
   },
 
@@ -712,54 +743,68 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  // Soft elevation — matches products.tsx cards
+  softShadow: {
+    shadowColor: "#0A3D3D",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+
   categoryList: {
-    gap: 12,
+    gap: 10,
     paddingBottom: 28,
   },
 
-  category: {
-    width: 90,
-    height: 95,
-    borderRadius: 16,
-    borderWidth: 1,
+  // Circular category tiles — matches products.tsx
+  categoryTile: {
+    width: 78,
+    alignItems: "center",
+  },
+
+  categoryCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 6,
+    overflow: "hidden",
+  },
+
+  categoryImageContent: {
+    width: "100%",
+    height: "100%",
   },
 
   categoryIcon: {
-    fontSize: 28,
-    marginBottom: 7,
-  },
-
-  categoryImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginBottom: 7,
+    fontSize: 24,
   },
 
   categoryName: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "600",
     textAlign: "center",
+    marginTop: 7,
   },
 
   productRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
   },
 
+  // Borderless card (light) / bordered card (dark) — matches products.tsx
   productCard: {
     flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 10,
+    borderRadius: 20,
+    padding: 8,
+    overflow: "hidden",
   },
 
   productImage: {
-    height: 120,
-    borderRadius: 12,
+    height: 130,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
@@ -770,36 +815,65 @@ const styles = StyleSheet.create({
   productImageContent: {
     width: "100%" as const,
     height: "100%" as const,
-    borderRadius: 12,
+    borderRadius: 15,
   },
 
+  // Floating add-to-cart over the image — matches products.tsx
   addButton: {
     position: "absolute" as const,
-    right: 6,
-    bottom: 6,
-    width: 30,
-    height: 30,
-    borderRadius: 10,
+    right: 8,
+    bottom: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 13,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
 
-  addButtonText: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
-    lineHeight: 24,
+  productCategory: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    marginBottom: 4,
+    paddingHorizontal: 6,
   },
 
   productName: {
     fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 5,
+    fontWeight: "700",
+    lineHeight: 18,
+    paddingHorizontal: 6,
+  },
+
+  stockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 5,
+    paddingHorizontal: 6,
+  },
+
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+  stockText: {
+    fontSize: 11,
   },
 
   productPrice: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "800",
+    marginTop: 8,
+    letterSpacing: -0.3,
+    paddingHorizontal: 6,
   },
 
   emptyContainer: {
@@ -807,9 +881,13 @@ const styles = StyleSheet.create({
     paddingTop: 40,
   },
 
-  emptyEmoji: {
-    fontSize: 42,
-    marginBottom: 12,
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
 
   emptyTitle: {

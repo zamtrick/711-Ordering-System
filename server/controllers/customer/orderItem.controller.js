@@ -23,10 +23,17 @@ const emitFullOrder = async (orderId) => {
 // Helpers
 // ==========================================
 
-// Customers may only touch their own orders; admins can manage all.
+// Access rule for order items:
+//   customer   → only their own orders
+//   admin      → only orders placed at their assigned branch
+//   superadmin → all orders
 const orderQueryFor = (req, orderId) => {
   const query = { _id: orderId };
-  if (req.user.role !== "admin") query.user = req.user.userId;
+  if (req.user.role === "admin") {
+    query.branch = req.adminBranchId;
+  } else if (req.user.role !== "superadmin") {
+    query.user = req.user.userId;
+  }
   return query;
 };
 

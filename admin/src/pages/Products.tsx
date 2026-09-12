@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { Plus, Pencil, Trash2, Search, Upload, X, PackageSearch } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Upload, X, PackageSearch, Store } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
+import { useAuth } from "@/context/AuthContext";
 import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -20,6 +21,10 @@ type Product = {
   isActive: boolean;
   image?: string;
   createdAt: string;
+  // Present when the API merges the viewer's branch inventory (regular admins)
+  branchStock?: number | null;
+  isAvailableAtBranch?: boolean;
+  configuredAtBranch?: boolean;
 };
 
 type Category = { _id: string; name: string };
@@ -65,7 +70,11 @@ export default function Products() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
   const { can } = useAdminPermissions();
-  const readOnly = !can("canManageProducts");
+  const { user } = useAuth();
+  // Catalogue writes are superadmin-only. Branch admins get read access to the
+  // catalogue and manage availability/stock via the Branch Inventory page.
+  const isSuperadmin = user?.role === "superadmin";
+  const readOnly = !isSuperadmin || !can("canManageProducts");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -317,7 +326,9 @@ export default function Products() {
           <p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">Manage your product catalog</p>
           {readOnly && (
             <p className="text-xs font-semibold text-[#B45309] bg-[#FEF3C7] dark:bg-[#3A2A0A] dark:text-[#FCD34D] px-2.5 py-1 rounded-full inline-block mt-2">
-              Read-only — managing products is disabled by superadmin
+              {isSuperadmin
+                ? "Read-only — managing products is disabled by superadmin"
+                : "Catalogue is managed by the superadmin — set availability & stock in Branch Inventory"}
             </p>
           )}
         </div>
@@ -341,11 +352,16 @@ export default function Products() {
               <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Category</th>
               <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Price</th>
               <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Stock</th>
+              {!isSuperadmin && (
+                <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>
+                  <span className="inline-flex items-center gap-1"><Store size={13} /> My branch</span>
+                </th>
+              )}
               <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Actions</th>
             </tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[#777] dark:text-[#A0A0A0]">Loading...</td></tr>
-              : filtered.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-[#777] dark:text-[#A0A0A0]">No products found.</td></tr>
+              {loading ? <tr><td colSpan={isSuperadmin ? 7 : 8} className="px-4 py-8 text-center text-[#777] dark:text-[#A0A0A0]">Loading...</td></tr>
+              : filtered.length === 0 ? <tr><td colSpan={isSuperadmin ? 7 : 8} className="px-4 py-12 text-center text-[#777] dark:text-[#A0A0A0]">No products found.</td></tr>
               : filtered.map((p) => (
                 <tr key={p._id} className={`border-b transition-colors ${isDark ? "border-[#2E2E2E] hover:bg-[#2A2A2A]" : "border-[#F0F0F0] hover:bg-[#FAFAFA]"}`}>
                   <td className="px-4 py-3">
@@ -359,14 +375,30 @@ export default function Products() {
                   </td>
                   <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{p.name}</td>
                   <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.sku}</td>
-                  <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.categoryId && typeof p.categoryId === "object" ? p.categoryId.name : "—"}</td>
-                  <td className="px-4 py-3 text-[#007A53] dark:text-[#4CAF50] font-semibold">₱{p.price}</td>
+                  <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{p.categoryId && typeof p.categoryId === "object" ? p.categoryId.name : "—"}</td>                  <td className="px-4 py-3 text-[#007A53] dark:text-[#4CAF50] font-semibold">₱{p.price}</td>
                   <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.stock <= 5 ? "bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C]" : "bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]"}`}>{p.stock}</span></td>
+                  {!isSuperadmin && (
+                    <td className="px-4 py-3">
+                      {!p.configuredAtBranch ? (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${isDark ? "bg-[#2A2A2A] text-[#A0A0A0]" : "bg-[#F0ECE6] text-[#777]"}`}>Not set</span>
+                      ) : !p.isAvailableAtBranch ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#FFF0F0] dark:bg-[#3D1515] text-[#DA291C]">Unavailable</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]">
+                          {p.branchStock ?? p.stock}
+                        </span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Pencil size={14} className="text-[#4F46E5]" /></button>
-                      <button onClick={() => setDeleteProduct(p)} className="p-1.5 rounded-lg hover:bg-[#FFF0F0] dark:hover:bg-[#3D1515] cursor-pointer"><Trash2 size={14} className="text-[#DA291C]" /></button>
-                    </div>
+                    {isSuperadmin ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Pencil size={14} className="text-[#4F46E5]" /></button>
+                        <button onClick={() => setDeleteProduct(p)} className="p-1.5 rounded-lg hover:bg-[#FFF0F0] dark:hover:bg-[#3D1515] cursor-pointer"><Trash2 size={14} className="text-[#DA291C]" /></button>
+                      </div>
+                    ) : (
+                      <span className={`text-xs ${isDark ? "text-[#555]" : "text-[#aaa]"}`}>—</span>
+                    )}
                   </td>
                 </tr>
               ))}

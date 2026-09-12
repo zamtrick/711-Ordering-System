@@ -6,19 +6,24 @@ import {
 } from "../controllers/chat.controller.js";
 import auth from "../middlewares/auth.middleware.js";
 import { authorize } from "../middlewares/role.middleware.js";
+import { resolveStaffBranch } from "../middlewares/branchScope.middleware.js";
 
 const router = express.Router();
 
+// All chat routes require a valid session and (for staff) branch resolution:
+// superadmins get req.adminBranchId = null (see everything), branch admins
+// get their branch (scoped lists/access), customers pass through untouched.
+router.use(auth, resolveStaffBranch);
+
 // Customer — get or create their own conversation
-router.get("/conversation", auth, authorize("customer"), getOrCreateConversation);
+router.get("/conversation", authorize("customer"), getOrCreateConversation);
 
-// Admin — list all conversations
-router.get("/conversations", auth, authorize("admin", "superadmin"), getAllConversations);
+// Admin — list all conversations (branch-scoped for branch admins)
+router.get("/conversations", authorize("admin", "superadmin"), getAllConversations);
 
-// Both sides — fetch messages (ownership enforced in controller)
+// Both sides — fetch messages (ownership + branch scope enforced in controller)
 router.get(
   "/conversations/:conversationId/messages",
-  auth,
   authorize("customer", "admin", "superadmin"),
   getMessages,
 );

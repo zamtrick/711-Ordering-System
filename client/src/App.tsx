@@ -9,6 +9,8 @@ import Admins from "@/pages/Admins";
 import ActivityLog from "@/pages/ActivityLog";
 import Profile from "@/pages/Profile";
 import Products from "@/pages/Products";
+import BranchInventory from "@/pages/BranchInventory";
+import Chat from "@/pages/Chat";
 import Categories from "@/pages/Categories";
 import Riders from "@/pages/Riders";
 import Customers from "@/pages/Customers";
@@ -61,6 +63,8 @@ function AppRoutes() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/products" element={<Products />} />
+        <Route path="/branch-inventory" element={<BranchInventory />} />
+        <Route path="/chat" element={<Chat />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/riders" element={<Riders />} />
         <Route path="/orders" element={<Orders />} />

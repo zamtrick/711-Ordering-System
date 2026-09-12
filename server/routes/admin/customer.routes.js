@@ -9,8 +9,12 @@ import {
   deleteCustomerById,
 } from "../../controllers/admin/customer.controller.js";
 import { requireDeleteConfirmation } from "../../middlewares/deleteConfirm.middleware.js";
+import { resolveAdminBranch } from "../../middlewares/branchScope.middleware.js";
 
 const router = express.Router();
+
+// Branch scoping: admins manage customers who ordered at their branch only.
+router.use(resolveAdminBranch);
 
 // GET    /api/admin/customers
 router.get("/", getCustomers);

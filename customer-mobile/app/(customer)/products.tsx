@@ -16,6 +16,8 @@ import {
   Star,
   PackageSearch,
   Store,
+  Check,
+  LayoutGrid,
 } from "lucide-react-native";
 
 import useTheme from "@/hooks/useTheme";
@@ -63,8 +65,11 @@ type Product = {
 // --------------------------------------------------
 
 const Products = () => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { colors } = theme;
+
+  // Soft brand tint for selected/accent backgrounds (theme-aware)
+  const primaryTint = isDark ? "rgba(7,128,128,0.16)" : "rgba(0,122,83,0.08)";
 
   const { addItem, totalCount, items } = useCart();
 
@@ -237,10 +242,14 @@ const Products = () => {
             onPress={() => router.push("/(customer)/cart")}
             style={[
               styles.cartButton,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              isDark
+                ? { backgroundColor: colors.surface, borderColor: colors.border }
+                : { backgroundColor: colors.surface },
+              // eslint-disable-next-line react-native/no-inline-styles
+              isDark ? null : styles.softShadow,
             ]}
           >
-            <ShoppingCart size={21} color="#007A53" />
+            <ShoppingCart size={21} color={colors.primary} />
             {totalCount > 0 && (
               <View style={styles.cartBadge}>
                 <Text style={styles.cartBadgeText}>
@@ -255,7 +264,11 @@ const Products = () => {
         <View
           style={[
             styles.searchContainer,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            isDark
+              ? { backgroundColor: colors.surface, borderColor: colors.border }
+              : { backgroundColor: colors.surface },
+            // eslint-disable-next-line react-native/no-inline-styles
+            isDark ? null : styles.softShadow,
           ]}
         >
           <Search size={20} color={colors.muted} />
@@ -276,34 +289,49 @@ const Products = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterList}
         >
-          {/* "All Branches" chip */}
+          {/* "All Branches" card */}
           <Pressable
             onPress={() => setSelectedBranchId(ALL_BRANCHES_ID)}
             style={[
-              styles.branchChip,
+              styles.branchCard,
               {
                 backgroundColor:
-                  selectedBranchId === ALL_BRANCHES_ID ? "#007A53" : colors.surface,
+                  selectedBranchId === ALL_BRANCHES_ID ? primaryTint : colors.surface,
                 borderColor:
-                  selectedBranchId === ALL_BRANCHES_ID ? "#007A53" : colors.border,
+                  selectedBranchId === ALL_BRANCHES_ID ? colors.primary : colors.border,
               },
             ]}
           >
-            <Store
-              size={13}
-              color={selectedBranchId === ALL_BRANCHES_ID ? "#FFFFFF" : colors.muted}
-            />
-            <Text
+            <View
               style={[
-                styles.branchChipText,
+                styles.branchIconTile,
                 {
-                  color:
-                    selectedBranchId === ALL_BRANCHES_ID ? "#FFFFFF" : colors.headline,
+                  backgroundColor:
+                    selectedBranchId === ALL_BRANCHES_ID ? colors.primary : primaryTint,
                 },
               ]}
             >
-              All Branches
-            </Text>
+              <Store
+                size={16}
+                color={selectedBranchId === ALL_BRANCHES_ID ? "#FFFFFF" : colors.primary}
+              />
+            </View>
+            <View style={styles.branchTextWrap}>
+              <Text
+                style={[styles.branchCardName, { color: colors.headline }]}
+                numberOfLines={1}
+              >
+                All Branches
+              </Text>
+              <Text style={[styles.branchCardSub, { color: colors.muted }]}>
+                Full catalogue
+              </Text>
+            </View>
+            {selectedBranchId === ALL_BRANCHES_ID && (
+              <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+                <Check size={12} color="#FFFFFF" strokeWidth={3} />
+              </View>
+            )}
           </Pressable>
 
           {branches.map((branch) => {
@@ -313,44 +341,41 @@ const Products = () => {
                 key={branch._id}
                 onPress={() => setSelectedBranchId(branch._id)}
                 style={[
-                  styles.branchChip,
+                  styles.branchCard,
                   {
-                    backgroundColor: active ? "#007A53" : colors.surface,
-                    borderColor: active ? "#007A53" : colors.border,
+                    backgroundColor: active ? primaryTint : colors.surface,
+                    borderColor: active ? colors.primary : colors.border,
                   },
                 ]}
               >
-                <Store size={13} color={active ? "#FFFFFF" : colors.muted} />
-                <Text
+                <View
                   style={[
-                    styles.branchChipText,
-                    { color: active ? "#FFFFFF" : colors.headline },
+                    styles.branchIconTile,
+                    { backgroundColor: active ? colors.primary : primaryTint },
                   ]}
                 >
-                  {branch.name}
-                </Text>
+                  <Store size={16} color={active ? "#FFFFFF" : colors.primary} />
+                </View>
+                <View style={styles.branchTextWrap}>
+                  <Text
+                    style={[styles.branchCardName, { color: colors.headline }]}
+                    numberOfLines={1}
+                  >
+                    {branch.name}
+                  </Text>
+                  <Text style={[styles.branchCardSub, { color: colors.muted }]}>
+                    {branch.branchCode}
+                  </Text>
+                </View>
+                {active && (
+                  <View style={[styles.checkBadge, { backgroundColor: colors.primary }]}>
+                    <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                  </View>
+                )}
               </Pressable>
             );
           })}
         </ScrollView>
-
-        {/* Branch availability notice */}
-        {selectedBranch && (
-          <View
-            style={[
-              styles.branchNotice,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Store size={14} color="#007A53" />
-            <Text style={[styles.branchNoticeText, { color: colors.muted }]}>
-              Showing products available at{" "}
-              <Text style={{ fontWeight: "700", color: colors.headline }}>
-                {selectedBranch.name}
-              </Text>
-            </Text>
-          </View>
-        )}
 
         {/* ── CATEGORIES ─────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>
@@ -368,26 +393,36 @@ const Products = () => {
               <Pressable
                 key={cat.name}
                 onPress={() => setSelectedCategory(cat.name)}
-                style={[
-                  styles.categoryButton,
-                  {
-                    backgroundColor: active ? "#007A53" : colors.surface,
-                    borderColor: active ? "#007A53" : colors.border,
-                  },
-                ]}
+                style={styles.categoryTile}
               >
-                {cat.image ? (
-                  <Image
-                    source={{ uri: cat.image }}
-                    style={styles.categoryChipImage}
-                    resizeMode="cover"
-                  />
-                ) : null}
+                <View
+                  style={[
+                    styles.categoryCircle,
+                    {
+                      backgroundColor: active ? primaryTint : colors.surface,
+                      borderColor: active ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  {cat.image ? (
+                    <Image
+                      source={{ uri: cat.image }}
+                      style={styles.categoryImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <LayoutGrid
+                      size={22}
+                      color={active ? colors.primary : colors.muted}
+                    />
+                  )}
+                </View>
                 <Text
                   style={[
-                    styles.categoryText,
-                    { color: active ? "#FFFFFF" : colors.headline },
+                    styles.categoryTileLabel,
+                    { color: active ? colors.primary : colors.headline },
                   ]}
+                  numberOfLines={1}
                 >
                   {cat.name}
                 </Text>
@@ -402,7 +437,7 @@ const Products = () => {
             {selectedBranch ? `${selectedBranch.name} Products` : "All Products"}
           </Text>
           <Text style={[styles.resultText, { color: colors.muted }]}>
-            {filtered.length} products
+            {filtered.length} {filtered.length === 1 ? "item" : "items"}
           </Text>
         </View>
 
@@ -417,7 +452,9 @@ const Products = () => {
               }}
               style={[
                 styles.productCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                { backgroundColor: colors.surface },
+                // Borderless + soft shadow in light mode; subtle border in dark
+                isDark ? { borderColor: colors.border } : styles.softShadow,
               ]}
             >
               {/* Image */}
@@ -437,28 +474,50 @@ const Products = () => {
                   <PackageSearch size={40} color={colors.muted} />
                 )}
 
+                {/* Out of stock overlay */}
                 {product.stock <= 0 && (
                   <View style={styles.outOfStockOverlay}>
                     <Text style={styles.outOfStockText}>Out of stock</Text>
                   </View>
                 )}
 
+                {/* Rating badge — top-left over the image */}
+                {(product.ratingCount ?? 0) > 0 && (
+                  <View style={styles.ratingBadge}>
+                    <Star size={11} color="#FFC531" fill="#FFC531" />
+                    <Text style={styles.ratingBadgeText}>
+                      {(product.ratingAvg ?? 0).toFixed(1)}
+                    </Text>
+                    <Text style={styles.ratingBadgeCount}>
+                      ({product.ratingCount})
+                    </Text>
+                  </View>
+                )}
+
+                {/* Add to cart — floating over the image */}
                 {product.stock > 0 && (
                   <Pressable
                     onPress={() => handleAdd(product)}
-                    style={[styles.addButton, { backgroundColor: "#007A53" }]}
+                    style={[
+                      styles.addButton,
+                      { backgroundColor: colors.primary },
+                    ]}
                   >
-                    <Plus size={18} color="#FFFFFF" />
+                    <Plus size={19} color="#FFFFFF" />
                   </Pressable>
                 )}
 
-                <FavoriteHeartButton product={product} />
+                {/* Favorite heart — top-right */}
+                <FavoriteHeartButton product={product} placement="top-right" />
               </View>
 
               {/* Info */}
               <View style={styles.productInfo}>
-                <Text style={[styles.productCategory, { color: colors.muted }]}>
-                  {product.categoryId?.name ?? "Product"}
+                <Text
+                  style={[styles.productCategory, { color: colors.muted }]}
+                  numberOfLines={1}
+                >
+                  {product.categoryId?.name?.toUpperCase() ?? "PRODUCT"}
                 </Text>
 
                 <Text
@@ -469,27 +528,29 @@ const Products = () => {
                 </Text>
 
                 <View style={styles.stockRow}>
-                  <Star size={12} color="#FF6720" fill="#FF6720" />
+                  <View
+                    style={[
+                      styles.stockDot,
+                      {
+                        backgroundColor:
+                          product.stock <= 0
+                            ? colors.red
+                            : product.stock <= 5
+                              ? "#FF6720"
+                              : "#2E8B57",
+                      },
+                    ]}
+                  />
                   <Text style={[styles.stockText, { color: colors.muted }]}>
                     {product.stock > 0
-                      ? `${product.stock} in stock`
+                      ? product.stock <= 5
+                        ? `Only ${product.stock} left`
+                        : `${product.stock} in stock`
                       : "Out of stock"}
                   </Text>
                 </View>
 
-                {(product.ratingCount ?? 0) > 0 && (
-                  <View style={styles.stockRow}>
-                    <Star size={12} color="#FF6720" fill="#FF6720" />
-                    <Text style={[styles.stockText, { color: colors.headline, fontWeight: "700" }]}>
-                      {(product.ratingAvg ?? 0).toFixed(1)}
-                    </Text>
-                    <Text style={[styles.stockText, { color: colors.muted }]}>
-                      ({product.ratingCount})
-                    </Text>
-                  </View>
-                )}
-
-                <Text style={[styles.price, { color: "#007A53" }]}>
+                <Text style={[styles.price, { color: colors.primary }]}>
                   ₱{product.price.toFixed(2)}
                 </Text>
               </View>
@@ -499,7 +560,18 @@ const Products = () => {
 
         {filtered.length === 0 && !loading && (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🔍</Text>
+            <View
+              style={[
+                styles.emptyIcon,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(7,128,128,0.14)"
+                    : "rgba(0,122,83,0.08)",
+                },
+              ]}
+            >
+              <PackageSearch size={34} color={colors.primary} />
+            </View>
             <Text style={[styles.emptyTitle, { color: colors.headline }]}>
               No products found
             </Text>
@@ -547,7 +619,7 @@ const styles = StyleSheet.create({
   retryButton: {
     height: 44,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: "#007A53",
     alignItems: "center",
     justifyContent: "center",
@@ -558,6 +630,15 @@ const styles = StyleSheet.create({
 
   content: { padding: 20, paddingBottom: 35 },
 
+  // Soft elevation used on cards / search / cart button (light mode)
+  softShadow: {
+    shadowColor: "#0A3D3D",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -567,13 +648,12 @@ const styles = StyleSheet.create({
 
   smallTitle: { fontSize: 14, marginBottom: 3 },
 
-  title: { fontSize: 25, fontWeight: "800" },
+  title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
 
   cartButton: {
     width: 46,
     height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -593,10 +673,9 @@ const styles = StyleSheet.create({
   cartBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
 
   searchContainer: {
-    height: 53,
-    borderRadius: 15,
-    borderWidth: 1,
-    paddingHorizontal: 15,
+    height: 52,
+    borderRadius: 26,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 22,
@@ -604,7 +683,7 @@ const styles = StyleSheet.create({
 
   searchInput: { flex: 1, fontSize: 14, marginLeft: 10 },
 
-  sectionTitle: { fontSize: 18, fontWeight: "800" },
+  sectionTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
 
   filterList: {
     gap: 9,
@@ -612,51 +691,71 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
 
-  // Branch chips
-  branchChip: {
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
+  // Branch cards (horizontal rail)
+  branchCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-  },
-
-  branchChipText: { fontSize: 13, fontWeight: "600" },
-
-  branchNotice: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 2,
     paddingVertical: 9,
-    marginBottom: 18,
+    paddingHorizontal: 11,
+    maxWidth: 235,
   },
 
-  branchNoticeText: { fontSize: 12, flex: 1 },
-
-  // Category chips
-  categoryButton: {
-    height: 38,
-    paddingHorizontal: 17,
-    borderRadius: 20,
-    borderWidth: 1,
-    flexDirection: "row",
+  branchIconTile: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
   },
 
-  categoryChipImage: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  branchTextWrap: {
+    flexShrink: 1,
+    maxWidth: 140,
   },
 
-  categoryText: { fontSize: 13, fontWeight: "600" },
+  branchCardName: { fontSize: 13, fontWeight: "700" },
+
+  branchCardSub: { fontSize: 10.5, fontWeight: "500", marginTop: 1 },
+
+  checkBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 2,
+  },
+
+  // Category tiles (circular, image-first)
+  categoryTile: {
+    width: 78,
+    alignItems: "center",
+  },
+
+  categoryCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  categoryImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  categoryTileLabel: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    marginTop: 7,
+    textAlign: "center",
+  },
 
   productHeader: {
     flexDirection: "row",
@@ -665,25 +764,25 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  resultText: { fontSize: 12 },
+  resultText: { fontSize: 12, fontWeight: "500" },
 
   productGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: 14,
   },
 
+  // Borderless card (light) / bordered card (dark)
   productCard: {
     width: "48%",
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 9,
+    borderRadius: 20,
+    padding: 8,
     overflow: "hidden",
   },
 
   productImageContainer: {
-    height: 145,
-    borderRadius: 13,
+    height: 160,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -692,18 +791,50 @@ const styles = StyleSheet.create({
   productImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 13,
+    borderRadius: 15,
   },
 
+  // Floating add-to-cart button over the image
   addButton: {
     position: "absolute",
     right: 8,
     bottom: 8,
-    width: 34,
-    height: 34,
-    borderRadius: 11,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+
+  // Rating pill over the image (top-left)
+  ratingBadge: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(20,20,20,0.62)",
+    borderRadius: 9,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+
+  ratingBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  ratingBadgeCount: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 10,
+    fontWeight: "500",
   },
 
   outOfStockOverlay: {
@@ -712,42 +843,66 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    borderRadius: 13,
+    borderRadius: 15,
   },
 
-  outOfStockText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  outOfStockText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
 
   productInfo: {
-    paddingHorizontal: 3,
+    paddingHorizontal: 6,
     paddingTop: 10,
-    paddingBottom: 5,
+    paddingBottom: 6,
   },
 
-  productCategory: { fontSize: 11, marginBottom: 3 },
+  productCategory: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
 
-  productName: { fontSize: 14, fontWeight: "700" },
+  productName: { fontSize: 14, fontWeight: "700", lineHeight: 18 },
 
   stockRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 6,
+    gap: 5,
+    marginTop: 5,
+  },
+
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   stockText: { fontSize: 11 },
 
-  price: { fontSize: 16, fontWeight: "800", marginTop: 7 },
+  price: { fontSize: 17, fontWeight: "800", marginTop: 8, letterSpacing: -0.3 },
 
+  // Empty state
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 60,
   },
 
-  emptyEmoji: { fontSize: 42, marginBottom: 12 },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
 
   emptyTitle: { fontSize: 18, fontWeight: "800" },
 
