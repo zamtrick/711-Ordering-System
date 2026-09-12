@@ -32,7 +32,20 @@ type Delivery = {
   rider?: string | { _id?: string };
   createdAt: string;
   user?: { firstname: string; lastname: string; email: string };
-  branch?: { name: string; branchCode: string; location: string; address: string };
+  branch?: {
+    name: string;
+    branchCode: string;
+    location: string;
+    address?:
+      | string
+      | {
+          street?: string;
+          barangay?: string;
+          city?: string;
+          province?: string;
+          postalCode?: string;
+        };
+  };
   orderItems?: {
     _id: string;
     quantity: number;
@@ -57,6 +70,31 @@ const NEXT_ICON: Record<string, string> = {
   picked_up: "📦",
   in_transit: "🚚",
   delivered: "✅",
+};
+
+// Branch.address is a structured object on the server
+// ({street, barangay, city, province, postalCode}). Older clients used to
+// treat it as a plain string, so this formatter handles both shapes and
+// skips empty parts.
+const formatBranchAddress = (
+  address:
+    | string
+    | {
+        street?: string;
+        barangay?: string;
+        city?: string;
+        province?: string;
+        postalCode?: string;
+      }
+    | undefined
+): string => {
+  if (!address) return "";
+  if (typeof address === "string") return address;
+
+  return [address.street, address.barangay, address.city, address.province, address.postalCode]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
 };
 
 const Deliveries = () => {
@@ -98,6 +136,7 @@ const Deliveries = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
     fetchDeliveries();
   }, [fetchDeliveries]);
 
@@ -287,14 +326,14 @@ const Deliveries = () => {
                 </View>
 
                 {/* Address */}
-                {delivery.branch?.address && (
+                {formatBranchAddress(delivery.branch?.address) ? (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: colors.muted }]}>Address</Text>
                     <Text style={[styles.infoValue, { color: colors.headline }]} numberOfLines={2}>
-                      {delivery.branch.address}
+                      {formatBranchAddress(delivery.branch?.address)}
                     </Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* Items */}
                 <View style={styles.infoRow}>
