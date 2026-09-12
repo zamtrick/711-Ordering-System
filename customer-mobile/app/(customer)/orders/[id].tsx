@@ -18,11 +18,21 @@ import {
   Check,
   Circle,
   Truck,
+  Star,
+  Pencil,
+  Printer,
+  Share2,
 } from "lucide-react-native";
+import {
+  printReceipt,
+  shareReceipt,
+  type ReceiptOrder,
+} from "@/utils/receipt";
 import { router, useLocalSearchParams } from "expo-router";
 
 import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
+import ReviewModal from "@/components/ReviewModal";
 import api from "@/api/axios";
 import { useSocket } from "@/context/SocketContext";
 import { useCart } from "@/context/CartContext";
@@ -50,6 +60,7 @@ type OrderDetail = {
   deliveryAddress?: string;
   createdAt: string;
   updatedAt?: string;
+  user?: { firstname?: string; lastname?: string; email?: string } | null;
   branch?: { _id?: string; name?: string; branchCode?: string; location?: string };
   payment?: {
     paymentMethod: string;
@@ -128,8 +139,31 @@ const formatDate = (iso: string) =>
     minute: "2-digit",
   });
 
-// Ordered timeline steps for active orders
-const TIMELINE_STEPS = ["pending", "processing", "completed"] as const;
+// Ordered timeline steps for active orders — the 4-stage pipeline shown
+// live as the admin accepts and the rider delivers.
+const TIMELINE_STEPS = [
+  { key: "placed", label: "Order placed" },
+  { key: "preparing", label: "Preparing your order" },
+  { key: "on_delivery", label: "On the way" },
+  { key: "completed", label: "Completed" },
+] as const;
+
+// Which pipeline step the order is currently on (-1 when terminal)
+const activeStepIndex = (
+  status: ServerStatus,
+  deliveryStatus?: string
+): number => {
+  if (status === "completed") return 3;
+  if (status === "cancelled" || status === "refunded") return -1;
+  if (
+    status === "processing" &&
+    ["assigned", "picked_up", "in_transit", "delivered"].includes(deliveryStatus ?? "")
+  ) {
+    return 2;
+  }
+  if (status === "processing") return 1;
+  return 0; // pending
+};
 
 // --------------------------------------------------
 // SCREEN
@@ -146,6 +180,22 @@ export default function OrderDetailScreen() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+
+  // Reviews — keyed by productId for the delivered order
+  type EligibilityItem = {
+    productId: string;
+    productName?: string;
+    myReview: { rating: number; comment: string } | null;
+  };
+  const [reviewable, setReviewable] = useState<Record<string, EligibilityItem["myReview"]>>({});
+  const [reviewTarget, setReviewTarget] = useState<{
+    productId: string;
+    name: string;
+    rating: number;
+    comment: string;
+  } | null>(null);
+
+  const [receiptBusy, setReceiptBusy] = useState<"print" | "share" | null>(null);
 
   const fetchOrder = useCallback(async () => {
     if (!id) return;
@@ -167,6 +217,23 @@ export default function OrderDetailScreen() {
     fetchOrder();
   }, [fetchOrder]);
 
+  // Load review state once the order is completed + delivered
+  const fetchReviewState = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await api.get(`/customer/reviews/eligible/${id}`);
+      const data = res.data?.data;
+      if (!data?.eligible) return;
+      const map: Record<string, EligibilityItem["myReview"]> = {};
+      for (const item of data.items ?? []) {
+        map[item.productId] = item.myReview;
+      }
+      setReviewable(map);
+    } catch {
+      // Non-fatal — review buttons just won't show
+    }
+  }, [id]);
+
   // Live updates — server emits `order_updated` to customer:{userId}
   useEffect(() => {
     if (!socket || !id) return;
@@ -178,6 +245,14 @@ export default function OrderDetailScreen() {
       socket.off("order_updated", handler);
     };
   }, [socket, id]);
+
+  // Reviews become available once the order is completed + delivered
+  useEffect(() => {
+    if (order?.status === "completed" && order?.deliveryStatus === "delivered") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on eligibility
+      fetchReviewState();
+    }
+  }, [order?.status, order?.deliveryStatus, fetchReviewState]);
 
   const handleCancel = () => {
     if (!order) return;
@@ -199,6 +274,64 @@ export default function OrderDetailScreen() {
         },
       },
     ]);
+  };
+
+  const handleReviewSubmit = async (rating: number, comment: string) => {
+    if (!reviewTarget || !order) return;
+    try {
+      await api.post("/customer/reviews", {
+        orderId: order._id,
+        productId: reviewTarget.productId,
+        rating,
+        comment,
+      });
+      setReviewable((prev) => ({
+        ...prev,
+        [reviewTarget.productId]: { rating, comment },
+      }));
+      Alert.alert("Thank you!", "Your review has been saved.");
+    } catch (err: any) {
+      Alert.alert("Error", err?.response?.data?.message ?? "Failed to save review.");
+      throw err;
+    }
+  };
+
+  const isDelivered = order?.status === "completed" && order?.deliveryStatus === "delivered";
+
+  const buildReceiptOrder = (): ReceiptOrder | null => {
+    if (!order) return null;
+    return {
+      ...order,
+      customerName: order.user
+        ? `${order.user.firstname} ${order.user.lastname}`
+        : undefined,
+    };
+  };
+
+  const handlePrintReceipt = async () => {
+    const receipt = buildReceiptOrder();
+    if (!receipt) return;
+    setReceiptBusy("print");
+    try {
+      await printReceipt(receipt);
+    } catch {
+      Alert.alert("Error", "Could not open the print dialog.");
+    } finally {
+      setReceiptBusy(null);
+    }
+  };
+
+  const handleShareReceipt = async () => {
+    const receipt = buildReceiptOrder();
+    if (!receipt) return;
+    setReceiptBusy("share");
+    try {
+      await shareReceipt(receipt);
+    } catch {
+      Alert.alert("Error", "Could not generate the receipt.");
+    } finally {
+      setReceiptBusy(null);
+    }
   };
 
   const handleReorder = () => {
@@ -243,9 +376,7 @@ export default function OrderDetailScreen() {
   const statusBg = STATUS_BG[order.status];
   const canCancel = order.status === "pending" || order.status === "processing";
   const isTerminal = order.status === "cancelled" || order.status === "refunded";
-  const activeStepIndex = isTerminal
-    ? -1
-    : TIMELINE_STEPS.indexOf(order.status as (typeof TIMELINE_STEPS)[number]);
+  const currentStep = activeStepIndex(order.status, order.deliveryStatus);
 
   const subtotal = order.orderItems.reduce((s, i) => s + (i.subTotal ?? 0), 0);
 
@@ -278,28 +409,29 @@ export default function OrderDetailScreen() {
         {!isTerminal ? (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {TIMELINE_STEPS.map((step, idx) => {
-              const done = idx <= activeStepIndex;
-              const current = idx === activeStepIndex;
+              const done = idx < currentStep;
+              const current = idx === currentStep;
               return (
-                <View key={step} style={styles.stepRow}>
+                <View key={step.key} style={styles.stepRow}>
                   <View style={styles.stepLeft}>
                     <View
                       style={[
                         styles.stepDot,
                         {
-                          backgroundColor: done ? "#007A53" : colors.background,
-                          borderColor: done ? "#007A53" : colors.border,
+                          backgroundColor: done || current ? "#007A53" : colors.background,
+                          borderColor: done || current ? "#007A53" : colors.border,
                         },
                       ]}
                     >
                       {done && <Check size={12} color="#fff" />}
-                      {!done && <Circle size={10} color={colors.muted} />}
+                      {current && !done && <Circle size={10} color="#FFFFFF" fill="#FFFFFF" />}
+                      {!done && !current && <Circle size={10} color={colors.muted} />}
                     </View>
                     {idx < TIMELINE_STEPS.length - 1 && (
                       <View
                         style={[
                           styles.stepLine,
-                          { backgroundColor: idx < activeStepIndex ? "#007A53" : colors.border },
+                          { backgroundColor: done ? "#007A53" : colors.border },
                         ]}
                       />
                     )}
@@ -311,7 +443,7 @@ export default function OrderDetailScreen() {
                         { color: current ? "#007A53" : done ? colors.headline : colors.muted },
                       ]}
                     >
-                      {step === "pending" ? "Order placed" : step === "processing" ? "Preparing / on delivery" : "Completed"}
+                      {step.label}
                     </Text>
                     {current && order.deliveryStatus && order.deliveryStatus !== "unassigned" && (
                       <View style={styles.deliveryRow}>
@@ -363,29 +495,69 @@ export default function OrderDetailScreen() {
         {/* Items */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>Items</Text>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {order.orderItems.map((item, idx) => (
-            <View key={item._id}>
-              <View style={styles.itemRow}>
-                <View style={[styles.thumb, { backgroundColor: colors.background }]}>
-                  {item.product?.image ? (
-                    <Image source={{ uri: item.product.image }} style={styles.thumbImg} resizeMode="cover" />
-                  ) : (
-                    <PackageSearch size={20} color={colors.muted} />
-                  )}
+          {order.orderItems.map((item, idx) => {
+            const pid = typeof item.product === "object" ? item.product?._id : undefined;
+            const myReview = pid ? reviewable[pid] : undefined;
+            return (
+              <View key={item._id}>
+                <View style={styles.itemRow}>
+                  <View style={[styles.thumb, { backgroundColor: colors.background }]}>
+                    {item.product?.image ? (
+                      <Image source={{ uri: item.product.image }} style={styles.thumbImg} resizeMode="cover" />
+                    ) : (
+                      <PackageSearch size={20} color={colors.muted} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemName, { color: colors.headline }]} numberOfLines={1}>
+                      {item.product?.name ?? "Product"}
+                    </Text>
+                    <Text style={[styles.itemQty, { color: colors.muted }]}>Qty: {item.quantity}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>₱{(item.subTotal ?? 0).toFixed(2)}</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.itemName, { color: colors.headline }]} numberOfLines={1}>
-                    {item.product?.name ?? "Product"}
-                  </Text>
-                  <Text style={[styles.itemQty, { color: colors.muted }]}>Qty: {item.quantity}</Text>
-                </View>
-                <Text style={styles.itemPrice}>₱{(item.subTotal ?? 0).toFixed(2)}</Text>
+
+                {/* Rate / edit review — delivered orders only */}
+                {pid && myReview !== undefined && (
+                  <Pressable
+                    style={[styles.reviewBtn, { borderColor: colors.border }]}
+                    onPress={() =>
+                      setReviewTarget({
+                        productId: pid,
+                        name: item.product?.name ?? "Product",
+                        rating: myReview?.rating ?? 0,
+                        comment: myReview?.comment ?? "",
+                      })
+                    }
+                  >
+                    {myReview ? (
+                      <>
+                        {[1, 2, 3, 4, 5].map((v) => (
+                          <Star
+                            key={v}
+                            size={13}
+                            color={v <= (myReview.rating ?? 0) ? "#FF6720" : colors.border}
+                            fill={v <= (myReview.rating ?? 0) ? "#FF6720" : "transparent"}
+                          />
+                        ))}
+                        <Text style={[styles.reviewBtnText, { color: colors.muted }]}>Edit review</Text>
+                        <Pencil size={12} color={colors.muted} />
+                      </>
+                    ) : (
+                      <>
+                        <Star size={13} color="#FF6720" fill="#FF6720" />
+                        <Text style={[styles.reviewBtnText, { color: colors.headline }]}>Rate this product</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
+
+                {idx < order.orderItems.length - 1 && (
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                )}
               </View>
-              {idx < order.orderItems.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* Totals */}
@@ -443,6 +615,41 @@ export default function OrderDetailScreen() {
             )}
           </Pressable>
         )}
+        {/* Receipt actions — delivered orders only */}
+        {isDelivered && (
+          <View style={styles.receiptRow}>
+            <Pressable
+              onPress={handlePrintReceipt}
+              disabled={receiptBusy !== null}
+              style={[styles.receiptBtn, { borderColor: colors.border, opacity: receiptBusy ? 0.6 : 1 }]}
+            >
+              {receiptBusy === "print" ? (
+                <ActivityIndicator size="small" color={colors.headline} />
+              ) : (
+                <>
+                  <Printer size={16} color={colors.headline} />
+                  <Text style={[styles.receiptText, { color: colors.headline }]}>Print</Text>
+                </>
+              )}
+            </Pressable>
+
+            <Pressable
+              onPress={handleShareReceipt}
+              disabled={receiptBusy !== null}
+              style={[styles.receiptBtn, styles.receiptBtnPrimary, { opacity: receiptBusy ? 0.6 : 1 }]}
+            >
+              {receiptBusy === "share" ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Share2 size={16} color="#FFFFFF" />
+                  <Text style={[styles.receiptText, { color: "#FFFFFF" }]}>Save PDF / Share</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        )}
+
         {(order.status === "completed" || isTerminal) && order.orderItems.length > 0 && (
           <Pressable onPress={handleReorder} style={styles.reorderBtn}>
             <RotateCcw size={18} color="#fff" />
@@ -450,6 +657,16 @@ export default function OrderDetailScreen() {
           </Pressable>
         )}
       </ScrollView>
+
+      {/* Review modal */}
+      <ReviewModal
+        visible={reviewTarget !== null}
+        productName={reviewTarget?.name ?? ""}
+        initialRating={reviewTarget?.rating ?? 0}
+        initialComment={reviewTarget?.comment ?? ""}
+        onClose={() => setReviewTarget(null)}
+        onSubmit={handleReviewSubmit}
+      />
     </ThemedView>
   );
 }
@@ -545,4 +762,36 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   reorderText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  receiptRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  receiptBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  receiptBtnPrimary: {
+    backgroundColor: "#007A53",
+    borderWidth: 0,
+  },
+  receiptText: { fontSize: 13, fontWeight: "700" },
+  reviewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignSelf: "flex-start",
+    marginTop: 2,
+  },
+  reviewBtnText: { fontSize: 11, fontWeight: "700", marginLeft: 3 },
 });
