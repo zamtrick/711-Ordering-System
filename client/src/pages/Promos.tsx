@@ -102,11 +102,11 @@ export default function Promos() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deletePromo) return;
     setDeleting(true);
     try {
-      await api.delete(`/superadmin/promos/${deletePromo._id}`);
+      await api.delete(`/superadmin/promos/${deletePromo._id}`, { data: { confirmText } });
       success("Promo deleted.");
       setDeletePromo(null);
       fetchData();
@@ -288,6 +288,7 @@ export default function Promos() {
         onClose={() => !deleting && setDeletePromo(null)}
         onConfirm={handleDelete}
         title="Delete Promo"
+        confirmText="DELETE"
         message={`Delete "${deletePromo?.title}"? This removes it from the customer carousel.`}
         loading={deleting}
       />

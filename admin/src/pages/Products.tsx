@@ -6,6 +6,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type Product = {
   _id: string;
@@ -203,11 +204,11 @@ export default function Products() {
     } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteProduct) return;
     setDeleting(true);
     try {
-      await api.delete(`/admin/products/${deleteProduct._id}`);
+      await api.delete(`/admin/products/${deleteProduct._id}`, { data: { confirmText } });
       success("Product deleted.");
       setDeleteProduct(null);
       fetchData();
@@ -394,18 +395,15 @@ export default function Products() {
       )}
 
       {/* Delete Confirm */}
-      {deleteProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => !deleting && setDeleteProduct(null)} />
-          <div className={`relative w-full max-w-sm rounded-2xl shadow-2xl z-10 p-6 text-center ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
-            <p className={`text-sm mb-4 ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Delete <strong>{deleteProduct.name}</strong>? This cannot be undone.</p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeleteProduct(null)} disabled={deleting} className={`flex-1 h-10 rounded-xl text-sm font-medium border cursor-pointer ${isDark ? "border-[#2E2E2E] text-white" : "border-[#E5E2DE] text-[#232323]"}`}>Cancel</button>
-              <button onClick={handleDelete} disabled={deleting} className="flex-1 h-10 rounded-xl text-sm font-bold text-white bg-[#DA291C] hover:opacity-90 cursor-pointer">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteProduct !== null}
+        onClose={() => !deleting && setDeleteProduct(null)}
+        onConfirm={handleDelete}
+        title="Delete Product"
+        confirmText="DELETE"
+        message={`Are you sure you want to delete "${deleteProduct?.name}"? This action cannot be undone.`}
+        loading={deleting}
+      />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

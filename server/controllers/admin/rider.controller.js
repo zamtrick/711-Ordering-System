@@ -5,6 +5,11 @@ import User from "../../models/User.js";
 import Rider from "../../models/Rider.js";
 import { notifyRiderCreated } from "../../services/email.service.js";
 import Branch from "../../models/Branch.js";
+import {
+  branchQuery,
+  canAccessBranchDoc,
+  isBranchScoped,
+} from "../../middlewares/branchScope.middleware.js";
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleRiderError = (err, res) => {
@@ -32,7 +37,7 @@ const handleRiderError = (err, res) => {
 
 export const getRiders = async (req, res) => {
   try {
-    const riders = await Rider.find()
+    const riders = await Rider.find(branchQuery(req, "assignedBranch"))
       .populate("user", "-password")
       .populate("assignedBranch")
       .sort({ createdAt: -1 });
@@ -79,7 +84,7 @@ export const getRiderById = async (req, res) => {
       .populate("user", "-password")
       .populate("assignedBranch");
 
-    if (!rider) {
+    if (!rider || !canAccessBranchDoc(req, rider.assignedBranch)) {
       return res.status(404).json({
         success: false,
         message: "Rider not found",
@@ -146,6 +151,18 @@ export const createRider = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
+    | BRANCH SCOPING
+    |--------------------------------------------------------------------------
+    | Regular admins can only create riders for their own branch —
+    | the request body's assignedBranch is overridden.
+    |--------------------------------------------------------------------------
+    */
+    const effectiveBranch = isBranchScoped(req)
+      ? req.adminBranchId.toString()
+      : assignedBranch;
+
+    /*
+    |--------------------------------------------------------------------------
     | VALIDATE REQUIRED FIELDS
     |--------------------------------------------------------------------------
     */
@@ -155,7 +172,7 @@ export const createRider = async (req, res) => {
       !lastname ||
       !email ||
       !password ||
-      !assignedBranch ||
+      !effectiveBranch ||
       !phone ||
       !address ||
       age === undefined ||
@@ -187,7 +204,7 @@ export const createRider = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    if (!mongoose.Types.ObjectId.isValid(assignedBranch)) {
+    if (!mongoose.Types.ObjectId.isValid(effectiveBranch)) {
       return res.status(400).json({
         success: false,
         message: "Invalid branch ID",
@@ -200,7 +217,7 @@ export const createRider = async (req, res) => {
     |--------------------------------------------------------------------------
     */
 
-    const branch = await Branch.findById(assignedBranch);
+    const branch = await Branch.findById(effectiveBranch);
 
     if (!branch) {
       return res.status(404).json({
@@ -287,7 +304,7 @@ export const createRider = async (req, res) => {
 
       const rider = await Rider.create({
         user: user._id,
-        assignedBranch,
+        assignedBranch: effectiveBranch,
         phone: phone.trim(),
         address: address.trim(),
         age,
@@ -383,7 +400,7 @@ export const updateRiderById = async (req, res) => {
 
     const rider = await Rider.findById(id);
 
-    if (!rider) {
+    if (!rider || !canAccessBranchDoc(req, rider.assignedBranch)) {
       return res.status(404).json({
         success: false,
         message: "Rider not found",
@@ -465,6 +482,17 @@ export const updateRiderById = async (req, res) => {
         return res.status(404).json({
           success: false,
           message: "Branch not found",
+        });
+      }
+
+      // Regular admins cannot move riders out of their branch.
+      if (
+        isBranchScoped(req) &&
+        assignedBranch !== req.adminBranchId.toString()
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only keep riders in your assigned branch.",
         });
       }
 
@@ -633,7 +661,7 @@ export const deleteRiderById = async (req, res) => {
 
     const rider = await Rider.findById(id);
 
-    if (!rider) {
+    if (!rider || !canAccessBranchDoc(req, rider.assignedBranch)) {
       return res.status(404).json({
         success: false,
         message: "Rider not found",

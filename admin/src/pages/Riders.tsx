@@ -6,6 +6,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type Rider = {
   _id: string;
@@ -95,10 +96,10 @@ export default function Riders() {
     try { await api.patch(`/admin/riders/${editRider._id}`, buildPayload()); success("Updated."); closeForm(); fetchData(); } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed."); } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteRider) return;
     setDeleting(true);
-    try { await api.delete(`/admin/riders/${deleteRider._id}`); success("Deleted."); setDeleteRider(null); fetchData(); } catch { toastError("Failed."); } finally { setDeleting(false); }
+    try { await api.delete(`/admin/riders/${deleteRider._id}`, { data: { confirmText } }); success("Deleted."); setDeleteRider(null); fetchData(); } catch { toastError("Failed."); } finally { setDeleting(false); }
   };
 
   const openEdit = (r: Rider) => {
@@ -192,18 +193,15 @@ export default function Riders() {
         </div>
       )}
 
-      {deleteRider && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => !deleting && setDeleteRider(null)} />
-          <div className={`relative w-full max-w-sm rounded-2xl shadow-2xl z-10 p-6 text-center ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
-            <p className={`text-sm mb-4 ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Delete <strong>{deleteRider.user?.firstname} {deleteRider.user?.lastname}</strong>?</p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeleteRider(null)} className={`flex-1 h-10 rounded-xl text-sm font-medium border cursor-pointer ${isDark ? "border-[#2E2E2E] text-white" : "border-[#E5E2DE]"}`}>Cancel</button>
-              <button onClick={handleDelete} disabled={deleting} className="flex-1 h-10 rounded-xl text-sm font-bold text-white bg-[#DA291C] hover:opacity-90 cursor-pointer">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteRider !== null}
+        onClose={() => !deleting && setDeleteRider(null)}
+        onConfirm={handleDelete}
+        title="Delete Rider"
+        confirmText="DELETE"
+        message={`Are you sure you want to delete rider "${deleteRider?.user?.firstname ?? ""} ${deleteRider?.user?.lastname ?? ""}"? This also deletes their account and cannot be undone.`}
+        loading={deleting}
+      />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

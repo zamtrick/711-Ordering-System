@@ -196,10 +196,10 @@ export default function Products() {
     } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to update product."); } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteProduct) return;
     setDeleting(true);
-    try { await api.delete(`/admin/products/${deleteProduct._id}`); success("Product deleted successfully."); setDeleteProduct(null); fetchData(); } catch { toastError("Failed to delete product."); } finally { setDeleting(false); }
+    try { await api.delete(`/admin/products/${deleteProduct._id}`, { data: { confirmText } }); success("Product deleted successfully."); setDeleteProduct(null); fetchData(); } catch { toastError("Failed to delete product."); } finally { setDeleting(false); }
   };
 
   const openEdit = (p: Product) => {
@@ -339,6 +339,7 @@ export default function Products() {
         onClose={() => !deleting && setDeleteProduct(null)}
         onConfirm={handleDelete}
         title="Delete Product"
+        confirmText="DELETE"
         message={`Are you sure you want to delete "${deleteProduct?.name}"? This action cannot be undone.`}
         loading={deleting}
       />

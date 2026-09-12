@@ -11,6 +11,7 @@ import {
 } from "../../controllers/admin/category.controller.js";
 import { getCategoryImageUploader, isCloudinaryConfigured } from "../../utils/uploads.js";
 import { requireAdminPermission } from "../../middlewares/adminPermissions.middleware.js";
+import { requireDeleteConfirmation } from "../../middlewares/deleteConfirm.middleware.js";
 
 const router = express.Router();
 
@@ -26,8 +27,13 @@ router.get("/:id", getCategoryById);
 // Update category by ID
 router.patch("/:id", requireAdminPermission("canManageCategories"), updateCategoryById);
 
-// Delete category by ID
-router.delete("/:id", requireAdminPermission("canManageCategories"), deleteCategoryById);
+// Delete category by ID (requires { confirmText: "DELETE" })
+router.delete(
+  "/:id",
+  requireAdminPermission("canManageCategories"),
+  requireDeleteConfirmation,
+  deleteCategoryById
+);
 
 // Category image upload/removal — stored on Cloudinary.
 // The uploader is created lazily on first request (env vars must be loaded

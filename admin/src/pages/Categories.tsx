@@ -6,6 +6,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type Category = { _id: string; name: string; description: string; isActive: boolean; image?: string; createdAt: string };
 
@@ -122,10 +123,10 @@ export default function Categories() {
     } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed."); } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteCat) return;
     setDeleting(true);
-    try { await api.delete(`/admin/categories/${deleteCat._id}`); success("Deleted."); setDeleteCat(null); fetchData(); } catch { toastError("Failed."); } finally { setDeleting(false); }
+    try { await api.delete(`/admin/categories/${deleteCat._id}`, { data: { confirmText } }); success("Deleted."); setDeleteCat(null); fetchData(); } catch { toastError("Failed."); } finally { setDeleting(false); }
   };
 
   const inputClass = `h-11 px-3 rounded-xl border text-sm outline-none transition-colors w-full ${isDark ? "bg-[#121212] border-[#2E2E2E] text-white focus:border-[#078080]" : "bg-white border-[#E5E2DE] text-[#232323] focus:border-[#007A53]"} focus:ring-2 focus:ring-[#007A53]/20`;
@@ -250,18 +251,15 @@ export default function Categories() {
         </div>
       )}
 
-      {deleteCat && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => !deleting && setDeleteCat(null)} />
-          <div className={`relative w-full max-w-sm rounded-2xl shadow-2xl z-10 p-6 text-center ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
-            <p className={`text-sm mb-4 ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Delete <strong>{deleteCat.name}</strong>?</p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeleteCat(null)} className={`flex-1 h-10 rounded-xl text-sm font-medium border cursor-pointer ${isDark ? "border-[#2E2E2E] text-white" : "border-[#E5E2DE]"}`}>Cancel</button>
-              <button onClick={handleDelete} disabled={deleting} className="flex-1 h-10 rounded-xl text-sm font-bold text-white bg-[#DA291C] hover:opacity-90 cursor-pointer">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteCat !== null}
+        onClose={() => !deleting && setDeleteCat(null)}
+        onConfirm={handleDelete}
+        title="Delete Category"
+        confirmText="DELETE"
+        message={`Are you sure you want to delete "${deleteCat?.name}"? This action cannot be undone.`}
+        loading={deleting}
+      />
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

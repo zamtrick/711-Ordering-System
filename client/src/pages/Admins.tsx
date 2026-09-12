@@ -346,11 +346,11 @@ export default function Admins() {
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteAdmin) return;
     setDeleting(true);
     try {
-      await api.delete(`/superadmin/admins/${deleteAdmin._id}`);
+      await api.delete(`/superadmin/admins/${deleteAdmin._id}`, { data: { confirmText } });
       success("Admin deleted successfully.");
       setDeleteAdmin(null);
       fetchData();
@@ -805,6 +805,7 @@ export default function Admins() {
         onClose={() => !deleting && setDeleteAdmin(null)}
         onConfirm={handleDelete}
         title="Delete Admin"
+        confirmText="DELETE"
         message={`Are you sure you want to delete admin ${deleteAdmin?.user?.firstname ?? ""} ${deleteAdmin?.user?.lastname ?? ""}? This will also delete their account.`}
         loading={deleting}
       />

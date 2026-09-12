@@ -86,11 +86,11 @@ export default function Categories() {
     } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to update category."); } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteCat) return;
     setDeleting(true);
     try {
-      await api.delete(`/admin/categories/${deleteCat._id}`);
+      await api.delete(`/admin/categories/${deleteCat._id}`, { data: { confirmText } });
       success("Category deleted successfully.");
       setDeleteCat(null);
       fetchData();
@@ -235,6 +235,7 @@ export default function Categories() {
         onClose={() => !deleting && setDeleteCat(null)}
         onConfirm={handleDelete}
         title="Delete Category"
+        confirmText="DELETE"
         message={`Are you sure you want to delete "${deleteCat?.name}"? This action cannot be undone.`}
         loading={deleting}
       />

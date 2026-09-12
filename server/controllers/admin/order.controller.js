@@ -5,6 +5,10 @@ import Payment from "../../models/Payment.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyOrderStatusChanged } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
+import {
+  branchQuery,
+  canAccessBranchDoc,
+} from "../../middlewares/branchScope.middleware.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -29,13 +33,14 @@ const ALLOWED_TRANSITIONS = {
 |--------------------------------------------------------------------------
 | GET ADMIN ORDERS
 |--------------------------------------------------------------------------
-| Admins / superadmins see all orders, newest first.
+| Branch-scoped listing: regular admins only see orders for their assigned
+| branch; superadmins see everything, newest first.
 |--------------------------------------------------------------------------
 */
 
 export const getAdminOrders = async (req, res) => {
   try {
-    const orders = await Order.find({})
+    const orders = await Order.find(branchQuery(req, "branch"))
       .populate("user", "firstname lastname email")
       .populate("branch")
       .populate({
@@ -89,7 +94,7 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     const order = await Order.findById(id);
-    if (!order) {
+    if (!order || !canAccessBranchDoc(req, order.branch)) {
       return res.status(404).json({
         success: false,
         message: "Order not found",

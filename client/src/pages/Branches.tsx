@@ -550,11 +550,11 @@ export default function Branches() {
 
   // ── Delete ─────────────────────────────────────────────────────────────────
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteBranch) return;
     setDeleting(true);
     try {
-      await api.delete(`/superadmin/branches/${deleteBranch._id}`);
+      await api.delete(`/superadmin/branches/${deleteBranch._id}`, { data: { confirmText } });
       success("Branch deleted successfully.");
       setDeleteBranch(null);
       fetchBranches();
@@ -900,6 +900,7 @@ export default function Branches() {
         onClose={() => !deleting && setDeleteBranch(null)}
         onConfirm={handleDelete}
         title="Delete Branch"
+        confirmText="DELETE"
         message={`Are you sure you want to delete branch "${deleteBranch?.name}"? This action cannot be undone.`}
         loading={deleting}
       />

@@ -127,10 +127,10 @@ export default function Riders() {
     } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to update rider."); } finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (confirmText?: string) => {
     if (!deleteRider) return;
     setDeleting(true);
-    try { await api.delete(`/admin/riders/${deleteRider._id}`); success("Rider deleted successfully."); setDeleteRider(null); fetchData(); } catch { toastError("Failed to delete rider."); } finally { setDeleting(false); }
+    try { await api.delete(`/admin/riders/${deleteRider._id}`, { data: { confirmText } }); success("Rider deleted successfully."); setDeleteRider(null); fetchData(); } catch { toastError("Failed to delete rider."); } finally { setDeleting(false); }
   };
 
   const openEdit = (r: Rider) => {
@@ -243,6 +243,7 @@ export default function Riders() {
         onClose={() => !deleting && setDeleteRider(null)}
         onConfirm={handleDelete}
         title="Delete Rider"
+        confirmText="DELETE"
         message={`Are you sure you want to delete "${deleteRider?.user?.firstname} ${deleteRider?.user?.lastname}"? This will also delete their user account.`}
         loading={deleting}
       />

@@ -12,6 +12,7 @@ import express from "express";
 import multer from "multer";
 import { getProductImageUploader, isCloudinaryConfigured } from "../../utils/uploads.js";
 import { requireAdminPermission } from "../../middlewares/adminPermissions.middleware.js";
+import { requireDeleteConfirmation } from "../../middlewares/deleteConfirm.middleware.js";
 
 // In-memory storage for the CSV/Excel product import
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -22,7 +23,12 @@ router.post("/", requireAdminPermission("canManageProducts"), createProduct);
 router.post("/import", upload.single("file"), requireAdminPermission("canManageProducts"), importProducts);
 router.get("/:id", getProductById);
 router.patch("/:id", requireAdminPermission("canManageProducts"), updateProductById);
-router.delete("/:id", requireAdminPermission("canManageProducts"), deleteProductById);
+router.delete(
+  "/:id",
+  requireAdminPermission("canManageProducts"),
+  requireDeleteConfirmation,
+  deleteProductById
+);
 
 // Product image upload/removal — stored on Cloudinary.
 // The uploader is created lazily on first request (env vars must be loaded

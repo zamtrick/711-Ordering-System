@@ -4,12 +4,22 @@ import Rider from "../../models/Rider.js";
 import Customer from "../../models/Customer.js";
 import Order from "../../models/Order.js";
 import Payment from "../../models/Payment.js";
+import {
+  branchQuery,
+  isBranchScoped,
+} from "../../middlewares/branchScope.middleware.js";
 
 // ==========================================
 // GET ADMIN DASHBOARD ANALYTICS
 // ==========================================
 export const getAdminDashboard = async (req, res) => {
   try {
+    // Branch scoping: regular admins see stats for their branch only,
+    // superadmins see platform-wide numbers. Products, categories and
+    // customers are global catalog/accounting entities and stay unscoped.
+    const orderFilter = branchQuery(req, "branch");
+    const riderFilter = branchQuery(req, "assignedBranch");
+
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(now);
@@ -57,36 +67,50 @@ export const getAdminDashboard = async (req, res) => {
         .sort({ stock: 1 })
         .limit(5)
         .select("name sku stock categoryId"),
-      Rider.countDocuments(),
-      Rider.countDocuments({ availabilityStatus: "available" }),
-      Rider.countDocuments({ availabilityStatus: "offline" }),
-      Rider.countDocuments({ availabilityStatus: "delivering" }),
+      Rider.countDocuments(riderFilter),
+      Rider.countDocuments({ ...riderFilter, availabilityStatus: "available" }),
+      Rider.countDocuments({ ...riderFilter, availabilityStatus: "offline" }),
+      Rider.countDocuments({ ...riderFilter, availabilityStatus: "delivering" }),
       Customer.countDocuments(),
       Customer.countDocuments({ createdAt: { $gte: startOfMonth } }),
-      Order.countDocuments(),
-      Order.countDocuments({ createdAt: { $gte: startOfDay } }),
-      Order.countDocuments({ status: "pending" }),
-      Order.countDocuments({ status: "processing" }),
-      Order.countDocuments({ status: "completed" }),
-      Order.countDocuments({ status: "cancelled" }),
-      Order.aggregate([{ $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } }]),
+      Order.countDocuments(orderFilter),
+      Order.countDocuments({ ...orderFilter, createdAt: { $gte: startOfDay } }),
+      Order.countDocuments({ ...orderFilter, status: "pending" }),
+      Order.countDocuments({ ...orderFilter, status: "processing" }),
+      Order.countDocuments({ ...orderFilter, status: "completed" }),
+      Order.countDocuments({ ...orderFilter, status: "cancelled" }),
       Order.aggregate([
-        { $match: { createdAt: { $gte: startOfDay } } },
+        { $match: orderFilter },
         { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
       ]),
-      Payment.aggregate([
-        { $match: { status: "paid" } },
-        { $group: { _id: "$paymentMethod", total: { $sum: "$amount" }, count: { $sum: 1 } } },
-        { $sort: { total: -1 } },
+      Order.aggregate([
+        { $match: { ...orderFilter, createdAt: { $gte: startOfDay } } },
+        { $group: { _id: null, total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
       ]),
-      Order.find()
+      // Payment method split. For branch admins, payments are attributed via
+      // their order's branch (payments themselves are not branch-bound).
+      isBranchScoped(req)
+        ? Payment.aggregate([
+            { $match: { status: "paid" } },
+            { $lookup: { from: "orders", localField: "order", foreignField: "_id", as: "orderDoc" } },
+            { $unwind: "$orderDoc" },
+            { $match: { "orderDoc.branch": req.adminBranchId } },
+            { $group: { _id: "$paymentMethod", total: { $sum: "$amount" }, count: { $sum: 1 } } },
+            { $sort: { total: -1 } },
+          ])
+        : Payment.aggregate([
+            { $match: { status: "paid" } },
+            { $group: { _id: "$paymentMethod", total: { $sum: "$amount" }, count: { $sum: 1 } } },
+            { $sort: { total: -1 } },
+          ]),
+      Order.find(orderFilter)
         .populate("user", "firstname lastname email")
         .populate("branch", "name branchCode")
         .sort({ createdAt: -1 })
         .limit(5)
         .select("status totalAmount createdAt"),
       Order.aggregate([
-        { $match: { createdAt: { $gte: sevenDaysAgo } } },
+        { $match: { ...orderFilter, createdAt: { $gte: sevenDaysAgo } } },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },

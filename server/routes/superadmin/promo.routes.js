@@ -8,13 +8,14 @@ import {
   deletePromoImage,
 } from "../../controllers/superadmin/promo.controller.js";
 import { getPromoImageUploader, isCloudinaryConfigured } from "../../utils/uploads.js";
+import { requireDeleteConfirmation } from "../../middlewares/deleteConfirm.middleware.js";
 
 const router = express.Router();
 
 router.get("/", getPromos);
 router.post("/", createPromo);
 router.patch("/:id", updatePromoById);
-router.delete("/:id", deletePromoById);
+router.delete("/:id", requireDeleteConfirmation, deletePromoById);
 
 router.post("/:id/image", (req, res) => {
   if (!isCloudinaryConfigured()) {

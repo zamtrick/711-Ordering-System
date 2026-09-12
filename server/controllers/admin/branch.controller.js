@@ -1,12 +1,14 @@
 import mongoose from "mongoose";
 import Branch from "../../models/Branch.js";
+import { branchQuery } from "../../middlewares/branchScope.middleware.js";
 
 // ==========================================
 // GET BRANCHES (Admin lookup for forms)
 // ==========================================
+// Regular admins only see their assigned branch; superadmins see all.
 export const getBranchesForAdmin = async (req, res) => {
   try {
-    const branches = await Branch.find().sort({ name: 1 });
+    const branches = await Branch.find(branchQuery(req, "_id")).sort({ name: 1 });
     return res.status(200).json({ success: true, branches });
   } catch (err) {
     console.error("Admin branch lookup error:", err.message);

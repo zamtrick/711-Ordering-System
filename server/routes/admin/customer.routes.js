@@ -8,6 +8,7 @@ import {
   toggleCustomerStatus,
   deleteCustomerById,
 } from "../../controllers/admin/customer.controller.js";
+import { requireDeleteConfirmation } from "../../middlewares/deleteConfirm.middleware.js";
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ router.patch("/:id", updateCustomerById);
 // PATCH  /api/admin/customers/:id/status
 router.patch("/:id/status", toggleCustomerStatus);
 
-// DELETE /api/admin/customers/:id
-router.delete("/:id", deleteCustomerById);
+// DELETE /api/admin/customers/:id (requires { confirmText: "DELETE" })
+router.delete("/:id", requireDeleteConfirmation, deleteCustomerById);
 
 export default router;
