@@ -24,6 +24,24 @@ type Order = {
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
 };
 
+const DELIVERY_LABEL: Record<string, string> = {
+  unassigned: "Waiting for rider",
+  assigned: "Rider assigned",
+  picked_up: "Picked up",
+  in_transit: "On the way",
+  delivered: "Delivered",
+};
+
+const deliveryBadgeVariant = (s: string): "green" | "blue" | "orange" | "gray" => {
+  switch (s) {
+    case "delivered": return "green";
+    case "in_transit": return "blue";
+    case "picked_up": return "blue";
+    case "assigned": return "orange";
+    default: return "gray";
+  }
+};
+
 function SkeletonRow() {
   return (
     <tr className="animate-pulse border-b border-[#F0F0F0]">
@@ -156,7 +174,15 @@ export default function Orders() {
                   <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{o.user ? `${o.user.firstname} ${o.user.lastname}` : "—"}</td>
                   <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{o.branch?.name ?? "—"}</td>
                   <td className="px-4 py-3 font-semibold text-[#007A53] dark:text-[#4CAF50]">₱{o.totalAmount.toFixed(2)}</td>
-                  <td className="px-4 py-3"><Badge variant={orderStatusVariant(o.status)}>{o.status}</Badge></td>
+                  <td className="px-4 py-3">
+                    {o.status === "processing" && o.deliveryStatus && o.deliveryStatus !== "unassigned" ? (
+                      <Badge variant={deliveryBadgeVariant(o.deliveryStatus)}>
+                        {DELIVERY_LABEL[o.deliveryStatus]}
+                      </Badge>
+                    ) : (
+                      <Badge variant={orderStatusVariant(o.status)}>{o.status}</Badge>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -223,7 +249,14 @@ export default function Orders() {
               </div>
               <div className="bg-[#F8F5F2] dark:bg-[#2A2A2A] rounded-xl p-3">
                 <p className="text-xs text-[#777] dark:text-[#A0A0A0] mb-1">Status</p>
-                <Badge variant={orderStatusVariant(viewOrder.status)}>{viewOrder.status}</Badge>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant={orderStatusVariant(viewOrder.status)}>{viewOrder.status}</Badge>
+                  {viewOrder.deliveryStatus && viewOrder.deliveryStatus !== "unassigned" && (
+                    <Badge variant={deliveryBadgeVariant(viewOrder.deliveryStatus)}>
+                      {DELIVERY_LABEL[viewOrder.deliveryStatus]}
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="bg-[#F8F5F2] dark:bg-[#2A2A2A] rounded-xl p-3">
                 <p className="text-xs text-[#777] dark:text-[#A0A0A0] mb-1">Total</p>

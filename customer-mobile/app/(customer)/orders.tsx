@@ -42,17 +42,19 @@ type Order = {
 };
 
 // --------------------------------------------------
-// LIVE STAGE — the 4-step pipeline shown on each order card
+// LIVE STAGE — the 5-step pipeline shown on each order card
 // --------------------------------------------------
 // Maps (status, deliveryStatus) to a customer-friendly stage so the card
 // always reflects the rider's progress, not just the admin status.
-const STAGES = ["placed", "preparing", "on_delivery", "completed"] as const;
+const STAGES = ["placed", "preparing", "assigned", "picked_up", "in_transit", "completed"] as const;
 type Stage = (typeof STAGES)[number];
 
 const STAGE_LABEL: Record<Stage, string> = {
   placed: "Order placed",
   preparing: "Preparing your order",
-  on_delivery: "On the way",
+  assigned: "Rider assigned",
+  picked_up: "Picked up",
+  in_transit: "On the way",
   completed: "Completed",
 };
 
@@ -62,16 +64,22 @@ const orderStage = (
 ): Stage | null => {
   if (status === "completed") return "completed";
   if (status === "cancelled" || status === "refunded") return null; // terminal — no pipeline
-  if (
-    status === "processing" &&
-    (deliveryStatus === "assigned" ||
-      deliveryStatus === "picked_up" ||
-      deliveryStatus === "in_transit" ||
-      deliveryStatus === "delivered")
-  ) {
-    return "on_delivery";
+  if (status === "processing") {
+    // Map deliveryStatus to the appropriate stage
+    switch (deliveryStatus) {
+      case "assigned":
+        return "assigned";
+      case "picked_up":
+        return "picked_up";
+      case "in_transit":
+        return "in_transit";
+      case "delivered":
+        return "completed";
+      default:
+        return "preparing";
+    }
   }
-  return "preparing";
+  return "placed";
 };
 
 // --------------------------------------------------
@@ -309,6 +317,8 @@ const Orders = () => {
               order.status === "pending" || order.status === "processing";
             const stage = orderStage(order.status, order.deliveryStatus);
             const stageIndex = stage ? STAGES.indexOf(stage) : -1;
+            // For completed orders via delivery, show the final delivery stage
+            const displayStage = order.status === "completed" && order.deliveryStatus === "delivered" ? "completed" : stage;
 
             return (
               <Pressable
@@ -347,8 +357,8 @@ const Orders = () => {
                   </View>
                 </View>
 
-                {/* Live pipeline — Placed → Preparing → On the way → Completed */}
-                {stage && (
+                {/* Live pipeline — Placed → Preparing → Rider Assigned → Picked Up → In Transit → Completed */}
+                {displayStage && (
                   <View style={styles.pipeline}>
                     {STAGES.map((s, i) => {
                       const done = i < stageIndex;
@@ -380,9 +390,9 @@ const Orders = () => {
                     })}
                   </View>
                 )}
-                {stage && (
+                {displayStage && (
                   <Text style={[styles.stageLabel, { color: colors.muted }]}>
-                    {STAGE_LABEL[stage]}
+                    {STAGE_LABEL[displayStage]}
                   </Text>
                 )}
 

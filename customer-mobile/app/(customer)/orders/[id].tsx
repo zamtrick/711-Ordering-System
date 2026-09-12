@@ -139,12 +139,14 @@ const formatDate = (iso: string) =>
     minute: "2-digit",
   });
 
-// Ordered timeline steps for active orders — the 4-stage pipeline shown
-// live as the admin accepts and the rider delivers.
+// Ordered timeline steps for active orders — the 6-stage pipeline shown
+// live as the admin accepts and the rider progresses through delivery.
 const TIMELINE_STEPS = [
   { key: "placed", label: "Order placed" },
   { key: "preparing", label: "Preparing your order" },
-  { key: "on_delivery", label: "On the way" },
+  { key: "assigned", label: "Rider assigned" },
+  { key: "picked_up", label: "Picked up" },
+  { key: "in_transit", label: "On the way" },
   { key: "completed", label: "Completed" },
 ] as const;
 
@@ -153,16 +155,26 @@ const activeStepIndex = (
   status: ServerStatus,
   deliveryStatus?: string
 ): number => {
-  if (status === "completed") return 3;
-  if (status === "cancelled" || status === "refunded") return -1;
-  if (
-    status === "processing" &&
-    ["assigned", "picked_up", "in_transit", "delivered"].includes(deliveryStatus ?? "")
-  ) {
-    return 2;
+  if (status === "completed") {
+    // If delivered, show the final step; otherwise show the completed step
+    return deliveryStatus === "delivered" ? 5 : 4;
   }
-  if (status === "processing") return 1;
-  return 0; // pending
+  if (status === "cancelled" || status === "refunded") return -1;
+  if (status === "processing") {
+    switch (deliveryStatus) {
+      case "assigned":
+        return 2;
+      case "picked_up":
+        return 3;
+      case "in_transit":
+        return 4;
+      case "delivered":
+        return 5;
+      default:
+        return 1; // preparing
+    }
+  }
+  return 0; // pending = placed
 };
 
 // --------------------------------------------------

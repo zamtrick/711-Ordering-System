@@ -53,6 +53,16 @@ const DELIVERY_LABEL: Record<string, string> = {
   delivered: "Delivered",
 };
 
+// Pipeline stages for the visual progress indicator
+const PIPELINE_STAGES = [
+  { key: "placed", label: "Placed" },
+  { key: "preparing", label: "Preparing" },
+  { key: "assigned", label: "Assigned" },
+  { key: "picked_up", label: "Picked Up" },
+  { key: "in_transit", label: "In Transit" },
+  { key: "completed", label: "Completed" },
+] as const;
+
 const deliveryColor = (s: string) => {
   switch (s) {
     case "delivered": return "bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]";
@@ -226,12 +236,20 @@ export default function Orders() {
                 <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{o.user ? `${o.user.firstname} ${o.user.lastname}` : "—"}</td>
                 <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{o.branch?.name ?? "—"}</td>
                 <td className="px-4 py-3 font-semibold text-[#007A53] dark:text-[#4CAF50]">₱{o.totalAmount}</td>
-                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(o.status)}`}>{o.status}</span></td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(o.deliveryStatus ?? "unassigned")}`}>
-                    {DELIVERY_LABEL[o.deliveryStatus ?? "unassigned"]}
-                  </span>
+                  {/* Show delivery status when processing, otherwise show order status */}
+                  {o.status === "processing" && o.deliveryStatus && o.deliveryStatus !== "unassigned" ? (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(o.deliveryStatus)}`}>
+                      {DELIVERY_LABEL[o.deliveryStatus]}
+                    </span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(o.status)}`}>
+                      {o.status}
+                    </span>
+                  )
                 </td>
+                <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
+                <td className="px-4 py-3"><button onClick={() => setViewOrder(o)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Eye size={14} className="text-[#4F46E5]" /></button></td>
                 <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
                 <td className="px-4 py-3"><button onClick={() => setViewOrder(o)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Eye size={14} className="text-[#4F46E5]" /></button></td>
               </tr>
@@ -279,19 +297,28 @@ export default function Orders() {
                     {DELIVERY_LABEL[viewOrder.deliveryStatus ?? "unassigned"]}
                   </span>
                 </div>
-                {/* Pipeline: Placed → Preparing → On delivery → Completed */}
+                {/* Pipeline: Placed → Preparing → Assigned → Picked Up → In Transit → Completed */}
                 {viewOrder.status !== "cancelled" && viewOrder.status !== "refunded" && (
                   <div className="flex items-center mt-3">
-                    {["Placed", "Preparing", "On delivery", "Completed"].map((label, i) => {
-                      const reached =
-                        (viewOrder.status === "completed") ? i <= 3 :
-                        (viewOrder.status === "processing" && ["assigned", "picked_up", "in_transit", "delivered"].includes(viewOrder.deliveryStatus ?? "")) ? i <= 2 :
-                        (viewOrder.status === "processing") ? i <= 1 : i <= 0;
+                    {PIPELINE_STAGES.map((stage, i) => {
+                      let reached = false;
+                      if (viewOrder.status === "completed") {
+                        reached = i <= 5;
+                      } else if (viewOrder.status === "processing") {
+                        const ds = viewOrder.deliveryStatus;
+                        if (ds === "assigned") reached = i <= 2;
+                        else if (ds === "picked_up") reached = i <= 3;
+                        else if (ds === "in_transit") reached = i <= 4;
+                        else if (ds === "delivered") reached = i <= 5;
+                        else reached = i <= 1;
+                      } else if (viewOrder.status === "pending") {
+                        reached = i <= 0;
+                      }
                       return (
-                        <div key={label} className="flex items-center flex-1">
+                        <div key={stage.key} className="flex items-center flex-1">
                           <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${reached ? "bg-[#007A53]" : isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />
-                          {i < 3 && <div className={`flex-1 h-0.5 mx-1 ${reached && i < 2 ? "bg-[#007A53]" : isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />}
-                          <span className={`text-[10px] font-semibold ml-1 whitespace-nowrap ${reached ? "text-[#007A53] dark:text-[#4CAF50]" : isDark ? "text-[#777]" : "text-[#aaa]"}`}>{label}</span>
+                          {i < PIPELINE_STAGES.length - 1 && <div className={`flex-1 h-0.5 mx-1 ${reached && i < 4 ? "bg-[#007A53]" : isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />}
+                          <span className={`text-[10px] font-semibold ml-1 whitespace-nowrap ${reached ? "text-[#007A53] dark:text-[#4CAF50]" : isDark ? "text-[#777]" : "text-[#aaa]"}`}>{stage.label}</span>
                         </div>
                       );
                     })}

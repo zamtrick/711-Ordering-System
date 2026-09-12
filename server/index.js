@@ -20,7 +20,7 @@ import chatRoutes from "./routes/chat.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import auth from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
-import { resolveAdminBranch } from "./middlewares/branchScope.middleware.js";
+import { resolveAdminBranch, resolveStaffBranch } from "./middlewares/branchScope.middleware.js";
 
 import manageBranches from "./routes/superadmin/branch.routes.js";
 import manageAdmins from "./routes/superadmin/admin.routes.js";
@@ -184,11 +184,11 @@ app.use("/api/customer/favorites", auth, manageCustomerFavorites);
 app.use("/api/customer/reviews", auth, manageCustomerReviews);
 app.use("/api/admin/reviews", auth, authorize("admin", "superadmin"), manageAdminReviews);
 app.use("/api/customer/branches", auth, manageCustomerBranches);
-// resolveAdminBranch passes customers through untouched; for staff it sets
+// resolveStaffBranch passes customers through untouched; for staff it sets
 // req.adminBranchId (admins → their branch, superadmins → null) so the order
 // controllers can scope branch-bound admins to their branch's orders.
-app.use("/api/orders", auth, authorize("customer", "admin"), resolveAdminBranch, manageOrderItems);
-app.use("/api/orders", auth, authorize("customer", "admin"), resolveAdminBranch, manageOrders);
+app.use("/api/orders", auth, authorize("customer", "admin"), resolveStaffBranch, manageOrderItems);
+app.use("/api/orders", auth, authorize("customer", "admin"), resolveStaffBranch, manageOrders);
 
 // App settings (delivery fee etc.)
 app.use("/api/settings", manageSettings);
