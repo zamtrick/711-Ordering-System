@@ -8,7 +8,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -18,10 +17,11 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import { Search, ShoppingCart, ChevronRight, PackageSearch } from "lucide-react-native";
+import { Search, ShoppingCart, ChevronRight, PackageSearch, Heart } from "lucide-react-native";
 import { playTap } from "@/utils/sound";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
+import { useFavorites } from "@/context/FavoriteContext";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
 import api from "@/api/axios";
@@ -76,11 +76,11 @@ const iconFor = (name: string) =>
 // --------------------------------------------------
 
 const Home = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { addItem, items, totalCount } = useCart();
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   // ── data ──────────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
@@ -439,6 +439,18 @@ const Home = () => {
                     <Text style={styles.addButtonText}>+</Text>
                   </Pressable>
                 )}
+
+                <Pressable
+                  onPress={() => toggleFavorite(product)}
+                  style={styles.heartButton}
+                  hitSlop={8}
+                >
+                  <Heart
+                    size={18}
+                    color={isFavorite(product._id) ? "#DA291C" : "#FFFFFF"}
+                    fill={isFavorite(product._id) ? "#DA291C" : "rgba(0,0,0,0.25)"}
+                  />
+                </Pressable>
               </View>
 
               <Text
@@ -765,6 +777,18 @@ const styles = StyleSheet.create({
     width: "100%" as const,
     height: "100%" as const,
     borderRadius: 12,
+  },
+
+  heartButton: {
+    position: "absolute" as const,
+    left: 6,
+    top: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
 
   addButton: {

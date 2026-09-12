@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  useColorScheme,
   TouchableWithoutFeedback,
   Keyboard,
   Image,
@@ -16,7 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { MailCheck } from "lucide-react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
 import api from "@/api/axios";
@@ -33,8 +32,7 @@ const RESEND_SECONDS = 60;
 // Reset success -> /(auth)/reset with the confirmed code.
 
 const Verify = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const params = useLocalSearchParams<{

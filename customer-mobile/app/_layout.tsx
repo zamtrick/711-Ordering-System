@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { CartProvider } from "@/context/CartContext";
+import { FavoriteProvider } from "@/context/FavoriteContext";
 import { SettingsProvider, SettingsContext } from "@/context/SettingsContext";
 import AppSplash from "@/components/AppSplash";
 import * as SystemUI from "expo-system-ui";
@@ -99,11 +100,13 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <CartProvider>
-        <ThemedStatusBar />
+        <FavoriteProvider>
+          <ThemedStatusBar />
 
-        {!bootReady && <AppSplash />}
+          {!bootReady && <AppSplash />}
 
-        <ThemedRoot bootReady={bootReady} />
+          <ThemedRoot bootReady={bootReady} />
+        </FavoriteProvider>
       </CartProvider>
     </SettingsProvider>
   );

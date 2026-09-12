@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -25,7 +24,7 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import DeliveryMapPicker, {
   type DeliveryCoords,
@@ -98,8 +97,7 @@ const paymentLabel = (m: string) => PAYMENT_LABELS[m] ?? m;
 // --------------------------------------------------
 
 export default function Checkout() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { items, subtotal, clearCart, removeItem } = useCart();
@@ -189,6 +187,7 @@ export default function Checkout() {
   // Switching branch resets the method if the new branch doesn't take it.
   useEffect(() => {
     if (paymentMethod && !acceptedMethods.includes(paymentMethod)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- branch change resets payment method
       setPaymentMethod(acceptedMethods[0] ?? null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when branch changes
@@ -940,9 +939,9 @@ function SectionHeader({
   icon: React.ReactNode;
   title: string;
 }) {
-  const colorScheme = useColorScheme();
+  const { theme } = useTheme();
   const { colors } =
-    colorScheme === "dark" ? DarkTheme : LightTheme;
+    theme;
   return (
     <View style={styles.sectionHeader}>
       {icon}

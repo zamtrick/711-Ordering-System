@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -16,7 +15,7 @@ import {
   PackageCheck,
 } from "lucide-react-native";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { router, useFocusEffect } from "expo-router";
 import { useSocket } from "@/context/SocketContext";
@@ -87,8 +86,7 @@ const FILTERS = ["All", "Pending", "Processing", "Completed", "Cancelled", "Refu
 // --------------------------------------------------
 
 const Orders = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const [selectedFilter, setSelectedFilter] = useState("All");

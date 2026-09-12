@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -33,7 +32,7 @@ import {
   Plus,
 } from "lucide-react-native";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
 import api from "@/api/axios";
@@ -73,8 +72,7 @@ type EditForm = {
 // --------------------------------------------------
 
 const Profile = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -514,6 +512,7 @@ const Profile = () => {
             icon={<Heart size={20} color="#DA291C" />}
             title="Favorites"
             subtitle="Your saved products"
+            onPress={() => router.push("/(customer)/favorites")}
             colors={colors}
           />
         </View>

@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  useColorScheme,
   TouchableWithoutFeedback,
   Keyboard,
   Image,
@@ -16,14 +15,13 @@ import { Link, router } from "expo-router";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
 import api from "@/api/axios";
 
 const Login = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   // Form states

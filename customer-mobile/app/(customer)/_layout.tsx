@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Tabs, router } from "expo-router";
-import { useColorScheme, type ColorValue, ActivityIndicator, Text, StyleSheet, View } from "react-native";
+import { type ColorValue, ActivityIndicator, Text, StyleSheet, View } from "react-native";
 import {
   House,
   ShoppingBag,
@@ -8,7 +8,7 @@ import {
   User,
   MessageCircle,
 } from "lucide-react-native";
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import CartTabIcon from "@/components/CartTabIcon";
@@ -16,6 +16,7 @@ import { useSettings } from "@/context/SettingsContext";
 import { useSocket, SocketProvider } from "@/context/SocketContext";
 
 const CustomerLayout = () => {
+  const { theme } = useTheme();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -43,7 +44,9 @@ const CustomerLayout = () => {
     return (
       <ThemedView style={styles.centered}>
         <ActivityIndicator size="large" color="#007A53" />
-        <Text style={styles.checkingText}>Loading...</Text>
+        <Text style={[styles.checkingText, { color: theme.colors.muted }]}>
+          Loading...
+        </Text>
       </ThemedView>
     );
   }
@@ -62,11 +65,7 @@ const CustomerLayout = () => {
 // --------------------------------------------------
 
 const CustomerTabs = () => {
-  const systemScheme = useColorScheme();
-  const { themePreference } = useSettings();
-  const resolvedScheme =
-    themePreference === "system" ? systemScheme : themePreference;
-  const theme = resolvedScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
 
   const { socket } = useSocket();
 
@@ -185,7 +184,6 @@ const CustomerTabs = () => {
           headerShown: false,
         }}
       />
-
       {/* Hidden screen — no tab button */}
       <Tabs.Screen
         name="checkout"
@@ -198,6 +196,15 @@ const CustomerTabs = () => {
       {/* Hidden screen — order detail, no tab button */}
       <Tabs.Screen
         name="orders/[id]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      {/* Hidden screen — favorites, reachable from Profile */}
+      <Tabs.Screen
+        name="favorites"
         options={{
           href: null,
           headerShown: false,

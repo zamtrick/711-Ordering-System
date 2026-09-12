@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  useColorScheme,
   TouchableWithoutFeedback,
   Keyboard,
   Image,
@@ -16,7 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Lock, Eye, EyeOff, Check } from "lucide-react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
 import api from "@/api/axios";
@@ -25,8 +24,7 @@ import api from "@/api/axios";
 // email + code; this screen collects the new password and submits
 // everything together (the code authorizes the change, then dies).
 const Reset = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { email, code } = useLocalSearchParams<{

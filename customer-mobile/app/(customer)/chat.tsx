@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   FlatList,
   TextInput,
@@ -15,11 +14,10 @@ import {
 import { ChevronLeft, Send, MessageCircle, WifiOff } from "lucide-react-native";
 import { router } from "expo-router";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import { useSocket } from "@/context/SocketContext";
-import { useSettings } from "@/context/SettingsContext";
 
 // --------------------------------------------------
 // TYPES
@@ -101,11 +99,7 @@ const flattenGroups = (groups: ReturnType<typeof groupByDate>): ListItem[] => {
 // --------------------------------------------------
 
 export default function Chat() {
-  const systemScheme = useColorScheme();
-  const { themePreference } = useSettings();
-  const resolvedScheme =
-    themePreference === "system" ? systemScheme : themePreference;
-  const theme = resolvedScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { socket, connected } = useSocket();

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   TextInput,
   ScrollView,
@@ -15,11 +14,13 @@ import {
   ShoppingCart,
   Plus,
   Star,
+  Heart,
   PackageSearch,
   Store,
 } from "lucide-react-native";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
+import { useFavorites } from "@/context/FavoriteContext";
 import ThemedView from "@/components/ThemedView";
 import { router, useLocalSearchParams } from "expo-router";
 import api from "@/api/axios";
@@ -61,11 +62,11 @@ type Product = {
 // --------------------------------------------------
 
 const Products = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { addItem, totalCount, items } = useCart();
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   // Home screen deep-links here with a preselected category
   const params = useLocalSearchParams<{ category?: string }>();
@@ -152,9 +153,11 @@ const Products = () => {
   // Keep selectedBranch object in sync with selectedBranchId
   useEffect(() => {
     if (selectedBranchId === ALL_BRANCHES_ID) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync state with selector
       setSelectedBranch(null);
     } else {
       const b = branches.find((b) => b._id === selectedBranchId) ?? null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync state with selector
       setSelectedBranch(b);
     }
   }, [selectedBranchId, branches]);
@@ -443,6 +446,18 @@ const Products = () => {
                     <Plus size={18} color="#FFFFFF" />
                   </Pressable>
                 )}
+
+                <Pressable
+                  onPress={() => toggleFavorite(product)}
+                  style={styles.heartButton}
+                  hitSlop={8}
+                >
+                  <Heart
+                    size={18}
+                    color={isFavorite(product._id) ? "#DA291C" : "#FFFFFF"}
+                    fill={isFavorite(product._id) ? "#DA291C" : "rgba(0,0,0,0.25)"}
+                  />
+                </Pressable>
               </View>
 
               {/* Info */}
@@ -671,6 +686,18 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderRadius: 13,
+  },
+
+  heartButton: {
+    position: "absolute" as const,
+    left: 8,
+    top: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
 
   addButton: {

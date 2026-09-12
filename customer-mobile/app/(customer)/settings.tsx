@@ -2,7 +2,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   Switch,
@@ -20,7 +19,7 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { useSettings, type ThemePreference } from "@/context/SettingsContext";
 
@@ -55,7 +54,6 @@ const THEME_OPTIONS: {
 // --------------------------------------------------
 
 const SettingsScreen = () => {
-  const systemScheme = useColorScheme();
   const {
     themePreference,
     setThemePreference,
@@ -66,9 +64,7 @@ const SettingsScreen = () => {
   } = useSettings();
 
   // Resolve theme for this screen's own UI
-  const resolvedScheme =
-    themePreference === "system" ? systemScheme : themePreference;
-  const theme = resolvedScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme, scheme: resolvedScheme } = useTheme();
   const { colors } = theme;
 
   return (

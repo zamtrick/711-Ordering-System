@@ -42,6 +42,7 @@ import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
 import managePromos from "./routes/superadmin/promo.routes.js";
 import manageCustomerPromos from "./routes/customer/promo.routes.js";
+import manageCustomerFavorites from "./routes/customer/favorite.routes.js";
 import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
 import manageAdminOrders from "./routes/admin/order.routes.js";
 
@@ -176,6 +177,7 @@ app.use("/api/admin/orders", auth, authorize("admin", "superadmin"), manageAdmin
 app.use("/api/customer/profile", auth, manageProfileCustomer);
 app.use("/api/customer/products", auth, manageCustomerProducts);
 app.use("/api/customer/promos", auth, manageCustomerPromos);
+app.use("/api/customer/favorites", auth, manageCustomerFavorites);
 app.use("/api/customer/branches", auth, manageCustomerBranches);
 app.use("/api/orders", auth, authorize("customer", "admin"), manageOrderItems);
 app.use("/api/orders", auth, authorize("customer", "admin"), manageOrders);

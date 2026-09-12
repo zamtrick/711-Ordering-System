@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   Image,
@@ -17,7 +16,7 @@ import {
   PackageSearch,
 } from "lucide-react-native";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
 import { useCart } from "@/context/CartContext";
@@ -27,8 +26,7 @@ import { useCart } from "@/context/CartContext";
 // --------------------------------------------------
 
 const Cart = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { items, removeItem, increaseQuantity, decreaseQuantity, subtotal, totalCount } =

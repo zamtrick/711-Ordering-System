@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  useColorScheme,
   TouchableWithoutFeedback,
   Keyboard,
   Image,
@@ -16,7 +15,7 @@ import { router } from "expo-router";
 import { Mail, ArrowRight, ChevronLeft } from "lucide-react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
 import api from "@/api/axios";
@@ -24,8 +23,7 @@ import api from "@/api/axios";
 // Forgot password — step 1: collect the email, issue a reset code,
 // then hand off to the shared OTP screen (purpose=reset).
 const Forgot = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const [email, setEmail] = useState("");

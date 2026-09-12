@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   Pressable,
   ScrollView,
   ActivityIndicator,
@@ -22,7 +21,7 @@ import {
 } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
-import { LightTheme, DarkTheme } from "@/constants/theme";
+import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import { useSocket } from "@/context/SocketContext";
@@ -138,8 +137,7 @@ const TIMELINE_STEPS = ["pending", "processing", "completed"] as const;
 
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
+  const { theme } = useTheme();
   const { colors } = theme;
 
   const { socket } = useSocket();
@@ -165,6 +163,7 @@ export default function OrderDetailScreen() {
   }, [id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
     fetchOrder();
   }, [fetchOrder]);
 
