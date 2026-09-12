@@ -30,6 +30,7 @@ type ServerStatus = "pending" | "processing" | "completed" | "cancelled" | "refu
 type Order = {
   _id: string;
   status: ServerStatus;
+  deliveryStatus?: "unassigned" | "assigned" | "picked_up" | "in_transit" | "delivered";
   totalAmount: number;
   createdAt: string;
   orderItems: {
@@ -38,6 +39,39 @@ type Order = {
     product?: { name: string; image?: string };
   }[];
   deliveryFee?: number;
+};
+
+// --------------------------------------------------
+// LIVE STAGE — the 4-step pipeline shown on each order card
+// --------------------------------------------------
+// Maps (status, deliveryStatus) to a customer-friendly stage so the card
+// always reflects the rider's progress, not just the admin status.
+const STAGES = ["placed", "preparing", "on_delivery", "completed"] as const;
+type Stage = (typeof STAGES)[number];
+
+const STAGE_LABEL: Record<Stage, string> = {
+  placed: "Order placed",
+  preparing: "Preparing your order",
+  on_delivery: "On the way",
+  completed: "Completed",
+};
+
+const orderStage = (
+  status: ServerStatus,
+  deliveryStatus?: string
+): Stage | null => {
+  if (status === "completed") return "completed";
+  if (status === "cancelled" || status === "refunded") return null; // terminal — no pipeline
+  if (
+    status === "processing" &&
+    (deliveryStatus === "assigned" ||
+      deliveryStatus === "picked_up" ||
+      deliveryStatus === "in_transit" ||
+      deliveryStatus === "delivered")
+  ) {
+    return "on_delivery";
+  }
+  return "preparing";
 };
 
 // --------------------------------------------------
@@ -273,6 +307,8 @@ const Orders = () => {
             const cancelling = cancellingId === order._id;
             const canCancel =
               order.status === "pending" || order.status === "processing";
+            const stage = orderStage(order.status, order.deliveryStatus);
+            const stageIndex = stage ? STAGES.indexOf(stage) : -1;
 
             return (
               <Pressable
@@ -310,6 +346,45 @@ const Orders = () => {
                     </Text>
                   </View>
                 </View>
+
+                {/* Live pipeline — Placed → Preparing → On the way → Completed */}
+                {stage && (
+                  <View style={styles.pipeline}>
+                    {STAGES.map((s, i) => {
+                      const done = i < stageIndex;
+                      const current = i === stageIndex;
+                      return (
+                        <View key={s} style={styles.pipelineStep}>
+                          <View
+                            style={[
+                              styles.pipelineDot,
+                              {
+                                backgroundColor:
+                                  done || current ? "#007A53" : colors.border,
+                              },
+                            ]}
+                          />
+                          {i < STAGES.length - 1 && (
+                            <View
+                              style={[
+                                styles.pipelineLine,
+                                {
+                                  backgroundColor:
+                                    done ? "#007A53" : colors.border,
+                                },
+                              ]}
+                            />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+                {stage && (
+                  <Text style={[styles.stageLabel, { color: colors.muted }]}>
+                    {STAGE_LABEL[stage]}
+                  </Text>
+                )}
 
                 {/* Items */}
                 {order.orderItems.length > 0 && (
@@ -569,6 +644,37 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     gap: 5,
+  },
+
+  pipeline: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+  },
+
+  pipelineStep: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  pipelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+
+  pipelineLine: {
+    flex: 1,
+    height: 2,
+    marginHorizontal: 2,
+    borderRadius: 1,
+  },
+
+  stageLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 6,
   },
 
   statusDot: {

@@ -41,6 +41,25 @@ const paymentStatusColor = (s: string) => {
 
 const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 
+// Customer-facing delivery progress, shown alongside the admin status.
+const DELIVERY_LABEL: Record<string, string> = {
+  unassigned: "Waiting for rider",
+  assigned: "Rider assigned",
+  picked_up: "Picked up",
+  in_transit: "On the way",
+  delivered: "Delivered",
+};
+
+const deliveryColor = (s: string) => {
+  switch (s) {
+    case "delivered": return "bg-[#E8F5EF] dark:bg-[#0A3D3D] text-[#007A53] dark:text-[#4CAF50]";
+    case "in_transit": return "bg-[#EEF2FF] dark:bg-[#1A1A3D] text-[#4F46E5]";
+    case "picked_up": return "bg-[#EEF2FF] dark:bg-[#1A1A3D] text-[#4F46E5]";
+    case "assigned": return "bg-[#FFF3E8] dark:bg-[#3D2A15] text-[#FF6720]";
+    default: return "bg-[#F0F0F0] dark:bg-[#2A2A2A] text-[#777] dark:text-[#A0A0A0]";
+  }
+};
+
 export default function Orders() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success: toastSuccess, error: toastError } = useToast();
@@ -189,11 +208,11 @@ export default function Orders() {
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-[#1E1E1E] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>
         <table className="w-full text-sm">
           <thead><tr className={`border-b ${isDark ? "bg-[#2A2A2A] border-[#2E2E2E]" : "bg-[#F8F5F2] border-[#E5E2DE]"}`}>
-            {["Order ID", "Customer", "Branch", "Amount", "Status", "Date", "Details"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>{h}</th>)}
+            {["Order ID", "Customer", "Branch", "Amount", "Status", "Delivery", "Date", "Details"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={7} className="px-4 py-8 text-center text-[#777]">Loading...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-[#777]">No orders found.</td></tr>
+            {loading ? <tr><td colSpan={8} className="px-4 py-8 text-center text-[#777]">Loading...</td></tr>
+            : filtered.length === 0 ? <tr><td colSpan={8} className="px-4 py-12 text-center text-[#777]">No orders found.</td></tr>
             : filtered.map((o) => (
               <tr key={o._id} className={`border-b ${isDark ? "border-[#2E2E2E] hover:bg-[#2A2A2A]" : "border-[#F0F0F0] hover:bg-[#FAFAFA]"}`}>
                 <td className="px-4 py-3 font-mono text-xs text-[#555] dark:text-[#A0A0A0]">{o._id.slice(-8)}</td>
@@ -201,6 +220,11 @@ export default function Orders() {
                 <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{o.branch?.name ?? "—"}</td>
                 <td className="px-4 py-3 font-semibold text-[#007A53] dark:text-[#4CAF50]">₱{o.totalAmount}</td>
                 <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(o.status)}`}>{o.status}</span></td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(o.deliveryStatus ?? "unassigned")}`}>
+                    {DELIVERY_LABEL[o.deliveryStatus ?? "unassigned"]}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
                 <td className="px-4 py-3"><button onClick={() => setViewOrder(o)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Eye size={14} className="text-[#4F46E5]" /></button></td>
               </tr>
@@ -230,7 +254,30 @@ export default function Orders() {
               </div>
               <div className={`p-3 rounded-xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
                 <p className={`text-xs ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Status</p>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(viewOrder.status)}`}>{viewOrder.status}</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(viewOrder.status)}`}>{viewOrder.status}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(viewOrder.deliveryStatus ?? "unassigned")}`}>
+                    {DELIVERY_LABEL[viewOrder.deliveryStatus ?? "unassigned"]}
+                  </span>
+                </div>
+                {/* Pipeline: Placed → Preparing → On delivery → Completed */}
+                {viewOrder.status !== "cancelled" && viewOrder.status !== "refunded" && (
+                  <div className="flex items-center mt-3">
+                    {["Placed", "Preparing", "On delivery", "Completed"].map((label, i) => {
+                      const reached =
+                        (viewOrder.status === "completed") ? i <= 3 :
+                        (viewOrder.status === "processing" && ["assigned", "picked_up", "in_transit", "delivered"].includes(viewOrder.deliveryStatus ?? "")) ? i <= 2 :
+                        (viewOrder.status === "processing") ? i <= 1 : i <= 0;
+                      return (
+                        <div key={label} className="flex items-center flex-1">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${reached ? "bg-[#007A53]" : isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />
+                          {i < 3 && <div className={`flex-1 h-0.5 mx-1 ${reached && i < 2 ? "bg-[#007A53]" : isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />}
+                          <span className={`text-[10px] font-semibold ml-1 whitespace-nowrap ${reached ? "text-[#007A53] dark:text-[#4CAF50]" : isDark ? "text-[#777]" : "text-[#aaa]"}`}>{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {viewOrder.payment && (
                 <div className={`p-3 rounded-xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
