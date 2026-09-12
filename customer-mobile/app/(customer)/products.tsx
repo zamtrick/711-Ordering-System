@@ -55,6 +55,8 @@ type Product = {
   image?: string;
   categoryId?: Category;
   stock: number;
+  ratingAvg?: number;
+  ratingCount?: number;
 };
 
 // --------------------------------------------------
@@ -481,6 +483,18 @@ const Products = () => {
                       : "Out of stock"}
                   </Text>
                 </View>
+
+                {(product.ratingCount ?? 0) > 0 && (
+                  <View style={styles.stockRow}>
+                    <Star size={12} color="#FF6720" fill="#FF6720" />
+                    <Text style={[styles.stockText, { color: colors.headline, fontWeight: "700" }]}>
+                      {(product.ratingAvg ?? 0).toFixed(1)}
+                    </Text>
+                    <Text style={[styles.stockText, { color: colors.muted }]}>
+                      ({product.ratingCount})
+                    </Text>
+                  </View>
+                )}
 
                 <Text style={[styles.price, { color: "#007A53" }]}>
                   ₱{product.price.toFixed(2)}

@@ -55,6 +55,21 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // Denormalized review aggregates — kept in sync by the review controller
+    // so product cards never need a join to show "4.6 ★ (23)".
+    ratingAvg: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,
