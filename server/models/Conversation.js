@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 
 /**
- * Conversation — one thread between a customer and the admin/branch.
- * A customer can only have one active conversation at a time.
+ * Conversation — one thread between a customer and a specific branch.
+ * A customer can have one conversation per branch.
  */
 const conversationSchema = new mongoose.Schema(
   {
@@ -11,7 +11,14 @@ const conversationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true, // one conversation per customer
+    },
+
+    // The branch this conversation is scoped to.
+    // Branch admins only see conversations for their branch.
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
     },
 
     // Snapshot of the last message for the list view
@@ -41,7 +48,9 @@ const conversationSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-conversationSchema.index({ lastMessageAt: -1 });
+// One conversation per customer+branch pair
+conversationSchema.index({ customer: 1, branch: 1 }, { unique: true });
+conversationSchema.index({ branch: 1, lastMessageAt: -1 });
 
 const Conversation = mongoose.model("Conversation", conversationSchema);
 export default Conversation;

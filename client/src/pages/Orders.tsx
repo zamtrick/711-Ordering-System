@@ -22,6 +22,10 @@ type Order = {
   deliveryStatus?: string;
   createdAt: string;
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
+  proofOfDelivery?: {
+    photoUrl?: string | null;
+    scannedAt?: string | null;
+  } | null;
 };
 
 const DELIVERY_LABEL: Record<string, string> = {
@@ -263,6 +267,23 @@ export default function Orders() {
                 <p className="text-lg font-bold text-[#007A53] dark:text-[#4CAF50]">₱{viewOrder.totalAmount.toFixed(2)}</p>
               </div>
             </div>
+
+            {/* Proof of Delivery */}
+            {viewOrder.proofOfDelivery?.photoUrl && (
+              <div className="bg-[#F8F5F2] dark:bg-[#2A2A2A] rounded-xl p-3 mb-4">
+                <p className="text-xs font-semibold text-[#777] dark:text-[#A0A0A0] mb-2">Proof of Delivery</p>
+                <img
+                  src={viewOrder.proofOfDelivery.photoUrl}
+                  alt="Proof of delivery"
+                  className="w-full h-48 object-cover rounded-lg mb-2"
+                />
+                {viewOrder.proofOfDelivery?.scannedAt && (
+                  <p className="text-xs text-[#777] dark:text-[#A0A0A0]">
+                    Delivered at: {new Date(viewOrder.proofOfDelivery.scannedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
 
             {viewOrder.orderItems?.length > 0 && (
               <div>

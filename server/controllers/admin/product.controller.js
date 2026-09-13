@@ -106,8 +106,8 @@ export const createProduct = async (req, res) => {
   }
   try {
     const { sku, barcode, name, description, categoryId, price, stock } = req.body;
-    if (!sku || !barcode || !name || !categoryId || price === undefined || stock === undefined) {
-      return res.status(400).json({ success: false, message: "SKU, barcode, name, categoryId, price, and stock are required" });
+    if (!sku || !name || !categoryId || price === undefined || stock === undefined) {
+      return res.status(400).json({ success: false, message: "SKU, name, categoryId, price, and stock are required" });
     }
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
       return res.status(400).json({ success: false, message: "Invalid category ID" });

@@ -69,7 +69,7 @@ const Home = () => {
 
       if (statsRes.data?.data) setStats(statsRes.data.data);
       if (deliveriesRes.data?.deliveries) setDeliveries(deliveriesRes.data.deliveries);
-    } catch (err: any) {
+    } catch (err) {
       console.log("Fetch data error:", err);
       if (err?.response?.status === 401) {
         router.replace("/(auth)/login");
@@ -116,7 +116,7 @@ const Home = () => {
       setStats((prev) =>
         prev ? { ...prev, availabilityStatus: res.data?.data?.availabilityStatus || newStatus } : prev,
       );
-    } catch (err: any) {
+    } catch (err) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to update status");
     } finally {
       setTogglingAvailability(false);
@@ -132,7 +132,7 @@ const Home = () => {
         prev ? { ...prev, activeDeliveries: prev.activeDeliveries + 1 } : prev,
       );
       Alert.alert("Success", "Delivery accepted! Go to Deliveries tab to manage it.");
-    } catch (err: any) {
+    } catch (err) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to accept delivery");
     } finally {
       setAcceptingId(null);

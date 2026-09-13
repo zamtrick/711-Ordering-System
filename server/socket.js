@@ -4,7 +4,6 @@ import * as cookie from "cookie";
 import Admin from "./models/Admin.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
-import Order from "./models/Order.js";
 
 // --------------------------------------------------
 // Rooms
@@ -21,23 +20,6 @@ import Order from "./models/Order.js";
 let ioInstance = null;
 
 export const getIo = () => ioInstance;
-
-// --------------------------------------------------
-// Branch rooms a customer's chat updates should reach.
-// Branch admins listen on branch_room:<branchId>; a customer belongs to
-// every branch they've ordered from. Superadmins always hear via admin_room
-// (handled separately by callers).
-// --------------------------------------------------
-const staffBranchRoomsForCustomer = async (customer) => {
-  try {
-    const customerId = customer?._id ?? customer;
-    if (!customerId) return [];
-    const orders = await Order.find({ user: customerId }).select("branch").lean();
-    return [...new Set(orders.map((o) => `branch_room:${o.branch}`))];
-  } catch {
-    return [];
-  }
-};
 
 export const emitOrderUpdated = (order) => {
   try {
@@ -140,17 +122,11 @@ export const initSocket = (httpServer) => {
       // Customers can only join their own conversation
       if (role === "customer" && convo.customer.toString() !== userId) return;
 
-      // Branch admins can only join their branch's customer conversations
-      if (role === "admin" && socket.adminBranchId) {
-        try {
-          const orders = await Order.find({ branch: socket.adminBranchId })
-            .select("user")
-            .lean();
-          const ids = [...new Set(orders.map((o) => o.user.toString()))];
-          if (!ids.includes(convo.customer.toString())) return;
-        } catch {
-          return;
-        }
+      // Branch admins can only join conversations for their branch.
+      // convo.branch may be absent on legacy documents — allow those through
+      // so old data doesn't permanently break; new conversations always have it.
+      if (role === "admin" && socket.adminBranchId && convo.branch) {
+        if (convo.branch.toString() !== socket.adminBranchId.toString()) return;
       }
 
       socket.join(`conv:${conversationId}`);
@@ -162,14 +138,10 @@ export const initSocket = (httpServer) => {
         { $set: { read: true } },
       );
 
-      if (role === "admin") {
+      if (role === "admin" || role === "superadmin") {
         await Conversation.findByIdAndUpdate(conversationId, { unreadAdmin: 0 });
-        // Tell the admin's other tabs the count is cleared — superadmins in
-        // the shared room, same-branch admins in their branch room
-        io.to("admin_room").emit("conversation_updated", {
-          conversationId,
-          unreadAdmin: 0,
-        });
+        // Tell other admin tabs the count is cleared
+        io.to("admin_room").emit("conversation_updated", { conversationId, unreadAdmin: 0 });
         if (socket.adminBranchId) {
           io.to(`branch_room:${socket.adminBranchId}`).emit("conversation_updated", {
             conversationId,
@@ -200,26 +172,24 @@ export const initSocket = (httpServer) => {
         const convo = await Conversation.findById(conversationId);
         if (!convo) return ack?.({ success: false, message: "Conversation not found" });
 
+        // Superadmin is read-only — they can view but not send messages
+        if (role === "superadmin") {
+          return ack?.({ success: false, message: "Superadmin cannot send messages. Only branch admins can reply." });
+        }
+
         // Ownership guard
         if (role === "customer" && convo.customer.toString() !== userId) {
           return ack?.({ success: false, message: "Forbidden" });
         }
 
-        // Branch admins can only message their branch's customers
-        if (role === "admin" && socket.adminBranchId) {
-          try {
-            const orders = await Order.find({ branch: socket.adminBranchId })
-              .select("user")
-              .lean();
-            const ids = [...new Set(orders.map((o) => o.user.toString()))];
-            if (!ids.includes(convo.customer.toString())) {
-              return ack?.({
-                success: false,
-                message: "You can only chat with customers of your branch.",
-              });
-            }
-          } catch {
-            return ack?.({ success: false, message: "Server error" });
+        // Branch admins can only message conversations belonging to their branch.
+        // Legacy conversations without a branch field are allowed through.
+        if (role === "admin" && socket.adminBranchId && convo.branch) {
+          if (convo.branch.toString() !== socket.adminBranchId.toString()) {
+            return ack?.({
+              success: false,
+              message: "You can only chat with customers of your branch.",
+            });
           }
         }
 
@@ -258,14 +228,15 @@ export const initSocket = (httpServer) => {
         // Broadcast the message to everyone in this conversation room
         io.to(`conv:${conversationId}`).emit("new_message", populated);
 
-        // Notify the other side even if they haven't opened the convo pane.
-        // Staff listeners: superadmins via admin_room, branch admins via the
-        // branch rooms of the branches this customer has ordered from.
-        const staffRooms = await staffBranchRoomsForCustomer(convo.customer);
-        for (const room of staffRooms) {
-          io.to(room).emit("conversation_updated", updatedConvo);
-        }
+        // Notify the other side's unread counter even if pane isn't open.
+        // Route to the conversation's branch room (branch admin) + admin_room
+        // (superadmin). If the customer sent, notify staff; if staff sent,
+        // notify the customer.
+        const convBranchId = convo.branch?.toString();
         if (senderRole === "customer") {
+          if (convBranchId) {
+            io.to(`branch_room:${convBranchId}`).emit("conversation_updated", updatedConvo);
+          }
           io.to("admin_room").emit("conversation_updated", updatedConvo);
         } else {
           io.to(`customer:${convo.customer.toString()}`).emit(

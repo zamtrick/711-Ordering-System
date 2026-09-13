@@ -41,6 +41,7 @@ import manageCustomerProducts from "./routes/customer/product.routes.js";
 import manageCustomerBranches from "./routes/customer/branch.routes.js";
 import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
+import riderDeliveryRoutes from "./routes/rider/delivery.routes.js";
 import managePromos from "./routes/superadmin/promo.routes.js";
 import manageCustomerPromos from "./routes/customer/promo.routes.js";
 import manageCustomerFavorites from "./routes/customer/favorite.routes.js";
@@ -198,8 +199,141 @@ app.use("/api/chat", chatRoutes);
 
 app.use("/api/admin/branch-inventory", auth, authorize("admin", "superadmin"), manageBranchInventory);
 
-// Rider routes
+// Rider delivery routes — must be mounted BEFORE the general rider router
+// so that /api/rider/deliveries/... is matched here first and not swallowed
+// by the /api/rider prefix-match above.
+app.use("/api/rider/deliveries", auth, authorize("rider"), riderDeliveryRoutes);
+
+// General rider routes (availability, profile, etc.)
 app.use("/api/rider", auth, authorize("rider", "superadmin"), manageRiderRoutes);
+
+// Customer QR access endpoint - customers can get their order's QR code
+// This is separate from rider routes to avoid authorization issues
+app.use("/api/customer/orders/qr", auth, async (req, res, next) => {
+  try {
+    const { orderId } = req.query;
+    
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: "Order ID is required" });
+    }
+
+    const Order = (await import("./models/Order.js")).default;
+    const { generateDeliveryQR } = await import("./utils/qr-delivery.js");
+
+    const order = await Order.findById(orderId).populate("user", "firstname lastname");
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Only the order owner (customer) can see the QR
+    if (req.user.role !== "customer" || req.user.userId !== order.user?._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized to view this QR" });
+    }
+
+    // qrValue is the raw 24-char orderId — the client renders the QR image itself
+    const qrValue = await generateDeliveryQR(order._id.toString());
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        orderId: order._id,
+        qrValue,
+      },
+    });
+  } catch (err) {
+    console.error("Customer QR error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+// Customer can also mark their own order as delivered (for testing)
+// NOTE: This bypasses the rider QR scan requirement - use with caution
+app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { photoUrl } = req.body;
+
+    const Order = (await import("./models/Order.js")).default;
+    const Rider = (await import("./models/Rider.js")).default;
+    const AuditLog = (await import("./models/AuditLog.js")).default;
+
+    const order = await Order.findById(id);
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // Only the customer who placed the order can mark it
+    if (req.user.role !== "customer" || req.user.userId !== order.user?.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    // Only processing orders can be marked delivered
+    if (!["assigned", "picked_up", "in_transit"].includes(order.deliveryStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order cannot be marked delivered from current status: ${order.deliveryStatus}`,
+      });
+    }
+
+    // Get rider info if available
+    let riderId = null;
+    if (order.rider) {
+      const rider = await Rider.findById(order.rider);
+      riderId = rider?._id;
+    }
+
+    // Update order
+    order.deliveryStatus = "delivered";
+    order.status = "completed";    // Create proof of delivery record
+    order.proofOfDelivery = {
+      photoUrl: photoUrl || null,
+      scannedAt: new Date(),
+      riderId: riderId,
+      qrToken: `${order._id}-${Date.now()}-customer-delivered`,
+    };
+
+    await order.save();
+
+    // Update payment status if COD
+    const Payment = (await import("./models/Payment.js")).default;
+    if (order.payment) {
+      await Payment.findByIdAndUpdate(order.payment, {
+        status: "paid",
+        paidAt: new Date(),
+      });
+    }
+
+    // Audit log
+    await AuditLog.create({
+      user: req.user.userId,
+      action: "order_marked_delivered_by_customer",
+      target: "Order",
+      targetId: order._id,
+      details: `Customer marked order as delivered for #${order._id.toString().slice(-6).toUpperCase()}`,
+    });
+
+    const updated = await Order.findById(order._id)
+      .populate("user", "firstname lastname email")
+      .populate("branch", "name branchCode")
+      .populate("proofOfDelivery.riderId", "user");
+
+    // Emit update to all connected clients
+    const { emitOrderUpdated } = await import("./socket.js");
+    emitOrderUpdated(updated);
+
+    return res.status(200).json({
+      success: true,
+      message: "Order marked as delivered",
+      data: updated,
+    });
+  } catch (err) {
+    console.error("Mark delivered error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
 
 mongoose
   .connect(DB_URI)

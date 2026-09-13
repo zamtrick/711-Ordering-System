@@ -97,12 +97,14 @@ export async function notifyOrderStatusChanged(order) {
     processing: "Your order is now being prepared! 👨‍🍳",
     completed: "Your order is ready for pickup! ✅",
     cancelled: "Your order has been cancelled. ❌",
+    refunded: "Your order has been refunded. 💸",
   };
 
   const statusColors = {
     processing: "#FF6720",
     completed: "#007A53",
     cancelled: "#DA291C",
+    refunded: "#888888",
   };
 
   await sendMail(

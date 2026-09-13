@@ -181,6 +181,44 @@ export const getPromoImageUploader = () => {
 };
 
 // --------------------------------------------------
+// Proof of delivery image upload — Cloudinary via multer storage engine
+// Images land in the "proof-of-delivery" folder, capped at 10MB for photos.
+// --------------------------------------------------
+
+let proofDeliveryUploader = null;
+export const getProofDeliveryUploader = () => {
+  if (proofDeliveryUploader) return proofDeliveryUploader;
+
+  ensureCloudinary();
+
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder: "proof-of-delivery",
+      allowed_formats: ["jpg", "png", "jpeg", "webp"],
+      public_id: `delivery-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+      transformation: [
+        { width: 1920, height: 1080, crop: "limit", quality: "auto", fetch_format: "auto" },
+      ],
+    }),
+  });
+
+  proofDeliveryUploader = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB for photos
+    fileFilter: (req, file, cb) => {
+      if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only image files are allowed (JPG, PNG, WEBP)"));
+      }
+    },
+  });
+
+  return proofDeliveryUploader;
+};
+
+// --------------------------------------------------
 // Delete an image belonging to a product.
 // Works in two modes:
 //  - Cloudinary URL (https://res.cloudinary.com/...) → destroy by public_id

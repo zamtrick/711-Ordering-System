@@ -24,14 +24,8 @@ export const getAdmins = async (req, res) => {
       .populate("assignedBranch")
       .sort({ createdAt: -1 });
 
-    // If no admins exist
-    if (admins.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No admins found",
-      });
-    }
-
+    // Return empty array (not 404) when no admins exist yet —
+    // an empty list is a valid state, not an error.
     return res.status(200).json({
       success: true,
       message: "Admins retrieved successfully",

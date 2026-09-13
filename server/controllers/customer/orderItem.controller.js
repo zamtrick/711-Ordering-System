@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import OrderItem from "../../models/OrderItem.js";
 import Order from "../../models/Order.js";
 import Product from "../../models/Product.js";
+import Payment from "../../models/Payment.js";
 import { emitOrderUpdated } from "../../socket.js";
 
 // Emit the fully-populated order so admin/customer listeners stay in sync
@@ -171,10 +172,21 @@ export const createOrderItem = async (req, res) => {
     // The mobile checkout fires one request per cart item in parallel
     // (Promise.all) — a read-modify-write here loses updates and corrupts
     // the total. $push/$inc are atomic on the server.
-    await Order.findByIdAndUpdate(orderId, {
-      $push: { orderItems: orderItem._id },
-      $inc: { totalAmount: subTotal },
-    });
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        $push: { orderItems: orderItem._id },
+        $inc: { totalAmount: subTotal },
+      },
+      { new: true },
+    );
+
+    // Keep Payment.amount in sync so analytics and receipts are accurate.
+    if (updatedOrder?.payment) {
+      await Payment.findByIdAndUpdate(updatedOrder.payment, {
+        amount: updatedOrder.totalAmount,
+      });
+    }
 
     const populated = await OrderItem.findById(orderItem._id).populate(
       "product",
@@ -316,7 +328,17 @@ export const updateOrderItemById = async (req, res) => {
     await orderItem.save();
 
     if (delta !== 0) {
-      await Order.findByIdAndUpdate(orderId, { $inc: { totalAmount: delta } });
+      const updatedOrder = await Order.findByIdAndUpdate(
+        orderId,
+        { $inc: { totalAmount: delta } },
+        { new: true },
+      );
+      // Keep Payment.amount in sync
+      if (updatedOrder?.payment) {
+        await Payment.findByIdAndUpdate(updatedOrder.payment, {
+          amount: updatedOrder.totalAmount,
+        });
+      }
     }
 
     const updated = await OrderItem.findById(orderItem._id).populate("product");
@@ -376,10 +398,21 @@ export const deleteOrderItemById = async (req, res) => {
     }
 
     // Remove the reference and subtract the subtotal ATOMICALLY
-    await Order.findByIdAndUpdate(orderId, {
-      $pull: { orderItems: itemId },
-      $inc: { totalAmount: -orderItem.subTotal },
-    });
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        $pull: { orderItems: itemId },
+        $inc: { totalAmount: -orderItem.subTotal },
+      },
+      { new: true },
+    );
+
+    // Keep Payment.amount in sync
+    if (updatedOrder?.payment) {
+      await Payment.findByIdAndUpdate(updatedOrder.payment, {
+        amount: updatedOrder.totalAmount,
+      });
+    }
 
     await orderItem.deleteOne();
 

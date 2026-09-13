@@ -23,7 +23,7 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
       </div>
     );
   }
-  if (!user || user.role !== "admin") return <Navigate to="/login" replace />;
+  if (!user || (user.role !== "admin" && user.role !== "superadmin")) return <Navigate to="/login" replace />;
   return children;
 }
 

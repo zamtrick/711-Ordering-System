@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { MessageCircle, Send, Users, WifiOff, Search } from "lucide-react";
+import { MessageCircle, Send, Users, WifiOff, Search, Store } from "lucide-react";
 import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
@@ -9,6 +9,12 @@ import { useAuth } from "@/context/AuthContext";
 // TYPES
 // --------------------------------------------------
 
+type Branch = {
+  _id: string;
+  name: string;
+  branchCode: string;
+};
+
 type Conversation = {
   _id: string;
   customer: {
@@ -17,6 +23,7 @@ type Conversation = {
     lastname: string;
     email: string;
   };
+  branch: Branch;
   lastMessage: string;
   lastMessageAt: string | null;
   unreadAdmin: number;
@@ -56,11 +63,7 @@ const formatDateLabel = (iso: string) => {
   yesterday.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-PH", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
 
 const initials = (c: Conversation["customer"]) =>
@@ -73,10 +76,15 @@ const initials = (c: Conversation["customer"]) =>
 export default function Chat() {
   const { isDark } = useTheme();
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === "superadmin";
 
   // ── socket ───────────────────────────────────────
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+
+  // ── branch filter (superadmin only) ─────────────
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string>(""); // "" = all
 
   // ── conversations list ───────────────────────────
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -109,7 +117,6 @@ export default function Chat() {
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
 
-    // New message in the active thread
     socket.on("new_message", (msg: Message) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
@@ -117,21 +124,14 @@ export default function Chat() {
       });
     });
 
-    // Conversation list update (new message from a customer, unread reset, etc.)
     socket.on("conversation_updated", (updated: Conversation) => {
       setConversations((prev) =>
         prev
           .map((c) => (c._id === updated._id ? { ...c, ...updated } : c))
-          .sort((a, b) =>
-            (b.lastMessageAt ?? "") > (a.lastMessageAt ?? "") ? 1 : -1,
-          ),
+          .sort((a, b) => ((b.lastMessageAt ?? "") > (a.lastMessageAt ?? "") ? 1 : -1)),
       );
-
-      // If the update is for the currently-open conversation, clear the badge
       if (activeConvRef.current?._id === updated._id) {
-        setActiveConv((prev) =>
-          prev ? { ...prev, unreadAdmin: 0 } : prev,
-        );
+        setActiveConv((prev) => (prev ? { ...prev, unreadAdmin: 0 } : prev));
       }
     });
 
@@ -142,64 +142,69 @@ export default function Chat() {
   }, []);
 
   // --------------------------------------------------
-  // FETCH ALL CONVERSATIONS
+  // LOAD BRANCHES (superadmin only — for filter)
   // --------------------------------------------------
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get("/chat/conversations");
-        setConversations(res.data?.data ?? []);
-      } catch (e) {
-        console.error("Load conversations error:", e);
-      } finally {
-        setLoadingConvs(false);
-      }
-    })();
-  }, []);
+    if (!isSuperAdmin) return;
+    api
+      .get("/superadmin/branches")
+      .then((res) => setBranches(res.data?.data ?? res.data?.branches ?? []))
+      .catch(() => {});
+  }, [isSuperAdmin]);
+
+  // --------------------------------------------------
+  // FETCH CONVERSATIONS (re-runs when branch filter changes)
+  // --------------------------------------------------
+
+  const loadConversations = useCallback(async () => {
+    setLoadingConvs(true);
+    try {
+      const params: Record<string, string> = {};
+      if (isSuperAdmin && branchFilter) params.branchId = branchFilter;
+      const res = await api.get("/chat/conversations", { params });
+      setConversations(res.data?.data ?? []);
+    } catch (e) {
+      console.error("Load conversations error:", e);
+    } finally {
+      setLoadingConvs(false);
+    }
+  }, [branchFilter, isSuperAdmin]);
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
 
   // --------------------------------------------------
   // OPEN A CONVERSATION
   // --------------------------------------------------
 
-  const openConversation = useCallback(
-    async (conv: Conversation) => {
-      // Leave the previous room
-      if (activeConvRef.current) {
-        socketRef.current?.emit("leave_conversation", {
-          conversationId: activeConvRef.current._id,
-        });
-      }
-
-      setActiveConv({ ...conv, unreadAdmin: 0 });
-      setMessages([]);
-      setLoadingMsgs(true);
-
-      // Join the new room
-      socketRef.current?.emit("join_conversation", {
-        conversationId: conv._id,
+  const openConversation = useCallback(async (conv: Conversation) => {
+    if (activeConvRef.current) {
+      socketRef.current?.emit("leave_conversation", {
+        conversationId: activeConvRef.current._id,
       });
+    }
 
-      try {
-        const res = await api.get(
-          `/chat/conversations/${conv._id}/messages`,
-        );
-        setMessages(res.data?.data ?? []);
-      } catch (e) {
-        console.error("Load messages error:", e);
-      } finally {
-        setLoadingMsgs(false);
-      }
+    setActiveConv({ ...conv, unreadAdmin: 0 });
+    setMessages([]);
+    setLoadingMsgs(true);
 
-      // Reset unread badge in list
-      setConversations((prev) =>
-        prev.map((c) =>
-          c._id === conv._id ? { ...c, unreadAdmin: 0 } : c,
-        ),
-      );
-    },
-    [],
-  );
+    socketRef.current?.emit("join_conversation", { conversationId: conv._id });
+
+    try {
+      const res = await api.get(`/chat/conversations/${conv._id}/messages`);
+      setMessages(res.data?.data ?? []);
+    } catch (e) {
+      console.error("Load messages error:", e);
+    } finally {
+      setLoadingMsgs(false);
+    }
+
+    setConversations((prev) =>
+      prev.map((c) => (c._id === conv._id ? { ...c, unreadAdmin: 0 } : c)),
+    );
+  }, []);
 
   // --------------------------------------------------
   // AUTO-SCROLL
@@ -216,10 +221,8 @@ export default function Chat() {
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed || !activeConv || !socketRef.current || !connected) return;
-
     setSending(true);
     setText("");
-
     socketRef.current.emit(
       "send_message",
       { conversationId: activeConv._id, text: trimmed },
@@ -241,7 +244,7 @@ export default function Chat() {
   };
 
   // --------------------------------------------------
-  // RENDER HELPERS
+  // FILTER
   // --------------------------------------------------
 
   const filtered = conversations.filter(
@@ -252,12 +255,9 @@ export default function Chat() {
       c.customer.email.toLowerCase().includes(convSearch.toLowerCase()),
   );
 
-  const totalUnread = conversations.reduce(
-    (sum, c) => sum + (c.unreadAdmin ?? 0),
-    0,
-  );
+  const totalUnread = conversations.reduce((sum, c) => sum + (c.unreadAdmin ?? 0), 0);
 
-  // Group messages by date for date separators
+  // Group messages by date
   const grouped: { date: string; msgs: Message[] }[] = [];
   let currentDate = "";
   for (const msg of messages) {
@@ -278,7 +278,9 @@ export default function Chat() {
   const border = isDark ? "border-[#2E2E2E]" : "border-[#E5E2DE]";
   const headline = isDark ? "text-white" : "text-[#232323]";
   const muted = isDark ? "text-[#A0A0A0]" : "text-[#777]";
-  const inputBg = isDark ? "bg-[#121212] border-[#2E2E2E] text-white" : "bg-[#F8F5F2] border-[#E5E2DE] text-[#232323]";
+  const inputBg = isDark
+    ? "bg-[#121212] border-[#2E2E2E] text-white"
+    : "bg-[#F8F5F2] border-[#E5E2DE] text-[#232323]";
   const hoverRow = isDark ? "hover:bg-[#2A2A2A]" : "hover:bg-[#F8F5F2]";
   const activeRow = isDark ? "bg-[#0A3D3D]" : "bg-[#E8F5EF]";
 
@@ -306,26 +308,42 @@ export default function Chat() {
               </span>
             )}
 
-            {/* Connection pill */}
             <span
               className={`ml-auto flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${
                 connected
-                  ? isDark
-                    ? "bg-[#0A3D3D] text-[#4CAF50]"
-                    : "bg-[#E8F5EF] text-[#007A53]"
-                  : isDark
-                  ? "bg-[#2E2E2E] text-[#A0A0A0]"
-                  : "bg-[#F0F0F0] text-[#777]"
+                  ? isDark ? "bg-[#0A3D3D] text-[#4CAF50]" : "bg-[#E8F5EF] text-[#007A53]"
+                  : isDark ? "bg-[#2E2E2E] text-[#A0A0A0]" : "bg-[#F0F0F0] text-[#777]"
               }`}
             >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  connected ? "bg-[#22C55E]" : "bg-[#9CA3AF]"
-                }`}
-              />
+              <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-[#22C55E]" : "bg-[#9CA3AF]"}`} />
               {connected ? "Live" : "Off"}
             </span>
           </div>
+
+          {/* Branch filter — superadmin only */}
+          {isSuperAdmin && (
+            <div className="mb-2">
+              <div className={`flex items-center gap-2 h-9 px-3 rounded-xl border ${inputBg}`}>
+                <Store size={13} className="text-[#007A53] shrink-0" />
+                <select
+                  value={branchFilter}
+                  onChange={(e) => {
+                    setBranchFilter(e.target.value);
+                    setActiveConv(null);
+                    setMessages([]);
+                  }}
+                  className="flex-1 bg-transparent outline-none text-xs appearance-none cursor-pointer"
+                >
+                  <option value="">All branches</option>
+                  {branches.map((b) => (
+                    <option key={b._id} value={b._id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Search */}
           <div className={`flex items-center gap-2 h-9 px-3 rounded-xl border ${inputBg}`}>
@@ -379,6 +397,17 @@ export default function Chat() {
                         </p>
                       )}
                     </div>
+
+                    {/* Branch badge */}
+                    {conv.branch && (
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 ${
+                        isDark ? "bg-[#0A3D3D] text-[#4CAF50]" : "bg-[#E8F5EF] text-[#007A53]"
+                      }`}>
+                        <Store size={9} />
+                        {conv.branch.name}
+                      </span>
+                    )}
+
                     <p className={`text-xs truncate mt-0.5 ${muted}`}>
                       {conv.lastMessage || "No messages yet"}
                     </p>
@@ -413,7 +442,17 @@ export default function Chat() {
                 <p className={`text-sm font-bold ${headline}`}>
                   {activeConv.customer.firstname} {activeConv.customer.lastname}
                 </p>
-                <p className={`text-xs ${muted}`}>{activeConv.customer.email}</p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-xs ${muted}`}>{activeConv.customer.email}</p>
+                  {activeConv.branch && (
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      isDark ? "bg-[#0A3D3D] text-[#4CAF50]" : "bg-[#E8F5EF] text-[#007A53]"
+                    }`}>
+                      <Store size={9} />
+                      {activeConv.branch.name}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {!connected && (
@@ -439,23 +478,16 @@ export default function Chat() {
               ) : (
                 grouped.map((group) => (
                   <div key={group.date}>
-                    {/* Date separator */}
                     <div className="flex items-center gap-3 my-4">
                       <div className={`flex-1 h-px ${isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />
-                      <span className={`text-xs font-semibold ${muted}`}>
-                        {group.date}
-                      </span>
+                      <span className={`text-xs font-semibold ${muted}`}>{group.date}</span>
                       <div className={`flex-1 h-px ${isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />
                     </div>
 
                     {group.msgs.map((msg) => {
                       const isAdmin = msg.senderRole === "admin";
                       return (
-                        <div
-                          key={msg._id}
-                          className={`flex mb-2 ${isAdmin ? "justify-end" : "justify-start"}`}
-                        >
-                          {/* Customer avatar */}
+                        <div key={msg._id} className={`flex mb-2 ${isAdmin ? "justify-end" : "justify-start"}`}>
                           {!isAdmin && (
                             <div className="w-7 h-7 rounded-full bg-[#007A53] dark:bg-[#078080] flex items-center justify-center text-white text-xs font-bold mr-2 mt-1 shrink-0">
                               {initials(activeConv.customer)}
@@ -472,36 +504,19 @@ export default function Chat() {
                             }`}
                           >
                             <p>{msg.text}</p>
-                            <p
-                              className={`text-[10px] mt-1 text-right ${
-                                isAdmin
-                                  ? "text-white/60"
-                                  : isDark
-                                  ? "text-[#A0A0A0]"
-                                  : "text-[#777]"
-                              }`}
-                            >
+                            <p className={`text-[10px] mt-1 text-right ${
+                              isAdmin ? "text-white/60" : isDark ? "text-[#A0A0A0]" : "text-[#777]"
+                            }`}>
                               {formatTime(msg.createdAt)}
-                              {isAdmin && (
-                                <span className="ml-1">
-                                  {msg.read ? " ✓✓" : " ✓"}
-                                </span>
-                              )}
+                              {isAdmin && <span className="ml-1">{msg.read ? " ✓✓" : " ✓"}</span>}
                             </p>
                           </div>
 
-                          {/* Admin avatar */}
                           {isAdmin && (
-                            <div
-                              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ml-2 mt-1 shrink-0 ${
-                                isDark
-                                  ? "bg-[#2A2A2A] text-[#A0A0A0]"
-                                  : "bg-[#F8F5F2] text-[#777]"
-                              }`}
-                            >
-                              {user
-                                ? `${user.firstname[0]}${user.lastname[0]}`.toUpperCase()
-                                : "A"}
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ml-2 mt-1 shrink-0 ${
+                              isDark ? "bg-[#2A2A2A] text-[#A0A0A0]" : "bg-[#F8F5F2] text-[#777]"
+                            }`}>
+                              {user ? `${user.firstname[0]}${user.lastname[0]}`.toUpperCase() : "A"}
                             </div>
                           )}
                         </div>
@@ -513,39 +528,46 @@ export default function Chat() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input bar */}
-            <div className={`px-4 py-3 border-t ${border} flex items-end gap-3`}>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
-                rows={1}
-                className={`flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none max-h-28 ${inputBg} placeholder-[#999]`}
-                style={{ overflowY: "auto" }}
-                disabled={!connected}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!text.trim() || sending || !connected}
-                className={`h-10 w-10 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
-                  text.trim() && connected
-                    ? "bg-[#007A53] dark:bg-[#078080] text-white cursor-pointer hover:opacity-90"
-                    : isDark
-                    ? "bg-[#2E2E2E] text-[#555] cursor-not-allowed"
-                    : "bg-[#E5E2DE] text-[#aaa] cursor-not-allowed"
-                }`}
-              >
-                {sending ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Send size={16} />
-                )}
-              </button>
-            </div>
+            {/* Input bar — branch admin only. Superadmin is read-only. */}
+            {isSuperAdmin ? (
+              <div className={`px-4 py-3 border-t ${border} flex items-center justify-center gap-2`}>
+                <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${isDark ? "bg-[#2A2A2A] text-[#A0A0A0]" : "bg-[#F8F5F2] text-[#777]"}`}>
+                  👁 View only — only the branch admin can reply
+                </span>
+              </div>
+            ) : (
+              <div className={`px-4 py-3 border-t ${border} flex items-end gap-3`}>
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+                  rows={1}
+                  className={`flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none max-h-28 ${inputBg} placeholder-[#999]`}
+                  style={{ overflowY: "auto" }}
+                  disabled={!connected}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!text.trim() || sending || !connected}
+                  className={`h-10 w-10 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                    text.trim() && connected
+                      ? "bg-[#007A53] dark:bg-[#078080] text-white cursor-pointer hover:opacity-90"
+                      : isDark
+                      ? "bg-[#2E2E2E] text-[#555] cursor-not-allowed"
+                      : "bg-[#E5E2DE] text-[#aaa] cursor-not-allowed"
+                  }`}
+                >
+                  {sending ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send size={16} />
+                  )}
+                </button>
+              </div>
+            )}
           </>
         ) : (
-          /* No conversation selected */
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${muted}`}>
             <div className={`w-20 h-20 rounded-3xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"} flex items-center justify-center`}>
               <MessageCircle size={38} className="text-[#007A53] dark:text-[#078080]" />

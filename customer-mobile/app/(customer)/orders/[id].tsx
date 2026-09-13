@@ -22,7 +22,9 @@ import {
   Pencil,
   Printer,
   Share2,
+  QrCode,
 } from "lucide-react-native";
+import QRCodeSVG from "react-native-qrcode-svg";
 import {
   printReceipt,
   shareReceipt,
@@ -42,6 +44,13 @@ import { useCart } from "@/context/CartContext";
 // --------------------------------------------------
 
 type ServerStatus = "pending" | "processing" | "completed" | "cancelled" | "refunded";
+
+type ProofOfDelivery = {
+  photoUrl?: string | null;
+  scannedAt?: string | null;
+  riderId?: string | { _id?: string } | null;
+  qrToken?: string | null;
+};
 
 type OrderItem = {
   _id: string;
@@ -67,6 +76,7 @@ type OrderDetail = {
     status: "pending" | "paid" | "failed" | "cancelled" | "refunded";
   } | null;
   orderItems: OrderItem[];
+  proofOfDelivery?: ProofOfDelivery | null;
 };
 
 // --------------------------------------------------
@@ -192,6 +202,9 @@ export default function OrderDetailScreen() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
 
   // Reviews — keyed by productId for the delivered order
   type EligibilityItem = {
@@ -257,6 +270,42 @@ export default function OrderDetailScreen() {
       socket.off("order_updated", handler);
     };
   }, [socket, id]);
+
+  // Fetch QR code for delivery verification (only for processing orders with rider assigned)
+  useEffect(() => {
+    if (!id || !order) return;
+    // Only show QR for orders that are being delivered (processing with rider)
+    if (order.status !== "processing" || order.deliveryStatus === "unassigned") {
+      setQrCode(null);
+      setQrError(null);
+      return;
+    }
+    const fetchQR = async () => {
+      try {
+        setQrLoading(true);
+        setQrError(null);
+        const res = await api.get(`/customer/orders/qr`, { params: { orderId: id } });
+        const data = res.data?.data ?? {};
+        
+        // qrValue is the raw order ID string — feed it directly into
+        // QRCodeSVG's value prop. The library renders the QR image itself.
+        if (!data.qrValue) {
+          setQrCode(null);
+          setQrError("QR unavailable");
+          return;
+        }
+        
+        setQrCode(data.qrValue);
+      } catch (err: any) {
+        console.log("QR fetch error:", err?.response?.data ?? err?.message);
+        setQrError(err?.response?.data?.message ?? "Could not load QR code");
+        setQrCode(null);
+      } finally {
+        setQrLoading(false);
+      }
+    };
+    fetchQR();
+  }, [id, order]);
 
   // Reviews become available once the order is completed + delivered
   useEffect(() => {
@@ -417,7 +466,7 @@ export default function OrderDetailScreen() {
 
         <Text style={[styles.dateText, { color: colors.muted }]}>{formatDate(order.createdAt)}</Text>
 
-        {/* Timeline */}
+        {/* Timeline + QR Code */}
         {!isTerminal ? (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {TIMELINE_STEPS.map((step, idx) => {
@@ -475,6 +524,67 @@ export default function OrderDetailScreen() {
             <Text style={[styles.terminalText, { color: statusColor }]}>
               This order was {order.status}.
             </Text>
+          </View>
+        )}
+
+        {/* QR Code for Delivery Verification */}
+        {order.status === "processing" && (
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.headline }]}>
+              Delivery Verification
+            </Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.muted }]}>
+              Show this QR code to your rider to confirm delivery
+            </Text>
+            {qrLoading ? (
+              <View style={styles.centered}>
+                <ActivityIndicator size="large" color="#007A53" />
+                <Text style={[styles.loadingText, { color: colors.muted }]}>
+                  Loading QR code...
+                </Text>
+              </View>
+            ) : qrError ? (
+              <View style={styles.centered}>
+                <Text style={[styles.errorText, { color: "#DA291C" }]}>
+                  {qrError}
+                </Text>
+              </View>
+            ) : qrCode ? (
+              <View style={styles.qrContainer}>
+                <QRCodeSVG
+                  value={qrCode}
+                  size={200}
+                  backgroundColor="#FFFFFF"
+                  color="#000000"
+                />
+                <Text style={[styles.qrLabel, { color: colors.muted }]}>
+                  Show this to your rider to confirm delivery
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.mutedText, { color: colors.muted }]}>
+                QR code not available
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Proof of Delivery (when completed) */}
+        {order.proofOfDelivery?.photoUrl && (
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.headline }]}>
+              Proof of Delivery
+            </Text>
+            <Image
+              source={{ uri: order.proofOfDelivery?.photoUrl }}
+              style={styles.proofImage}
+              resizeMode="cover"
+            />
+            {order.proofOfDelivery?.scannedAt && (
+              <Text style={[styles.proofDate, { color: colors.muted }]}>
+                Delivered at: {new Date(order.proofOfDelivery.scannedAt).toLocaleString("en-PH")}
+              </Text>
+            )}
           </View>
         )}
 
@@ -806,4 +916,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   reviewBtnText: { fontSize: 11, fontWeight: "700", marginLeft: 3 },
+  centered: { alignItems: "center", justifyContent: "center", padding: 20 },
+  loadingText: { marginTop: 12, fontSize: 14 },
+  errorText: { fontSize: 14, textAlign: "center" },
+  mutedText: { fontSize: 12, textAlign: "center", marginTop: 8 },
+  qrContainer: {
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginTop: 12,
+  },
+  qrLabel: { fontSize: 12, color: "#777", marginTop: 12, textAlign: "center" },
+  sectionSubtitle: { fontSize: 12, marginTop: 4, marginBottom: 12 },
+  proofImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 12,
+    marginTop: 12,
+  },  proofDate: { fontSize: 12, textAlign: "center", marginTop: 8 },
 });

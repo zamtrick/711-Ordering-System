@@ -10,6 +10,7 @@ import {
   resetPassword,
 } from "../controllers/auth.controllers.js";
 import auth from "../middlewares/auth.middleware.js";
+import optionalAuth from "../middlewares/optionalAuth.middleware.js";
 import {
   authLimiter,
   otpRequestLimiter,
@@ -20,7 +21,9 @@ const router = express.Router();
 
 router.post("/login", authLimiter, login);
 router.post("/register", authLimiter, register);
-router.post("/logout", logout);
+// auth middleware is optional here — the cookie is cleared regardless, but
+// if the token is present req.user is populated so the audit log fires.
+router.post("/logout", optionalAuth, logout);
 router.get("/me", auth, me);
 
 // Email OTP — request paths are cooldown-capped per email in the OTP

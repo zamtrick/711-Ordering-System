@@ -22,6 +22,10 @@ type Order = {
     status: "pending" | "paid" | "failed" | "cancelled" | "refunded";
   } | null;
   orderItems: { product: { name: string }; quantity: number; unitPrice: number; subTotal: number }[];
+  proofOfDelivery?: {
+    photoUrl?: string | null;
+    scannedAt?: string | null;
+  } | null;
 };
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -236,7 +240,7 @@ export default function Orders() {
                 <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{o.user ? `${o.user.firstname} ${o.user.lastname}` : "—"}</td>
                 <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{o.branch?.name ?? "—"}</td>
                 <td className="px-4 py-3 font-semibold text-[#007A53] dark:text-[#4CAF50]">₱{o.totalAmount}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" colSpan={2}>
                   {/* Show delivery status when processing, otherwise show order status */}
                   {o.status === "processing" && o.deliveryStatus && o.deliveryStatus !== "unassigned" ? (
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(o.deliveryStatus)}`}>
@@ -246,10 +250,8 @@ export default function Orders() {
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(o.status)}`}>
                       {o.status}
                     </span>
-                  )
+                  )}
                 </td>
-                <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
-                <td className="px-4 py-3"><button onClick={() => setViewOrder(o)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Eye size={14} className="text-[#4F46E5]" /></button></td>
                 <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0] text-xs">{formatDate(o.createdAt)}</td>
                 <td className="px-4 py-3"><button onClick={() => setViewOrder(o)} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Eye size={14} className="text-[#4F46E5]" /></button></td>
               </tr>
@@ -353,6 +355,24 @@ export default function Orders() {
                 <span className={`font-bold ${isDark ? "text-white" : "text-[#232323]"}`}>Total</span>
                 <span className="font-bold text-[#007A53] dark:text-[#4CAF50]">₱{viewOrder.totalAmount}</span>
               </div>
+
+              {/* Proof of Delivery */}
+              {viewOrder.proofOfDelivery?.photoUrl && (
+                <div className={`p-3 rounded-xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
+                  <p className={`text-xs font-semibold mb-2 ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Proof of Delivery</p>
+                  <img
+                    src={viewOrder.proofOfDelivery.photoUrl}
+                    alt="Proof of delivery"
+                    className="w-full h-48 object-cover rounded-lg mb-2"
+                  />
+                  {viewOrder.proofOfDelivery?.scannedAt && (
+                    <p className={`text-xs ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>
+                      Delivered at: {new Date(viewOrder.proofOfDelivery.scannedAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Admin actions — only valid transitions for the current status */}
               {(NEXT_ACTIONS[viewOrder.status] ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">

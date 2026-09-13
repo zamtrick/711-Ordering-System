@@ -75,6 +75,17 @@ const orderSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+
+    // Proof of delivery — captured when rider scans QR and completes delivery
+    proofOfDelivery: {
+      type: {
+        photoUrl: { type: String, default: null },
+        scannedAt: { type: Date, default: null },
+        riderId: { type: mongoose.Schema.Types.ObjectId, ref: "Rider", default: null },
+        qrToken: { type: String, default: null }, // The token that was scanned
+      },
+      default: null,
+    },
   },
   {
     timestamps: true,

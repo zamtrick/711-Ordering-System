@@ -43,7 +43,7 @@ const History = () => {
       setLoading(true);
       const res = await api.get("/rider/deliveries/history");
       setDeliveries(res.data?.deliveries ?? []);
-    } catch (err: any) {
+    } catch (err) {
       console.log("Fetch history error:", err);
       if (err?.response?.status === 401) {
         router.replace("/(auth)/login");

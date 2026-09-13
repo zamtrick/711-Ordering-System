@@ -52,24 +52,16 @@ export const addAddress = async (req, res) => {
       });
     }
 
-    // Add new address
+    // Add new address. Only auto-default when it's the very first one —
+    // subsequent addresses are not default unless the customer explicitly
+    // sets them via updateAddress.
     customer.addresses.push({
       label: label || "Address",
       address,
-      isDefault: customer.addresses.length === 0, // Set as default if first address
+      isDefault: customer.addresses.length === 0,
     });
 
     await customer.save();
-
-    // Ensure only one default address
-    if (customer.addresses.length > 1) {
-      customer.addresses.forEach((addr, idx) => {
-        if (idx !== customer.addresses.length - 1) {
-          addr.isDefault = false;
-        }
-      });
-      await customer.save();
-    }
 
     const updated = await Customer.findById(customer._id).populate(
       "user",
@@ -197,7 +189,7 @@ export const removeAddress = async (req, res) => {
 
 export const updateMyProfile = async (req, res) => {
   try {
-    const { firstname, lastname, phone, address, age } = req.body;
+    const { firstname, lastname, phone, age } = req.body;
 
     // Find the customer doc
     const customer = await Customer.findOne({ user: req.user.userId });
@@ -211,16 +203,11 @@ export const updateMyProfile = async (req, res) => {
 
     // Update Customer-level fields
     if (phone !== undefined) customer.phone = String(phone).trim();
-    if (address !== undefined) {
-      // If a single address string is provided, set it as the default address
-      customer.addresses = [
-        {
-          label: "Default",
-          address: String(address).trim(),
-          isDefault: true,
-        },
-      ];
-    }
+    // NOTE: `address` in the profile update payload is intentionally NOT
+    // mapped to customer.addresses — the full address list is managed via
+    // the dedicated /me/addresses endpoints (add / update / remove).
+    // Accepting a bare string here previously wiped the entire saved-address
+    // array, so it has been removed from this handler.
     if (age !== undefined) customer.age = String(age).trim();
     await customer.save();
 

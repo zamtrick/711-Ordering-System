@@ -29,13 +29,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .get("/auth/me")
       .then((res) => {
         const u = res.data?.data;
-        if (u && u.role === "admin") {
+        if (u && (u.role === "admin" || u.role === "superadmin")) {
           setUser({
             id: u.id,
             firstname: u.firstname,
             lastname: u.lastname,
             email: u.email,
             role: u.role,
+            assignedBranch: u.assignedBranch,
           });
         } else {
           setUser(null);
@@ -51,9 +52,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const res = await api.post("/auth/login", { email, password });
     const u = res.data?.userResponse;
     if (!u) throw new Error("Invalid response from server");
-    if (u.role !== "admin") {
+    if (u.role !== "admin" && u.role !== "superadmin") {
       await api.post("/auth/logout").catch(() => {});
-      throw new Error("Access denied. Admin only.");
+      throw new Error("Access denied. Admin or Superadmin only.");
     }
     setUser({
       id: u.id,
@@ -61,6 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       lastname: u.lastname,
       email: u.email,
       role: u.role,
+      assignedBranch: u.assignedBranch,
     });
   };
 

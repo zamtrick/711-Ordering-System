@@ -1,29 +1,15 @@
 import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
-import Order from "../models/Order.js";
 import Branch from "../models/Branch.js";
 import { isBranchScoped } from "../middlewares/branchScope.middleware.js";
 
 // --------------------------------------------------
-// BRANCH SCOPING FOR CHAT
+// Access guard — can the requester open this conversation?
+// Returns the conversation when allowed; sends the 403/404 and returns null.
 // --------------------------------------------------
-// Conversations link a customer to the "support team". A branch admin only
-// handles customers of their branch — defined as customers who have placed
-// an order there (Order.branch). Superadmins see every conversation.
-// --------------------------------------------------
-
-// Customer (User) ids that have ordered from the given branch
-const branchCustomerUserIds = async (branchId) => {
-  const rows = await Order.find({ branch: branchId }).select("user").lean();
-  return [...new Set(rows.map((o) => o.user.toString()))];
-};
-
-// Access guard: can the requester open this conversation?
-// Returns the conversation when allowed; sends the error response and
-// returns null otherwise.
 const findAccessibleConversation = async (req, res, conversationId) => {
-  const convo = await Conversation.findById(conversationId);
+  const convo = await Conversation.findById(conversationId).populate("branch", "name branchCode");
   if (!convo) {
     res.status(404).json({ success: false, message: "Conversation not found" });
     return null;
@@ -37,10 +23,10 @@ const findAccessibleConversation = async (req, res, conversationId) => {
     return convo;
   }
 
-  // Branch admins: only customers who ordered at their branch
+  // Branch admins: only conversations belonging to their branch.
+  // Legacy conversations without a branch field are allowed through.
   if (isBranchScoped(req)) {
-    const ids = await branchCustomerUserIds(req.adminBranchId);
-    if (!ids.includes(convo.customer.toString())) {
+    if (convo.branch && convo.branch.toString() !== req.adminBranchId?.toString()) {
       res.status(403).json({
         success: false,
         message: "You can only chat with customers of your branch.",
@@ -54,23 +40,36 @@ const findAccessibleConversation = async (req, res, conversationId) => {
 
 // --------------------------------------------------
 // GET OR CREATE the conversation for the logged-in customer
-// GET /api/chat/conversation
+// GET /api/chat/conversation?branchId=<id>
 // --------------------------------------------------
 export const getOrCreateConversation = async (req, res) => {
   try {
     const userId = req.user.userId;
+    const { branchId } = req.query;
 
-    let convo = await Conversation.findOne({ customer: userId }).populate(
-      "customer",
-      "firstname lastname email",
-    );
+    if (!branchId || !mongoose.Types.ObjectId.isValid(branchId)) {
+      return res.status(400).json({
+        success: false,
+        message: "branchId query parameter is required",
+      });
+    }
+
+    // Verify the branch exists
+    const branch = await Branch.findById(branchId).select("name branchCode");
+    if (!branch) {
+      return res.status(404).json({ success: false, message: "Branch not found" });
+    }
+
+    // Find or create one conversation per customer+branch
+    let convo = await Conversation.findOne({ customer: userId, branch: branchId })
+      .populate("customer", "firstname lastname email")
+      .populate("branch", "name branchCode");
 
     if (!convo) {
-      convo = await Conversation.create({ customer: userId });
-      convo = await Conversation.findById(convo._id).populate(
-        "customer",
-        "firstname lastname email",
-      );
+      convo = await Conversation.create({ customer: userId, branch: branchId });
+      convo = await Conversation.findById(convo._id)
+        .populate("customer", "firstname lastname email")
+        .populate("branch", "name branchCode");
     }
 
     return res.status(200).json({ success: true, data: convo });
@@ -82,64 +81,30 @@ export const getOrCreateConversation = async (req, res) => {
 
 // --------------------------------------------------
 // GET ALL CONVERSATIONS  (admin view — list of customers)
-// GET /api/chat/conversations
+// GET /api/chat/conversations[?branchId=<id>]
 // --------------------------------------------------
 export const getAllConversations = async (req, res) => {
   try {
-    // Branch admins see only their branch's customer conversations;
-    // superadmins see all.
     const scoped = isBranchScoped(req);
-    const query = scoped
-      ? { customer: { $in: await branchCustomerUserIds(req.adminBranchId) } }
-      : {};
+
+    let query = {};
+
+    if (scoped) {
+      // Branch admin — only their branch
+      query.branch = req.adminBranchId;
+    } else if (req.query.branchId) {
+      // Superadmin filtered by a specific branch via query param
+      if (!mongoose.Types.ObjectId.isValid(req.query.branchId)) {
+        return res.status(400).json({ success: false, message: "Invalid branchId" });
+      }
+      query.branch = req.query.branchId;
+    }
+    // else superadmin with no filter → all conversations
 
     const convos = await Conversation.find(query)
       .populate("customer", "firstname lastname email")
+      .populate("branch", "name branchCode")
       .sort({ lastMessageAt: -1 });
-
-    // Superadmins get every conversation across branches, so annotate each
-    // row with the branch(es) the customer has ordered from — the UI shows
-    // a branch badge per conversation row. Branch admins only ever see one
-    // branch, so the extra queries are skipped for them.
-    if (!scoped && convos.length > 0) {
-      const customerIds = convos.map((c) => c.customer?._id).filter(Boolean);
-      const branchRows = await Order.aggregate([
-        { $match: { user: { $in: customerIds } } },
-        {
-          $group: {
-            _id: "$user",
-            branches: { $addToSet: "$branch" },
-          },
-        },
-      ]);
-
-      // Resolve branch names in one query
-      const branchIds = [
-        ...new Set(branchRows.flatMap((r) => r.branches.map(String))),
-      ];
-      const branches = await Branch.find({ _id: { $in: branchIds } })
-        .select("name branchCode")
-        .lean();
-      const branchMap = new Map(branches.map((b) => [b._id.toString(), b]));
-
-      const branchByCustomer = new Map(
-        branchRows.map((r) => [
-          r._id.toString(),
-          r.branches
-            .map((id) => branchMap.get(id.toString()))
-            .filter(Boolean),
-        ]),
-      );
-
-      const data = convos.map((c) => {
-        const plain = c.toObject();
-        plain.customerBranches =
-          branchByCustomer.get(plain.customer?._id?.toString()) ?? [];
-        return plain;
-      });
-
-      return res.status(200).json({ success: true, data });
-    }
 
     return res.status(200).json({ success: true, data: convos });
   } catch (err) {
@@ -168,14 +133,14 @@ export const getMessages = async (req, res) => {
       .populate("sender", "firstname lastname");
 
     // Mark all messages as read for the requesting side
-    const otherRole = req.user.role === "admin" ? "customer" : "admin";
+    const otherRole = req.user.role === "admin" || req.user.role === "superadmin" ? "customer" : "admin";
     await Message.updateMany(
       { conversation: conversationId, senderRole: otherRole, read: false },
       { $set: { read: true } },
     );
 
     // Reset unread counter for this user's side
-    if (req.user.role === "admin") {
+    if (req.user.role === "admin" || req.user.role === "superadmin") {
       await Conversation.findByIdAndUpdate(conversationId, { unreadAdmin: 0 });
     } else {
       await Conversation.findByIdAndUpdate(conversationId, { unreadCustomer: 0 });
