@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { router } from "expo-router";
 import {
   View,
@@ -41,7 +41,7 @@ type Delivery = {
   deliveryStatus: string;
   createdAt: string;
   user?: { firstname: string; lastname: string };
-  branch?: { name: string; branchCode: string; location: string };
+  branch?: { _id?: string; id?: string; name: string; branchCode: string; location: string } | string;
   orderItems?: { _id: string; quantity: number; product?: { name: string } }[];
 };
 
@@ -58,6 +58,15 @@ const Home = () => {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const { socket, connected } = useSocket();
+  const assignedBranchRef = useRef<string | null>(null);
+
+  const branchKey = (b: unknown): string | null => {
+    if (!b) return null;
+    if (typeof b === "string") return b;
+    const o = b as { _id?: unknown; id?: unknown; branchCode?: unknown };
+    const raw = o._id ?? o.id ?? o.branchCode;
+    return raw != null ? String(raw) : null;
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -67,7 +76,12 @@ const Home = () => {
         api.get("/rider/deliveries/available"),
       ]);
 
-      if (statsRes.data?.data) setStats(statsRes.data.data);
+      if (statsRes.data?.data) {
+        setStats(statsRes.data.data);
+        assignedBranchRef.current =
+          branchKey(statsRes.data.data?.assignedBranch) ??
+          assignedBranchRef.current;
+      }
       if (deliveriesRes.data?.deliveries) setDeliveries(deliveriesRes.data.deliveries);
     } catch (err: any) {
       console.log("Fetch data error:", err);
@@ -80,8 +94,19 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    api
+      .get("/rider/profile/me")
+      .then((res) => {
+        const key = branchKey(res.data?.data?.assignedBranch);
+        if (key) assignedBranchRef.current = key;
+      })
+      .catch(() => {});
+  }, []);
 
   // Live: new customer orders appear here instantly; orders taken by
   // another rider or cancelled disappear without a manual refresh.
@@ -89,6 +114,11 @@ const Home = () => {
     if (!socket) return;
     const handler = (updated: Delivery) => {
       if (!updated?._id) return;
+      const mine = assignedBranchRef.current;
+      if (mine) {
+        const incoming = branchKey((updated as { branch?: unknown }).branch);
+        if (incoming && incoming !== mine) return;
+      }
       const isAvailable =
         updated.deliveryStatus === "unassigned" &&
         (updated.status === "pending" || updated.status === "processing");
@@ -129,10 +159,16 @@ const Home = () => {
       await api.patch(`/rider/deliveries/${orderId}/accept`);
       setDeliveries((prev) => prev.filter((d) => d._id !== orderId));
       setStats((prev) =>
-        prev ? { ...prev, activeDeliveries: prev.activeDeliveries + 1 } : prev,
+        prev
+          ? {
+              ...prev,
+              activeDeliveries: prev.activeDeliveries + 1,
+              availabilityStatus: "delivering",
+            }
+          : prev,
       );
       Alert.alert("Success", "Delivery accepted! Go to Deliveries tab to manage it.");
-    } catch (err) {
+    } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to accept delivery");
     } finally {
       setAcceptingId(null);
@@ -278,7 +314,7 @@ const Home = () => {
                 <View style={styles.deliveryHeader}>
                   <View>
                     <Text style={[styles.orderId, { color: colors.headline }]}>
-                      #{delivery._id.slice(-6).toUpperCase()}
+                      #{(delivery._id?.slice?.(-6) ?? "—").toUpperCase()}
                     </Text>
                     <Text style={[styles.orderTime, { color: colors.muted }]}>
                       {new Date(delivery.createdAt).toLocaleString("en-PH", {
@@ -290,7 +326,7 @@ const Home = () => {
                     </Text>
                   </View>
                   <Text style={[styles.orderTotal, { color: "#007A53" }]}>
-                    ₱{delivery.totalAmount.toFixed(2)}
+                    ₱{(delivery.totalAmount ?? 0).toFixed(2)}
                   </Text>
                 </View>
 
@@ -300,7 +336,7 @@ const Home = () => {
                 <View style={styles.infoRow}>
                   <Text style={[styles.infoLabel, { color: colors.muted }]}>Customer</Text>
                   <Text style={[styles.infoValue, { color: colors.headline }]}>
-                    {delivery.user?.firstname} {delivery.user?.lastname}
+                    {delivery.user?.firstname ?? "—"} {delivery.user?.lastname ?? ""}
                   </Text>
                 </View>
 
@@ -308,7 +344,7 @@ const Home = () => {
                 <View style={styles.infoRow}>
                   <Text style={[styles.infoLabel, { color: colors.muted }]}>Branch</Text>
                   <Text style={[styles.infoValue, { color: colors.headline }]}>
-                    {delivery.branch?.name}
+                    {typeof delivery.branch === "string" ? delivery.branch : (delivery.branch?.name ?? "—")}
                   </Text>
                 </View>
 

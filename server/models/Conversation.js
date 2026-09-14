@@ -21,6 +21,21 @@ const conversationSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Per-order delivery chat (customer <-> assigned rider). Null for the
+    // classic customer<->branch-admin support threads. One chat per order.
+    order: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
+    },
+
+    // The assigned rider's User id (only set on per-order delivery chats).
+    rider: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     // Snapshot of the last message for the list view
     lastMessage: {
       type: String,
@@ -44,13 +59,26 @@ const conversationSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+
+    unreadRider: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   { timestamps: true },
 );
 
-// One conversation per customer+branch pair
-conversationSchema.index({ customer: 1, branch: 1 }, { unique: true });
+// One support thread per customer+branch pair (only where order == null,
+// so per-order delivery chats never collide with it or each other)
+conversationSchema.index(
+  { customer: 1, branch: 1 },
+  { unique: true, partialFilterExpression: { order: null } },
+);
 conversationSchema.index({ branch: 1, lastMessageAt: -1 });
+// One delivery chat per order (sparse so branch threads with order=null
+// never collide with each other)
+conversationSchema.index({ order: 1 }, { unique: true, sparse: true });
 
 const Conversation = mongoose.model("Conversation", conversationSchema);
 export default Conversation;

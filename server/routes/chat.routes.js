@@ -3,6 +3,8 @@ import {
   getOrCreateConversation,
   getAllConversations,
   getMessages,
+  getOrCreateOrderConversation,
+  getMyDeliveryConversations,
 } from "../controllers/chat.controller.js";
 import auth from "../middlewares/auth.middleware.js";
 import { authorize } from "../middlewares/role.middleware.js";
@@ -24,8 +26,19 @@ router.get("/conversations", authorize("admin", "superadmin"), getAllConversatio
 // Both sides — fetch messages (ownership + branch scope enforced in controller)
 router.get(
   "/conversations/:conversationId/messages",
-  authorize("customer", "admin", "superadmin"),
+  authorize("customer", "admin", "superadmin", "rider"),
   getMessages,
 );
+
+// Per-order delivery chat (customer <-> assigned rider)
+// GET /api/chat/order/:orderId
+router.get(
+  "/order/:orderId",
+  authorize("customer", "rider"),
+  getOrCreateOrderConversation,
+);
+
+// Rider — list my delivery chats (one per assigned order)
+router.get("/my-deliveries", authorize("rider"), getMyDeliveryConversations);
 
 export default router;

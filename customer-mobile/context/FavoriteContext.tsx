@@ -75,7 +75,8 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
     try {
       const res = await api.get("/customer/favorites");
       const data = (res.data?.data ?? []) as FavoriteItem[];
-      setItems(data);
+      // Drop records whose product was deleted (populate resolves null)
+      setItems(data.filter((i) => i?.product?._id));
     } catch {
       // Non-fatal — hearts just stay at their last known state
     } finally {
@@ -88,7 +89,9 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  const favoriteIds = new Set(items.map((i) => i.product._id));
+  const favoriteIds = new Set(
+    items.map((i) => i.product?._id).filter(Boolean) as string[],
+  );
 
   const isFavorite = useCallback(
     (productId: string) => favoriteIds.has(productId),
@@ -104,7 +107,7 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
 
     // Optimistic update — flip the heart immediately
     if (wasFavorite) {
-      setItems((prev) => prev.filter((i) => i.product._id !== id));
+      setItems((prev) => prev.filter((i) => i.product?._id !== id));
     } else {
       setItems((prev) => [
         {
@@ -138,7 +141,7 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
       if (wasFavorite) {
         setItems((prev) => prev); // keep state; refresh below restores truth
       } else {
-        setItems((prev) => prev.filter((i) => i.product._id !== id));
+        setItems((prev) => prev.filter((i) => i.product?._id !== id));
       }
       Alert.alert("Error", "Could not update favorites. Please try again.");
       refresh();
@@ -152,7 +155,7 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeFavorite = async (productId: string) => {
-    setItems((prev) => prev.filter((i) => i.product._id !== productId));
+    setItems((prev) => prev.filter((i) => i.product?._id !== productId));
     try {
       await api.delete(`/customer/favorites/${productId}`);
     } catch {

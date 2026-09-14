@@ -1,5 +1,8 @@
 export const authorize = (...allowedRoles) => {
   return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
     // Superadmin has access to ALL routes
     if (req.user.role === "superadmin") {
       return next();

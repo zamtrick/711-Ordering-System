@@ -18,7 +18,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
-import api from "@/api/axios";
+import api, { baseURL } from "@/api/axios";
 
 const Login = () => {
   const { theme } = useTheme();
@@ -74,7 +74,9 @@ const Login = () => {
 
       const message =
         error?.response?.data?.message ||
-        "Unable to login. Please check your email and password.";
+        (error?.code === "ERR_NETWORK" || error?.message === "Network Error"
+          ? `Cannot reach the server. Check that the API is running and your phone is on the same Wi-Fi (API: ${baseURL}).`
+          : "Unable to login. Please check your email and password.");
 
       Alert.alert("Login Failed", message);
     } finally {

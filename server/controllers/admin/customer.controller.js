@@ -478,12 +478,7 @@ export const updateCustomerById = async (req, res) => {
       data: updatedCustomer,
     });
   } catch (err) {
-    console.error("Update customer error:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return handleCustomerError(err, res);
   }
 };
 
@@ -557,12 +552,7 @@ export const toggleCustomerStatus = async (req, res) => {
       isActive: user.isActive,
     });
   } catch (err) {
-    console.error("Toggle customer status error:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return handleCustomerError(err, res);
   }
 };
 

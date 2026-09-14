@@ -49,6 +49,7 @@ import manageCustomerReviews from "./routes/customer/review.routes.js";
 import manageAdminReviews from "./routes/admin/review.routes.js";
 import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
 import manageAdminOrders from "./routes/admin/order.routes.js";
+import Conversation from "./models/Conversation.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -166,12 +167,12 @@ app.use("/api/superadmin/promos", auth, authorize("superadmin"), managePromos);
 app.use("/api/admin/riders", auth, authorize("admin", "superadmin"), manageRiders);
 app.use("/api/admin/products", auth, authorize("admin", "superadmin"), manageProducts);
 app.use("/api/admin/categories", auth, authorize("admin", "superadmin"), manageCategories);
-app.use("/api/admin/customers", auth, authorize("admin"), manageCustomer);
-app.use("/api/admin/analytics", auth, authorize("admin"), manageAdminAnalytics);
+app.use("/api/admin/customers", auth, authorize("admin", "superadmin"), manageCustomer);
+app.use("/api/admin/analytics", auth, authorize("admin", "superadmin"), manageAdminAnalytics);
 app.use(
   "/api/admin/branches",
   auth,
-  authorize("admin"),
+  authorize("admin", "superadmin"),
   manageAdminBranches,
 );
 app.use("/api/admin/profile", auth, authorize("admin"), manageAdminProfile);
@@ -219,6 +220,17 @@ app.use("/api/customer/orders/qr", auth, async (req, res, next) => {
 
     const Order = (await import("./models/Order.js")).default;
     const { generateDeliveryQR } = await import("./utils/qr-delivery.js");
+    const { getDeliveryVerificationMode } = await import("./controllers/settings.controller.js");
+
+    // In "photo_only" mode there is nothing to show — the rider completes
+    // the delivery with a camera photo only.
+    const verificationMode = await getDeliveryVerificationMode();
+    if (verificationMode === "photo_only") {
+      return res.status(400).json({
+        success: false,
+        message: "QR verification is disabled — photo proof only",
+      });
+    }
 
     const order = await Order.findById(orderId).populate("user", "firstname lastname");
 
@@ -251,6 +263,10 @@ app.use("/api/customer/orders/qr", auth, async (req, res, next) => {
 // NOTE: This bypasses the rider QR scan requirement - use with caution
 app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
   try {
+    // Testing backdoor — never available in production
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ success: false, message: "Disabled in production" });
+    }
     const { id } = req.params;
     const { photoUrl } = req.body;
 
@@ -337,7 +353,25 @@ app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
 
 mongoose
   .connect(DB_URI)
-  .then(() => {
+  .then(async () => {
+    // One-time index migration for per-order delivery chats: the old
+    // customer_1_branch_1 unique index (no filter) would reject a second
+    // order chat for the same customer+branch. The model now defines it as
+    // partial (order == null); drop the legacy one so Mongoose recreates it.
+    try {
+      const coll = mongoose.connection.collection("conversations");
+      const indexes = await coll.indexes();
+      const legacy = indexes.find(
+        (ix) => ix.name === "customer_1_branch_1" && !ix.partialFilterExpression,
+      );
+      if (legacy) {
+        await coll.dropIndex("customer_1_branch_1");
+        console.log("Dropped legacy conversations index customer_1_branch_1");
+      }
+      await Conversation.syncIndexes();
+    } catch (err) {
+      console.error("Conversation index migration:", err.message);
+    }
     initSocket(httpServer);
     httpServer.listen(PORT, () => {
       console.log(`Running on Port http://localhost:${PORT}`);

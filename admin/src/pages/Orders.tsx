@@ -6,6 +6,7 @@ import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
 import { printReceipt, type ReceiptOrder } from "@/utils/receipt";
 import { useToast } from "@/hooks/useToast";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
 import Pagination from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -22,9 +23,17 @@ type PaginationMeta = {
 type Order = {
   _id: string;
   user: { firstname: string; lastname: string; email: string } | null;
-  branch: { name: string; branchCode: string } | null;
+  branch: { _id?: string; name: string; branchCode: string } | null;
   status: string;
   deliveryStatus?: string;
+  rider?: {
+    _id: string;
+    phone?: string;
+    vehicleType?: string;
+    vehiclePlateNumber?: string;
+    availabilityStatus?: string;
+    user?: { firstname?: string; lastname?: string } | null;
+  } | string | null;
   totalAmount: number;
   deliveryFee?: number;
   deliveryAddress?: string;
@@ -41,6 +50,17 @@ type Order = {
 };
 
 type OrdersResponse = { orders: Order[]; pagination?: PaginationMeta };
+
+type BranchRider = {
+  _id: string;
+  user?: { firstname?: string; lastname?: string; isActive?: boolean } | null;
+  phone?: string;
+  vehicleType?: string;
+  vehiclePlateNumber?: string;
+  availabilityStatus?: string;
+  activeDeliveries?: number;
+  assignedBranch?: { _id?: string } | null;
+};
 
 const fetchOrders = ({ page, limit, search, status }: { page: number; limit: number; search: string; status: string }) =>
   api
@@ -117,6 +137,8 @@ function SkeletonRow() {
 export default function Orders() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success: toastSuccess, error: toastError } = useToast();
+  const { can } = useAdminPermissions();
+  const readOnly = !can("canManageRiders");
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
@@ -126,7 +148,19 @@ export default function Orders() {
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [live, setLive] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [branchRiders, setBranchRiders] = useState<BranchRider[]>([]);
+  const [ridersLoading, setRidersLoading] = useState(false);
+  const [selectedRider, setSelectedRider] = useState("");
+  const [assigning, setAssigning] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+
+  // Live rider cap (superadmin setting, default 3) for the load labels.
+  const { data: riderCap } = useQuery({
+    queryKey: ["settings", "rider-capacity"],
+    queryFn: () => api.get("/settings/rider-capacity").then((res) => res.data?.data?.capacity as number),
+    staleTime: 60_000,
+  });
+  const cap = riderCap ?? 3;
 
   // Latest list params for the socket handler (avoids re-subscribing the
   // socket on every page/search change while still reading fresh values).
@@ -152,16 +186,21 @@ export default function Orders() {
   const meta = data?.pagination ?? null;
   const loading = isFetching && !data;
 
+  // Gone past the last page (e.g. orders cancelled away) → step back
+  useEffect(() => {
+    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
+  }, [meta, page]);
+
+  // No Cancel action — cancelling is the customer's own right, admins can
+  // only move orders forward (Accept / Complete) or refund (superadmin).
   const NEXT_ACTIONS: Record<string, { status: string; label: string; className: string }[]> = {
     pending: [
       { status: "processing", label: "Accept", className: "bg-accent hover:bg-accent/90 text-white" },
-      { status: "cancelled", label: "Cancel", className: "bg-danger-soft text-danger hover:bg-danger-soft" },
     ],
     // Complete is only enabled once rider marks delivered (guarded below + backend).
     // Refund removed — superadmin-only, done in client superadmin Orders.
     processing: [
       { status: "completed", label: "Complete", className: "bg-accent hover:bg-accent/90 text-white" },
-      { status: "cancelled", label: "Cancel", className: "bg-danger-soft text-danger hover:bg-danger-soft" },
     ],
     completed: [],
     cancelled: [],
@@ -190,6 +229,100 @@ export default function Orders() {
     printReceipt(order as unknown as ReceiptOrder);
   };
 
+  // Load branch riders (with live load counts) whenever the detail modal
+  // opens, so admin can manually assign even when only 1-2 riders exist.
+  useEffect(() => {
+    if (!viewOrder) {
+      setBranchRiders([]);
+      setSelectedRider("");
+      return;
+    }
+    let cancelled = false;
+    setRidersLoading(true);
+    (async () => {
+      try {
+        const all: BranchRider[] = [];
+        let pageNum = 1;
+        for (;;) {
+          const res = await api.get<{ riders: BranchRider[]; pagination?: PaginationMeta }>("/admin/riders", {
+            params: { limit: 100, page: pageNum },
+          });
+          const batch = res.data?.riders ?? [];
+          all.push(...batch);
+          const pag = res.data?.pagination;
+          if (!pag) break;
+          if (!pag.hasNextPage) break;
+          if (all.length >= (pag.total ?? all.length)) break;
+          if (batch.length === 0) break;
+          pageNum += 1;
+        }
+        if (cancelled) return;
+        // Riders endpoint is already branch-scoped for regular admins;
+        // superadmins see all, so filter to this order's branch here.
+        const branchId =
+          typeof viewOrder.branch === "object" ? viewOrder.branch?._id : undefined;
+        const scoped = branchId
+          ? all.filter((r) => r.assignedBranch?._id === branchId || !r.assignedBranch)
+          : all;
+        setBranchRiders(scoped.filter((r) => r.user?.isActive !== false));
+        const currentId =
+          typeof viewOrder.rider === "object" ? viewOrder.rider?._id ?? "" : "";
+        setSelectedRider(currentId);
+      } catch {
+        if (!cancelled) setBranchRiders([]);
+      } finally {
+        if (!cancelled) setRidersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewOrder?._id]);
+
+  const handleAssignRider = async () => {
+    if (!viewOrder || !selectedRider) return;
+    try {
+      setAssigning(true);
+      const res = await api.patch(`/admin/orders/${viewOrder._id}/rider`, {
+        riderId: selectedRider,
+      });
+      const updated: Order = res.data?.data;
+      if (res.data?.warning) toastSuccess(`Note: ${res.data.warning}`);
+      if (updated?._id) {
+        setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
+        toastSuccess("Rider assigned");
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        queryClient.invalidateQueries({ queryKey: ["riders"] });
+      }
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to assign rider.");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleUnassignRider = async () => {
+    if (!viewOrder) return;
+    try {
+      setAssigning(true);
+      const res = await api.patch(`/admin/orders/${viewOrder._id}/rider`, {
+        riderId: null,
+      });
+      const updated: Order = res.data?.data;
+      if (updated?._id) {
+        setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
+        setSelectedRider("");
+        toastSuccess("Rider unassigned (back to pool)");
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        queryClient.invalidateQueries({ queryKey: ["riders"] });
+      }
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to unassign rider.");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   // Live customer → admin updates: new orders, item changes, cancellations.
   // The server emits `order_updated` to admin_room on every mutation.
   useEffect(() => {
@@ -211,8 +344,12 @@ export default function Orders() {
       const exists = rows.some((o) => o._id === updated._id);
 
       if (!exists) {
-        const name = updated.user ? `${updated.user.firstname} ${updated.user.lastname}` : "Customer";
-        toastSuccess(`New order from ${name} — ₱${updated.totalAmount}`);
+        const createdMs = updated.createdAt ? new Date(updated.createdAt).getTime() : NaN;
+        const isNew = Number.isFinite(createdMs) && Date.now() - createdMs < 90_000;
+        if (isNew) {
+          const name = updated.user ? `${updated.user.firstname} ${updated.user.lastname}` : "Customer";
+          toastSuccess(`New order from ${name} — ₱${updated.totalAmount ?? "—"}`);
+        }
       } else {
         const prevStatus = rows.find((o) => o._id === updated._id)?.status;
         if (prevStatus && prevStatus !== updated.status) {
@@ -229,7 +366,13 @@ export default function Orders() {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
 
       // Keep the open detail modal in sync too
-      setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
+      setViewOrder((prev) => {
+        if (prev?._id !== updated._id) return prev;
+        const nextRiderId = typeof updated.rider === "string" ? updated.rider : (updated.rider?._id ?? "");
+        const prevRiderId = typeof prev.rider === "string" ? prev.rider : (prev.rider?._id ?? "");
+        if (nextRiderId !== prevRiderId) setSelectedRider(nextRiderId);
+        return { ...prev, ...updated };
+      });
     });
 
     return () => {
@@ -301,16 +444,18 @@ export default function Orders() {
                 <td className="px-4 py-3 font-medium text-ink">{o.user ? `${o.user.firstname} ${o.user.lastname}` : "—"}</td>
                 <td className="px-4 py-3 text-muted">{o.branch?.name ?? "—"}</td>
                 <td className="px-4 py-3 font-semibold text-accent-ink">₱{o.totalAmount}</td>
-                <td className="px-4 py-3" colSpan={2}>
-                  {/* Show delivery status when processing, otherwise show order status */}
-                  {o.status === "processing" && o.deliveryStatus && o.deliveryStatus !== "unassigned" ? (
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(o.status)}`}>
+                    {o.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  {o.deliveryStatus ? (
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(o.deliveryStatus)}`}>
-                      {DELIVERY_LABEL[o.deliveryStatus]}
+                      {DELIVERY_LABEL[o.deliveryStatus] ?? o.deliveryStatus}
                     </span>
                   ) : (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(o.status)}`}>
-                      {o.status}
-                    </span>
+                    <span className="text-xs text-faint">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-muted text-xs">{formatDate(o.createdAt)}</td>
@@ -385,6 +530,60 @@ export default function Orders() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+              {/* Delivery rider — manual assign for small branches (1-2 riders).
+                  Reassign allowed while unassigned/assigned; locked once the
+                  rider picks up / is in transit / delivered. */}
+              <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+                <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>Delivery rider</p>
+                <p className={`text-sm font-medium mt-1 ${isDark ? "text-white" : "text-ink"}`}>
+                  {typeof viewOrder.rider === "object" && viewOrder.rider
+                    ? `${viewOrder.rider.user?.firstname ?? ""} ${viewOrder.rider.user?.lastname ?? ""}`.trim() || "Assigned"
+                    : "Unassigned (in pool)"}
+                </p>
+                {["picked_up", "in_transit", "delivered"].includes(viewOrder.deliveryStatus ?? "") || ["completed", "cancelled", "refunded"].includes(viewOrder.status) ? (
+                  <p className="text-xs text-muted mt-1">Locked — rider is already on the way or order is terminal.</p>
+                ) : ridersLoading ? (
+                  <p className="text-xs text-muted mt-2">Loading riders…</p>
+                ) : readOnly ? (
+                  <p className="text-xs text-muted mt-1">Rider management is disabled for your role.</p>
+                ) : (
+                  <div className="flex gap-2 mt-2">
+                    <select
+                      value={selectedRider}
+                      onChange={(e) => setSelectedRider(e.target.value)}
+                      disabled={assigning}
+                      className={`flex-1 h-10 px-3 rounded-xl border text-sm cursor-pointer ${isDark ? "bg-surface border-line text-white" : "bg-white border-line text-ink"}`}
+                    >
+                      <option value="">Select rider…</option>
+                      {branchRiders.map((r) => {
+                        const name = `${r.user?.firstname ?? ""} ${r.user?.lastname ?? ""}`.trim() || "Rider";
+                        const load = r.activeDeliveries ?? 0;
+                        return (
+                          <option key={r._id} value={r._id}>
+                            {name} — {r.availabilityStatus} ({load}/{cap} active)
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <button
+                      onClick={handleAssignRider}
+                      disabled={assigning || !selectedRider}
+                      className="px-4 h-10 rounded-xl text-sm font-semibold bg-accent hover:bg-accent/90 text-white cursor-pointer disabled:opacity-50"
+                    >
+                      {assigning ? "Saving…" : "Assign"}
+                    </button>
+                    {typeof viewOrder.rider === "object" && viewOrder.rider && (
+                      <button
+                        onClick={handleUnassignRider}
+                        disabled={assigning}
+                        className="px-4 h-10 rounded-xl text-sm font-semibold bg-danger-soft text-danger cursor-pointer disabled:opacity-50"
+                      >
+                        Unassign
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

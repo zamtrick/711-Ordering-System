@@ -18,6 +18,9 @@ import {
   Check,
   Circle,
   Truck,
+  Bike,
+  Phone,
+  MessageCircle,
   Star,
   Pencil,
   Printer,
@@ -60,10 +63,19 @@ type OrderItem = {
   product?: { _id?: string; name?: string; price?: number; image?: string };
 };
 
+type RiderInfo = {
+  _id: string;
+  phone?: string;
+  vehicleType?: string;
+  vehiclePlateNumber?: string;
+  user?: { firstname?: string; lastname?: string } | null;
+};
+
 type OrderDetail = {
   _id: string;
   status: ServerStatus;
   deliveryStatus?: "unassigned" | "assigned" | "picked_up" | "in_transit" | "delivered";
+  rider?: RiderInfo | string | null;
   totalAmount: number;
   deliveryFee?: number;
   deliveryAddress?: string;
@@ -192,7 +204,8 @@ const activeStepIndex = (
 // --------------------------------------------------
 
 export default function OrderDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: raw } = useLocalSearchParams<{ id: string | string[] }>();
+  const id = Array.isArray(raw) ? raw[0] : raw;
   const { theme } = useTheme();
   const { colors } = theme;
 
@@ -223,7 +236,7 @@ export default function OrderDetailScreen() {
   const [receiptBusy, setReceiptBusy] = useState<"print" | "share" | null>(null);
 
   const fetchOrder = useCallback(async () => {
-    if (!id) return;
+    if (!id) { setLoading(false); return; }
     try {
       setLoading(true);
       const res = await api.get(`/orders/${id}`);
@@ -271,11 +284,34 @@ export default function OrderDetailScreen() {
     };
   }, [socket, id]);
 
+  // Which delivery verification flow the platform uses. "photo_only" means
+  // the rider completes with a camera photo — the customer never shows a QR.
+  // Non-blocking: defaults to QR flow until the setting loads.
+  const [verificationMode, setVerificationMode] = useState<"qr_and_photo" | "photo_only" | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get("/settings/delivery-verification")
+      .then((res) => {
+        const mode = res.data?.data?.mode;
+        if (mounted && (mode === "qr_and_photo" || mode === "photo_only")) {
+          setVerificationMode(mode);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const qrEnabled = verificationMode !== "photo_only";
+
   // Fetch QR code for delivery verification (only for processing orders with rider assigned)
   useEffect(() => {
     if (!id || !order) return;
-    // Only show QR for orders that are being delivered (processing with rider)
-    if (order.status !== "processing" || order.deliveryStatus === "unassigned") {
+    // Only show QR for orders that are being delivered (processing with rider),
+    // and only when the QR flow is enabled platform-wide.
+    if (!qrEnabled || order.status !== "processing" || order.deliveryStatus === "unassigned") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync QR state with order status
       setQrCode(null);
       setQrError(null);
       return;
@@ -305,7 +341,7 @@ export default function OrderDetailScreen() {
       }
     };
     fetchQR();
-  }, [id, order]);
+  }, [id, order, qrEnabled]);
 
   // Reviews become available once the order is completed + delivered
   useEffect(() => {
@@ -433,13 +469,13 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const statusColor = STATUS_COLOR[order.status];
-  const statusBg = STATUS_BG[order.status];
+  const statusColor = STATUS_COLOR[order.status] ?? "#888888";
+  const statusBg = STATUS_BG[order.status] ?? "#F0F0F0";
   const canCancel = order.status === "pending" || order.status === "processing";
   const isTerminal = order.status === "cancelled" || order.status === "refunded";
   const currentStep = activeStepIndex(order.status, order.deliveryStatus);
 
-  const subtotal = order.orderItems.reduce((s, i) => s + (i.subTotal ?? 0), 0);
+  const subtotal = (order.orderItems ?? []).reduce((s, i) => s + (i.subTotal ?? 0), 0);
 
   return (
     <ThemedView style={styles.screen}>
@@ -455,12 +491,12 @@ export default function OrderDetailScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.smallTitle, { color: colors.muted }]}>Order tracking</Text>
             <Text style={[styles.title, { color: colors.headline }]}>
-              #{order._id.slice(-6).toUpperCase()}
+              #{(order._id ?? "").slice(-6).toUpperCase() || "—"}
             </Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: statusColor }]}>{STATUS_LABEL[order.status]}</Text>
+            <Text style={[styles.statusText, { color: statusColor }]}>{STATUS_LABEL[order.status] ?? order.status ?? "Unknown"}</Text>
           </View>
         </View>
 
@@ -527,8 +563,65 @@ export default function OrderDetailScreen() {
           </View>
         )}
 
-        {/* QR Code for Delivery Verification */}
-        {order.status === "processing" && (
+        {/* Assigned rider */}
+        {typeof order.rider === "object" && order.rider !== null ? (
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.headline }]}>
+              Your rider
+            </Text>
+            <View style={styles.riderRow}>
+              <View style={styles.riderAvatar}>
+                <Truck size={20} color="#007A53" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.riderName, { color: colors.headline }]}>
+                  {order.rider.user
+                    ? `${order.rider.user.firstname ?? ""} ${order.rider.user.lastname ?? ""}`.trim() || "Rider"
+                    : "Rider"}
+                </Text>
+                {(order.rider.vehicleType || order.rider.vehiclePlateNumber) && (
+                  <View style={styles.riderSubRow}>
+                    <Bike size={13} color={colors.muted} />
+                    <Text style={[styles.riderSub, { color: colors.muted }]}>
+                      {[order.rider.vehicleType, order.rider.vehiclePlateNumber].filter(Boolean).join(" • ")}
+                    </Text>
+                  </View>
+                )}
+                {order.rider.phone && (
+                  <View style={styles.riderSubRow}>
+                    <Phone size={13} color={colors.muted} />
+                    <Text style={[styles.riderSub, { color: colors.muted }]}>
+                      {order.rider.phone}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/(customer)/rider-chat",
+                  params: { orderId: order._id },
+                })
+              }
+              style={styles.chatRiderBtn}
+            >
+              <MessageCircle size={16} color="#FFFFFF" />
+              <Text style={styles.chatRiderText}>Message rider</Text>
+            </Pressable>
+          </View>
+        ) : (
+          order.deliveryStatus === "unassigned" && !isTerminal && (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.mutedText, { color: colors.muted }]}>
+                Waiting for a rider to accept your order…
+              </Text>
+            </View>
+          )
+        )}
+
+        {/* QR Code for Delivery Verification — hidden in photo_only mode */}
+        {qrEnabled && order.status === "processing" && (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.headline }]}>
               Delivery Verification
@@ -719,7 +812,7 @@ export default function OrderDetailScreen() {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.totalRow}>
             <Text style={[styles.grandLabel, { color: colors.headline }]}>Total</Text>
-            <Text style={styles.grandValue}>₱{order.totalAmount.toFixed(2)}</Text>
+            <Text style={styles.grandValue}>₱{(order.totalAmount ?? 0).toFixed(2)}</Text>
           </View>
         </View>
 
@@ -852,6 +945,29 @@ const styles = StyleSheet.create({
   metaSub: { fontSize: 12, marginTop: 3, lineHeight: 17 },
   divider: { height: 1, marginVertical: 12 },
   sectionTitle: { fontSize: 17, fontWeight: "800", marginBottom: 10 },
+  riderRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+  riderAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#E8F5EF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  riderName: { fontSize: 15, fontWeight: "800" },
+  riderSubRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  riderSub: { fontSize: 12 },
+  chatRiderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: "#007A53",
+    marginTop: 12,
+  },
+  chatRiderText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   thumb: { width: 46, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   thumbImg: { width: "100%", height: "100%" },

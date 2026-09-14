@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const branches = await Branch.find({ status: "active" }).select(
-      "name branchCode location address contactNumber openingTime closingTime paymentMethods",
+      "name branchCode location address contactNumber openingTime closingTime paymentMethods deliveryRange coordinates",
     );
 
     return res.status(200).json({
@@ -38,7 +38,7 @@ router.get("/:id", async (req, res) => {
     }
 
     const branch = await Branch.findOne({ _id: id, status: "active" }).select(
-      "name branchCode location address contactNumber openingTime closingTime paymentMethods",
+      "name branchCode location address contactNumber openingTime closingTime paymentMethods deliveryRange coordinates",
     );
 
     if (!branch) {

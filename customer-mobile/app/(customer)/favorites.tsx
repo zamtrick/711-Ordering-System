@@ -126,7 +126,7 @@ const Favorites = () => {
           </Text>
         </View>
 
-        {items.map(({ product }) => (
+        {items.filter((i) => i?.product?._id).map(({ product }) => (
           <Pressable
             key={product._id}
             onPress={() => {
@@ -167,9 +167,9 @@ const Favorites = () => {
                 {product.name}
               </Text>
               <Text style={[styles.price, { color: colors.primary }]}>
-                ₱{product.price.toFixed(2)}
+                ₱{(product.price ?? 0).toFixed(2)}
               </Text>
-              {product.stock <= 0 && (
+              {(product.stock ?? 0) <= 0 && (
                 <Text style={[styles.outOfStock, { color: colors.error }]}>
                   Out of stock
                 </Text>
@@ -185,7 +185,7 @@ const Favorites = () => {
                 <Heart size={20} color={colors.red} fill={colors.red} />
               </Pressable>
 
-              {product.stock > 0 ? (
+              {(product.stock ?? 0) > 0 ? (
                 <Pressable
                   onPress={() => handleAddToCart(product)}
                   style={[

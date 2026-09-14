@@ -56,8 +56,10 @@ const Login = () => {
 
       const message =
         error?.response?.data?.message ||
-        error?.message ||
-        "Unable to login. Please check your email and password.";
+        (error?.code === "ERR_NETWORK" || error?.message === "Network Error"
+          ? "Cannot reach the server. Check that the API is running and your phone is on the same Wi-Fi (API: http://192.168.254.181:5000/api)."
+          : error?.message ||
+            "Unable to login. Please check your email and password.");
 
       Alert.alert("Login Failed", message);
     } finally {
@@ -227,7 +229,7 @@ const Login = () => {
             {/* Register */}
             <View style={styles.registerContainer}>
               <Text style={{ color: colors.muted }}>
-                Don't have an account?
+                Don&apos;t have an account?
               </Text>
 
               <Link

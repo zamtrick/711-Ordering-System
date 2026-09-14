@@ -117,12 +117,7 @@ export const createCategory = async (req, res) => {
       category,
     });
   } catch (err) {
-    console.error(err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return handleCategoryError(err, res);
   }
 };
 

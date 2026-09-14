@@ -93,6 +93,15 @@ const RiderTabs = () => {
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
+
+      {/* Hidden screen — per-order customer chat, opened from a delivery card */}
+      <Tabs.Screen
+        name="chat"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 };

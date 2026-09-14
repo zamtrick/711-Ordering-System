@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
+import { useAuth } from "./AuthContext";
 
 // --------------------------------------------------
 // Socket.io attaches to the server root, not /api
@@ -22,6 +24,7 @@ const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 type SocketContextType = {
   socket: Socket | null;
   connected: boolean;
+  reconnect: () => void;
 };
 
 // --------------------------------------------------
@@ -31,6 +34,7 @@ type SocketContextType = {
 export const SocketContext = createContext<SocketContextType>({
   socket: null,
   connected: false,
+  reconnect: () => {},
 });
 
 // --------------------------------------------------
@@ -41,11 +45,31 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const tokenRetryRef = useRef(false);
+  const initRef = useRef<() => void>(() => {});
+  const { user } = useAuth();
+  const userKey = user?._id ?? user?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
 
+    const teardown = (s: Socket | null) => {
+      if (!s) return;
+      s.off("connect");
+      s.off("disconnect");
+      s.off("connect_error");
+      s.disconnect();
+    };
+
     const init = async () => {
+      teardown(socketRef.current);
+      socketRef.current = null;
+      if (!cancelled) {
+        setSocket(null);
+        setConnected(false);
+      }
+      tokenRetryRef.current = false;
+
       // The httpOnly cookie can't be read by JS directly, so
       // /auth/token validates the cookie and echoes the value
       // back in the JSON body. The socket then sends it in the
@@ -71,35 +95,60 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socketRef.current = s;
       setSocket(s);
 
-      s.on("connect", () => setConnected(true));
-      s.on("disconnect", () => setConnected(false));
-
-      s.on("connect_error", (err) => {
+      const onConnect = () => {
+        if (!cancelled) setConnected(true);
+      };
+      const onDisconnect = () => {
+        if (!cancelled) setConnected(false);
+      };
+      const onConnectError = async (err: Error) => {
         console.log("Socket connect_error:", err.message);
-        // Auth errors won't fix themselves — stop retrying immediately
+        // Token may have rotated — refresh once and reconnect
+        // instead of permanently disabling reconnection.
         if (
-          err.message === "Authentication required" ||
-          err.message === "Invalid or expired token"
+          (err.message === "Authentication required" ||
+            err.message === "Invalid or expired token") &&
+          !tokenRetryRef.current
         ) {
-          s.io.opts.reconnection = false;
-          s.disconnect();
+          tokenRetryRef.current = true;
+          try {
+            const res = await api.get("/auth/token");
+            const fresh = res.data?.token ?? "";
+            if (fresh && !cancelled) {
+              s.auth = { ...(s.auth ?? {}), token: fresh };
+              s.connect();
+            }
+          } catch {
+            // Keep socket.io's own reconnection running
+          }
         }
-      });
+      };
+
+      s.on("connect", onConnect);
+      s.on("disconnect", onDisconnect);
+      s.on("connect_error", onConnectError);
     };
 
-    init();
+    initRef.current = () => {
+      void init();
+    };
+    void init();
 
     return () => {
       cancelled = true;
-      socketRef.current?.disconnect();
+      teardown(socketRef.current);
       socketRef.current = null;
       setSocket(null);
       setConnected(false);
     };
+  }, [userKey]);
+
+  const reconnect = useCallback(() => {
+    initRef.current();
   }, []);
 
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={{ socket, connected, reconnect }}>
       {children}
     </SocketContext.Provider>
   );

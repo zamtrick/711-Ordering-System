@@ -30,6 +30,10 @@ const findAccessibleReview = async (req, res) => {
     fail(res, 404, "Review not found");
     return null;
   }
+  if (!review.order) {
+    fail(res, 403, "You can only moderate reviews for orders at your branch.");
+    return null;
+  }
   if (isBranchScoped(req)) {
     const ids = await branchReviewIds(req.adminBranchId);
     if (!ids.includes(review.order.toString())) {

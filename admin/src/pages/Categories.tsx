@@ -90,7 +90,7 @@ export default function Categories() {
 
   // Deleted last row on the last page → step back to a valid page
   useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(meta.totalPages);
+    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
   }, [meta, page]);
 
   const filtered = categories;
@@ -105,18 +105,22 @@ export default function Categories() {
     await api.delete(`/admin/categories/${categoryId}/image`);
   };
 
+  const revokePreview = (url: string) => {
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+  };
+
   const pickImage = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file
     if (!file) return;
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    revokePreview(imagePreview);
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     setRemoveImage(false);
   };
 
   const clearPickedImage = () => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    revokePreview(imagePreview);
     setImageFile(null);
     setImagePreview("");
     setRemoveImage(true);

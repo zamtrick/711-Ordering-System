@@ -33,7 +33,9 @@ export const requireAdminPermission = (permKey) => async (req, res, next) => {
   try {
     const role = req.user?.role;
     if (role === "superadmin") return next();
-    if (role !== "admin") return next();
+    if (role !== "admin") {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
 
     const perms = await getAdminPermissionsMap();

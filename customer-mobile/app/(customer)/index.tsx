@@ -69,7 +69,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 const iconFor = (name: string) =>
-  CATEGORY_ICONS[name.toLowerCase()] ?? "🛍️";
+  CATEGORY_ICONS[(name ?? "").toLowerCase()] ?? "🛍️";
 
 // --------------------------------------------------
 // SCREEN
@@ -486,7 +486,7 @@ const Home = () => {
               </View>
 
               <Text style={[styles.productPrice, { color: colors.primary }]}>
-                ₱{product.price.toFixed(2)}
+                ₱{(product.price ?? 0).toFixed(2)}
               </Text>
             </Pressable>
           ))}

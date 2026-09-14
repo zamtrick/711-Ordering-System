@@ -8,10 +8,12 @@ export type AdminPermissions = {
   canManageRiders: boolean;
 };
 
+// Fail-closed: before the fetch resolves (or if it fails), branch admins
+// see read-only UI. Superadmin short-circuits to true in `can()` below.
 const DEFAULTS: AdminPermissions = {
-  canManageProducts: true,
-  canManageCategories: true,
-  canManageRiders: true,
+  canManageProducts: false,
+  canManageCategories: false,
+  canManageRiders: false,
 };
 
 export function useAdminPermissions() {
@@ -34,9 +36,9 @@ export function useAdminPermissions() {
         const d = res.data?.data;
         if (d) {
           setPerms({
-            canManageProducts: d.canManageProducts ?? true,
-            canManageCategories: d.canManageCategories ?? true,
-            canManageRiders: d.canManageRiders ?? true,
+            canManageProducts: d.canManageProducts ?? false,
+            canManageCategories: d.canManageCategories ?? false,
+            canManageRiders: d.canManageRiders ?? false,
           });
         }
       })

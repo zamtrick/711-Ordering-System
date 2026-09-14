@@ -13,7 +13,12 @@ const emitFullOrder = async (orderId) => {
       .populate("user", "firstname lastname email")
       .populate("branch")
       .populate({ path: "orderItems", populate: { path: "product" } })
-      .populate("payment");
+      .populate("payment")
+      .populate({
+        path: "rider",
+        select: "phone vehicleType vehiclePlateNumber",
+        populate: { path: "user", select: "firstname lastname" },
+      });
     if (full) emitOrderUpdated(full);
   } catch {
     // never break the request path on socket errors
@@ -148,11 +153,18 @@ export const createOrderItem = async (req, res) => {
       });
     }
 
-    // Stock guard — never allow ordering more than available
-    if (product.stock < quantity) {
+    // Stock guard — atomically decrement so parallel checkout requests
+    // (Promise.all, one per cart item) can't oversell the same units.
+    const decremented = await Product.findOneAndUpdate(
+      { _id: productId, stock: { $gte: Number(quantity) } },
+      { $inc: { stock: -Number(quantity) } },
+      { new: true },
+    );
+    if (!decremented) {
+      const fresh = await Product.findById(productId).select("stock");
       return res.status(400).json({
         success: false,
-        message: `Insufficient stock for "${product.name}". Only ${product.stock} left.`,
+        message: `Insufficient stock for "${product.name}". Only ${fresh?.stock ?? product.stock} left.`,
       });
     }
 
@@ -302,6 +314,14 @@ export const updateOrderItemById = async (req, res) => {
       });
     }
 
+    // Only pending orders accept item changes (same guard as create)
+    if (order.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot add items to a ${order.status} order`,
+      });
+    }
+
     const orderItem = await OrderItem.findOne({ _id: itemId, order: orderId });
 
     if (!orderItem) {
@@ -311,12 +331,27 @@ export const updateOrderItemById = async (req, res) => {
       });
     }
 
-    // Stock guard for the new quantity
+    // Stock adjustment by delta — increasing needs an atomic gte-guarded
+    // decrement (no oversell), decreasing restores the difference.
     const product = await Product.findById(orderItem.product);
-    if (product && product.stock < Number(quantity)) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient stock for "${product.name}". Only ${product.stock} left.`,
+    const oldQty = orderItem.quantity;
+    const newQty = Number(quantity);
+    const qtyDelta = newQty - oldQty;
+    if (qtyDelta > 0) {
+      const decremented = await Product.findOneAndUpdate(
+        { _id: orderItem.product, stock: { $gte: qtyDelta } },
+        { $inc: { stock: -qtyDelta } },
+      );
+      if (!decremented) {
+        const fresh = await Product.findById(orderItem.product).select("stock");
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for "${product?.name ?? "product"}". Only ${fresh?.stock ?? product?.stock ?? 0} left.`,
+        });
+      }
+    } else if (qtyDelta < 0) {
+      await Product.findByIdAndUpdate(orderItem.product, {
+        $inc: { stock: -qtyDelta },
       });
     }
 
@@ -388,6 +423,14 @@ export const deleteOrderItemById = async (req, res) => {
       });
     }
 
+    // Only pending orders accept item changes (same guard as create)
+    if (order.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot add items to a ${order.status} order`,
+      });
+    }
+
     const orderItem = await OrderItem.findOne({ _id: itemId, order: orderId });
 
     if (!orderItem) {
@@ -415,6 +458,13 @@ export const deleteOrderItemById = async (req, res) => {
     }
 
     await orderItem.deleteOne();
+
+    // Restore the reserved stock
+    if (orderItem.product && orderItem.quantity) {
+      await Product.findByIdAndUpdate(orderItem.product, {
+        $inc: { stock: orderItem.quantity },
+      });
+    }
 
     emitFullOrder(orderId).catch(() => {});
 

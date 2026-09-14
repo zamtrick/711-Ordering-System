@@ -156,6 +156,28 @@ export const bulkUpsertBranchInventory = async (req, res) => {
       return res.status(400).json({ success: false, message: "updates array is required" });
     }
 
+    if (updates.length > 100) {
+      return res.status(400).json({ success: false, message: "Too many updates (max 100)" });
+    }
+
+    for (const u of updates) {
+      if (!u || !mongoose.Types.ObjectId.isValid(u.productId)) {
+        return res.status(400).json({ success: false, message: "Invalid product ID in updates" });
+      }
+      if (u.stock !== null && u.stock !== undefined) {
+        const n = Number(u.stock);
+        if (!Number.isFinite(n) || n < 0) {
+          return res.status(400).json({ success: false, message: "Stock must be a number >= 0" });
+        }
+      }
+    }
+
+    const productIds = updates.map((u) => u.productId);
+    const existingCount = await Product.countDocuments({ _id: { $in: productIds } });
+    if (existingCount !== productIds.length) {
+      return res.status(404).json({ success: false, message: "One or more products not found" });
+    }
+
     const ops = updates.map(({ productId, isAvailable, stock }) => ({
       updateOne: {
         filter: { branch: branchId, product: productId },

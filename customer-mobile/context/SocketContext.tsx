@@ -7,19 +7,14 @@ import {
   ReactNode,
 } from "react";
 import { io, type Socket } from "socket.io-client";
-import Constants from "expo-constants";
-import api from "@/api/axios";
+import api, { baseURL } from "@/api/axios";
 
 // --------------------------------------------------
 // URLs
 // --------------------------------------------------
 
-const apiUrl: string =
-  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
-  "http://localhost:5000/api";
-
 // Socket.io attaches to the server root, not /api
-const socketURL = apiUrl.replace(/\/api\/?$/, "");
+const socketURL = baseURL.replace(/\/api\/?$/, "");
 
 // --------------------------------------------------
 // TYPES
@@ -28,6 +23,7 @@ const socketURL = apiUrl.replace(/\/api\/?$/, "");
 type SocketContextType = {
   socket: Socket | null;
   connected: boolean;
+  reconnect: () => Promise<void>;
 };
 
 // --------------------------------------------------
@@ -37,6 +33,7 @@ type SocketContextType = {
 export const SocketContext = createContext<SocketContextType>({
   socket: null,
   connected: false,
+  reconnect: async () => {},
 });
 
 // --------------------------------------------------
@@ -45,11 +42,42 @@ export const SocketContext = createContext<SocketContextType>({
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
+  const retriedRef = useRef(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    const attach = (s: Socket) => {
+      const onConnect = () => setConnected(true);
+      const onDisconnect = () => setConnected(false);
+      const onConnectError = async (err: Error) => {
+        console.log("Socket connect_error:", err.message);
+        if (err.message === "Invalid or expired token" && !retriedRef.current) {
+          retriedRef.current = true;
+          try {
+            const res = await api.get("/auth/token");
+            const fresh = res.data?.token ?? "";
+            if (!fresh || cancelled) return;
+            s.auth = { token: fresh };
+            s.connect();
+          } catch {
+            // give up — leave reconnection enabled
+          }
+        }
+      };
+      s.on("connect", onConnect);
+      s.on("disconnect", onDisconnect);
+      s.on("connect_error", onConnectError);
+      return () => {
+        s.off("connect", onConnect);
+        s.off("disconnect", onDisconnect);
+        s.off("connect_error", onConnectError);
+      };
+    };
+
+    let detach: (() => void) | null = null;
 
     const init = async () => {
       // --------------------------------------------------
@@ -79,27 +107,14 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
       socketRef.current = s;
       setSocket(s);
-
-      s.on("connect", () => setConnected(true));
-      s.on("disconnect", () => setConnected(false));
-
-      s.on("connect_error", (err) => {
-        console.log("Socket connect_error:", err.message);
-        // Auth errors won't fix themselves — stop retrying immediately
-        if (
-          err.message === "Authentication required" ||
-          err.message === "Invalid or expired token"
-        ) {
-          s.io.opts.reconnection = false;
-          s.disconnect();
-        }
-      });
+      detach = attach(s);
     };
 
     init();
 
     return () => {
       cancelled = true;
+      detach?.();
       socketRef.current?.disconnect();
       socketRef.current = null;
       setSocket(null);
@@ -107,8 +122,50 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const reconnect = async () => {
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    setSocket(null);
+    setConnected(false);
+    retriedRef.current = false;
+    try {
+      const res = await api.get("/auth/token");
+      const token = res.data?.token ?? "";
+      if (!token) return;
+      const s = io(socketURL, {
+        withCredentials: true,
+        transports: ["websocket"],
+        auth: { token },
+      });
+      const onConnect = () => setConnected(true);
+      const onDisconnect = () => setConnected(false);
+      const onConnectError = async (err: Error) => {
+        console.log("Socket connect_error:", err.message);
+        if (err.message === "Invalid or expired token" && !retriedRef.current) {
+          retriedRef.current = true;
+          try {
+            const r = await api.get("/auth/token");
+            const fresh = r.data?.token ?? "";
+            if (!fresh) return;
+            s.auth = { token: fresh };
+            s.connect();
+          } catch {
+            // give up — leave reconnection enabled
+          }
+        }
+      };
+      s.on("connect", onConnect);
+      s.on("disconnect", onDisconnect);
+      s.on("connect_error", onConnectError);
+      socketRef.current = s;
+      setSocket(s);
+    } catch {
+      // Not logged in — stay disconnected
+    }
+  };
+
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={{ socket, connected, reconnect }}>
       {children}
     </SocketContext.Provider>
   );

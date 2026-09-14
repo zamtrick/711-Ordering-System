@@ -1,11 +1,15 @@
 import mongoose from "mongoose";
 
 import Order from "../../models/Order.js";
+import OrderItem from "../../models/OrderItem.js";
+import Product from "../../models/Product.js";
 import Branch from "../../models/Branch.js";
 import User from "../../models/User.js";
 import Customer from "../../models/Customer.js";
 import Payment from "../../models/Payment.js";
-import { getCurrentDeliveryFee } from "../settings.controller.js";
+import Rider from "../../models/Rider.js";
+import { refreshRiderAvailability } from "../../utils/riderLoad.js";
+import { getCurrentDeliveryFee, getEffectiveDeliveryRange, haversineKm } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
 import { canAccessBranchDoc } from "../../middlewares/branchScope.middleware.js";
@@ -54,7 +58,12 @@ export const createOrder = async (req, res) => {
     // Get the authenticated user's ID from the JWT
     const user = req.user.userId;
 
-    const { branch, deliveryAddress: clientDeliveryAddress } = req.body;
+    const {
+      branch,
+      deliveryAddress: clientDeliveryAddress,
+      deliveryLat,
+      deliveryLng,
+    } = req.body;
 
     /*
     |--------------------------------------------------------------------------
@@ -194,6 +203,47 @@ export const createOrder = async (req, res) => {
 
     /*
     |--------------------------------------------------------------------------
+    | DELIVERY RANGE CHECK
+    |--------------------------------------------------------------------------
+    | The checkout map picker gives us the exact pin coordinates. When they're
+    | present we validate the straight-line distance against the branch's
+    | effective delivery range (branch override > superadmin default).
+    | Addresses typed manually without a pin skip this check — the branch can
+    | still refuse/redirect the order manually.
+    */
+
+    const parsedLat = Number(deliveryLat);
+    const parsedLng = Number(deliveryLng);
+    const hasCoords =
+      Number.isFinite(parsedLat) &&
+      Number.isFinite(parsedLng) &&
+      parsedLat >= -90 && parsedLat <= 90 &&
+      parsedLng >= -180 && parsedLng <= 180;
+
+    if (hasCoords) {
+      const branchLat = branchData.coordinates?.lat;
+      const branchLng = branchData.coordinates?.lng;
+
+      if (branchLat == null || branchLng == null) {
+        return res.status(400).json({
+          success: false,
+          message: "This branch hasn't set its map location yet — please contact the branch or choose another one.",
+        });
+      }
+
+      const effectiveRangeKm = await getEffectiveDeliveryRange(branchData);
+      const distanceKm = haversineKm(branchLat, branchLng, parsedLat, parsedLng);
+
+      if (distanceKm > effectiveRangeKm) {
+        return res.status(400).json({
+          success: false,
+          message: `Your address is ${distanceKm.toFixed(1)} km from ${branchData.name} — outside its ${effectiveRangeKm} km delivery range. Please pick a closer branch or a different address.`,
+        });
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | CREATE ORDER
     |--------------------------------------------------------------------------
     */
@@ -241,7 +291,12 @@ export const createOrder = async (req, res) => {
     const createdOrder = await Order.findById(order._id)
       .populate("user", "firstname lastname email")
       .populate("branch")
-      .populate("payment");
+      .populate("payment")
+      .populate({
+        path: "rider",
+        select: "phone vehicleType vehiclePlateNumber",
+        populate: { path: "user", select: "firstname lastname" },
+      });
 
     /* Email notification (non-blocking) */
     if (createdOrder?.user?.email) {
@@ -394,7 +449,12 @@ export const getOrderById = async (req, res) => {
           path: "product",
         },
       })
-      .populate("payment");
+      .populate("payment")
+      .populate({
+        path: "rider",
+        select: "phone vehicleType vehiclePlateNumber",
+        populate: { path: "user", select: "firstname lastname" },
+      });
 
     /*
     |--------------------------------------------------------------------------
@@ -525,11 +585,40 @@ export const cancelOrder = async (req, res) => {
 
     order.status = "cancelled";
 
+    // Release the rider — otherwise a cancelled order strands its delivery
+    // in assigned/picked_up/in_transit: it keeps showing in the rider's
+    // active list and the rider stays "delivering" forever.
+    const releasedRiderId = order.rider ? order.rider.toString() : null;
+    order.rider = null;
+    order.deliveryStatus = "unassigned";
+
     await order.save();
+
+    // Restore reserved stock for the cancelled order's items
+    try {
+      const items = await OrderItem.find({ order: order._id }).select(
+        "product quantity",
+      );
+      for (const it of items) {
+        if (it.product && it.quantity) {
+          await Product.findByIdAndUpdate(it.product, {
+            $inc: { stock: it.quantity },
+          });
+        }
+      }
+    } catch {
+      // stock restore must not break the cancel path
+    }
 
     // Keep the linked payment in sync — nothing was charged, so it dies too.
     if (order.payment) {
       await Payment.findByIdAndUpdate(order.payment, { status: "cancelled" });
+    }
+
+    // Recount the freed rider (back to "available" if nothing else active).
+    if (releasedRiderId) {
+      const freedRider = await Rider.findById(releasedRiderId);
+      await refreshRiderAvailability(freedRider);
     }
 
     /*
@@ -547,7 +636,12 @@ export const cancelOrder = async (req, res) => {
           path: "product",
         },
       })
-      .populate("payment");
+      .populate("payment")
+      .populate({
+        path: "rider",
+        select: "phone vehicleType vehiclePlateNumber",
+        populate: { path: "user", select: "firstname lastname" },
+      });
 
     /* Email notification (non-blocking) */
     if (cancelledOrder?.user?.email) {

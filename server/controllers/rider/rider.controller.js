@@ -5,6 +5,11 @@ import Payment from "../../models/Payment.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyDeliveryAssigned, notifyDeliveryCompleted } from "../../services/email.service.js";
 import { emitOrderUpdated } from "../../socket.js";
+import {
+  MAX_ACTIVE_DELIVERIES_PER_RIDER,
+  countActiveDeliveries,
+  getMaxActiveDeliveries,
+} from "../../utils/riderLoad.js";
 
 /* -------------------------------------------------------------------------- */
 /* GET RIDER PROFILE                                                          */
@@ -182,6 +187,9 @@ export const getMyDeliveries = async (req, res) => {
     const orders = await Order.find({
       rider: rider._id,
       deliveryStatus: { $in: ["assigned", "picked_up", "in_transit"] },
+      // Belt-and-braces: a cancelled/refunded order must never show as an
+      // active delivery even if its deliveryStatus was left stale.
+      status: { $in: ["pending", "processing"] },
     })
       .populate("user", "firstname lastname email")
       .populate("branch", "name branchCode location address")
@@ -260,23 +268,43 @@ export const acceptDelivery = async (req, res) => {
       });
     }
 
-    const order = await Order.findById(id);
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+    // Capacity cap — small branches (1-2 riders) overload fast, so a rider
+    // already carrying the superadmin-configured max can't stack more.
+    // Admin can still force-assign past the cap if needed.
+    // Checked BEFORE the atomic claim so overload never races the assignment.
+    const activeCount = await countActiveDeliveries(rider._id);
+    const liveCap = await getMaxActiveDeliveries();
+    if (activeCount >= liveCap) {
+      return res.status(400).json({
+        success: false,
+        message: `You are at capacity (${activeCount}/${liveCap} active deliveries). Finish one before accepting more.`,
+      });
     }
 
-    if (order.deliveryStatus !== "unassigned") {
+    // Atomic claim — read-check-then-save loses races when two riders tap
+    // accept at once, so the guard lives in the query itself. Null means the
+    // order was taken, cancelled/refunded, or belongs to another branch.
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: id,
+        deliveryStatus: "unassigned",
+        status: { $in: ["pending", "processing"] },
+        branch: rider.assignedBranch,
+      },
+      { $set: { rider: rider._id, deliveryStatus: "assigned", status: "processing" } },
+      { new: true },
+    );
+
+    if (!order) {
+      const exists = await Order.findById(id).select("_id");
+      if (!exists) {
+        return res.status(404).json({ success: false, message: "Order not found" });
+      }
       return res.status(400).json({
         success: false,
         message: "This delivery is no longer available",
       });
     }
-
-    order.rider = rider._id;
-    order.deliveryStatus = "assigned";
-    order.status = "processing";
-    await order.save();
 
     rider.availabilityStatus = "delivering";
     await rider.save();
@@ -296,6 +324,11 @@ export const acceptDelivery = async (req, res) => {
       .populate({
         path: "orderItems",
         populate: { path: "product", select: "name price image" },
+      })
+      .populate({
+        path: "rider",
+        select: "phone vehicleType vehiclePlateNumber",
+        populate: { path: "user", select: "firstname lastname" },
       });
 
     /* Email notification to rider (non-blocking) */
@@ -366,6 +399,14 @@ export const updateDeliveryStatus = async (req, res) => {
       });
     }
 
+    // A cancelled/refunded order is dead — the rider must not progress it.
+    if (["cancelled", "refunded"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order was ${order.status} — delivery is closed.`,
+      });
+    }
+
     const allowed = validTransitions[order.deliveryStatus] || [];
     if (!allowed.includes(deliveryStatus)) {
       return res.status(400).json({
@@ -378,11 +419,23 @@ export const updateDeliveryStatus = async (req, res) => {
 
     if (deliveryStatus === "delivered") {
       order.status = "completed";
-      rider.availabilityStatus = "available";
     }
 
     await order.save();
-    await rider.save();
+
+    // Recompute availability from actual load: still carrying other active
+    // orders -> stay "delivering", otherwise back to "available".
+    // (Never touches "offline" — refreshRiderAvailability guards that.)
+    const { refreshRiderAvailability } = await import("../../utils/riderLoad.js");
+    const freshRider = await Rider.findById(rider._id);
+    if (freshRider) {
+      if (deliveryStatus !== "delivered" && freshRider.availabilityStatus !== "offline") {
+        freshRider.availabilityStatus = "delivering";
+        await freshRider.save();
+      } else {
+        await refreshRiderAvailability(freshRider);
+      }
+    }
 
     // Delivery completed — settle the payment. COD-style methods are paid
     // in person at the door; prepaid gateways would already be "paid".
@@ -408,6 +461,11 @@ export const updateDeliveryStatus = async (req, res) => {
       .populate({
         path: "orderItems",
         populate: { path: "product", select: "name price image" },
+      })
+      .populate({
+        path: "rider",
+        select: "phone vehicleType vehiclePlateNumber",
+        populate: { path: "user", select: "firstname lastname" },
       });
 
     /* Email notification on delivery completed (non-blocking) */

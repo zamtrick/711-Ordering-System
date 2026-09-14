@@ -30,6 +30,7 @@ type Rider = {
   vehicleType: string;
   vehiclePlateNumber: string;
   availabilityStatus: string;
+  activeDeliveries?: number;
   createdAt: string;
 };
 
@@ -59,7 +60,7 @@ function SkeletonRow() {
   const { isDark } = useTheme();
   return (
     <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 7 }).map((_, i) => (
         <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
       ))}
     </tr>
@@ -107,9 +108,17 @@ export default function Riders() {
   const branches = branchesData?.branches ?? [];
   const loading = isFetching && !data;
 
+  // Live rider cap (superadmin setting, default 3) for the load column.
+  const { data: riderCap } = useQuery({
+    queryKey: ["settings", "rider-capacity"],
+    queryFn: () => api.get("/settings/rider-capacity").then((res) => res.data?.data?.capacity as number),
+    staleTime: 60_000,
+  });
+  const cap = riderCap ?? 3;
+
   // Deleted last row on the last page → step back to a valid page
   useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(meta.totalPages);
+    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
   }, [meta, page]);
 
   const buildPayload = () => {
@@ -181,11 +190,11 @@ export default function Riders() {
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
         <table className="w-full text-sm">
           <thead><tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
-            {["Name", "Phone", "Vehicle", "Plate", "Status", "Actions"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>{h}</th>)}
+            {["Name", "Phone", "Vehicle", "Plate", "Status", "Load", "Actions"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>{h}</th>)}
           </tr></thead>
           <tbody>
             {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}</>
-            : riders.length === 0 ? <tr><td colSpan={6} className="px-4 py-12 text-center text-muted">No riders found.</td></tr>
+            : riders.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-muted">No riders found.</td></tr>
             : riders.map((r) => (
               <tr key={r._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
                 <td className="px-4 py-3 font-medium text-ink">{r.user?.firstname} {r.user?.lastname}</td>
@@ -193,6 +202,7 @@ export default function Riders() {
                 <td className="px-4 py-3 text-muted">{r.vehicleType}</td>
                 <td className="px-4 py-3 text-muted">{r.vehiclePlateNumber}</td>
                 <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(r.availabilityStatus)}`}>{r.availabilityStatus}</span></td>
+                <td className="px-4 py-3 text-muted text-xs font-semibold">{r.activeDeliveries ?? 0}/{cap} active</td>
                 <td className="px-4 py-3"><div className="flex items-center gap-1">
                   <button onClick={() => openEdit(r)} disabled={readOnly} className="p-1.5 rounded-lg hover:bg-sunken cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Pencil size={14} className="text-info" /></button>
                   <button onClick={() => setDeleteRider(r)} disabled={readOnly} className="p-1.5 rounded-lg hover:bg-danger-soft cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Trash2 size={14} className="text-danger" /></button>

@@ -127,8 +127,15 @@ export default function Sidebar() {
   const socketRef = useRef<Socket | null>(null);
 
   const refreshPendingOrders = () => {
-    api.get("/orders")
+    // Use the staff-scoped endpoint (allows admin + superadmin).
+    // /api/orders only allows customer + admin, so superadmin always 403s here.
+    api.get("/admin/orders", { params: { status: "pending", limit: 1 } })
       .then((res) => {
+        const total: number | undefined = res.data?.pagination?.total;
+        if (typeof total === "number") {
+          setPendingOrders(total);
+          return;
+        }
         const list: { status?: string }[] = res.data?.orders ?? [];
         setPendingOrders(list.filter((o) => o.status === "pending").length);
       })

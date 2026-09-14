@@ -21,8 +21,8 @@ import {
   X,
   QrCode,
   ScanLine,
+  MessageCircle,
 } from "lucide-react-native";
-import QRCodeSVG from "react-native-qrcode-svg";
 import { CameraView, useCameraPermissions, type CameraView as CameraViewType } from "expo-camera";
 
 import { LightTheme, DarkTheme } from "@/constants/Theme";
@@ -139,8 +139,7 @@ const Deliveries = () => {
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const activeOrderIdRef = useRef<string | null>(null); // always-current ref for callbacks
   const [step, setStep] = useState<"qr" | "photo" | null>(null);
-  const [qrValue, setQrValue] = useState<string | null>(null);   // orderId to encode in QR
-  const [qrLoading, setQrLoading] = useState(false);
+  const [qrLoadingId, setQrLoadingId] = useState<string | null>(null);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
   const scannedRef = useRef(false); // ref instead of state — no re-render needed
@@ -149,6 +148,28 @@ const Deliveries = () => {
 
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraViewType>(null);
+
+  // ── delivery verification mode (superadmin setting) ──
+  // "photo_only" = skip the QR scan step entirely; the camera photo is the
+  // only proof. Defaults to "qr_and_photo" until the setting loads.
+  const [verificationMode, setVerificationMode] = useState<
+    "qr_and_photo" | "photo_only"
+  >("qr_and_photo");
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get("/settings/delivery-verification")
+      .then((res) => {
+        const mode = res.data?.data?.mode;
+        if (mounted && (mode === "qr_and_photo" || mode === "photo_only")) {
+          setVerificationMode(mode);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // ── socket ───────────────────────────────────────
   const { socket, connected } = useSocket();
@@ -213,9 +234,9 @@ const Deliveries = () => {
     };
     socket.on("order_updated", handler);
     return () => { socket.off("order_updated", handler); };
-  }, [socket]);
-
-  // ── step 1: open QR scan flow ─────────────────────
+  }, [socket]);  // ── step 1: open the proof flow ───────────────────
+  // QR + photo mode: fetch the signed QR (sanity check) then open the
+  // scanner. Photo-only mode: jump straight to the camera step.
   const startProofFlow = async (orderId: string) => {
     if (!permission?.granted) {
       const result = await requestPermission();
@@ -226,7 +247,20 @@ const Deliveries = () => {
     }
 
     try {
-      setQrLoading(true);
+      setQrLoadingId(orderId);
+
+      if (verificationMode === "photo_only") {
+        // Photo-only mode — skip the QR scan step entirely.
+        setActiveOrderId(orderId);
+        activeOrderIdRef.current = orderId;
+        scannedRef.current = true; // no scan will happen
+        setScanned(true);
+        setCapturedUri(null);
+        setCameraReady(false);
+        setStep("photo");
+        return;
+      }
+
       const res = await api.get(`/rider/deliveries/${orderId}/qr`);
       const data = res.data?.data ?? {};
 
@@ -235,7 +269,6 @@ const Deliveries = () => {
         return;
       }
 
-      setQrValue(data.qrValue);
       setActiveOrderId(orderId);
       activeOrderIdRef.current = orderId;
       scannedRef.current = false;
@@ -246,7 +279,7 @@ const Deliveries = () => {
     } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to start delivery proof.");
     } finally {
-      setQrLoading(false);
+      setQrLoadingId(null);
     }
   };
 
@@ -270,6 +303,8 @@ const Deliveries = () => {
         setCameraReady(false);
         setStep("photo");
       }
+      // (In photo_only mode this handler never fires — the flow starts
+      // directly at the photo step.)
     } catch (err: any) {
       const msg = err?.response?.data?.message || "QR does not match this order. Try again.";
       Alert.alert("Scan Failed", msg, [
@@ -365,7 +400,7 @@ const Deliveries = () => {
     setStep(null);
     setActiveOrderId(null);
     activeOrderIdRef.current = null;
-    setQrValue(null);
+    setQrLoadingId(null);
     setCapturedUri(null);
     scannedRef.current = false;
     setScanned(false);
@@ -481,7 +516,7 @@ const Deliveries = () => {
                 <View style={styles.cardHeader}>
                   <View>
                     <Text style={[styles.orderId, { color: colors.headline }]}>
-                      #{delivery._id.slice(-6).toUpperCase()}
+                      #{(delivery._id?.slice?.(-6) ?? "—").toUpperCase()}
                     </Text>
                     <Text style={[styles.orderDate, { color: colors.muted }]}>
                       {formatDate(delivery.createdAt)}
@@ -501,7 +536,7 @@ const Deliveries = () => {
                 <View style={styles.infoRow}>
                   <Text style={[styles.infoLabel, { color: colors.muted }]}>Customer</Text>
                   <Text style={[styles.infoValue, { color: colors.headline }]}>
-                    {delivery.user?.firstname} {delivery.user?.lastname}
+                    {delivery.user?.firstname ?? "—"} {delivery.user?.lastname ?? ""}
                   </Text>
                 </View>
 
@@ -537,7 +572,7 @@ const Deliveries = () => {
                 <View style={styles.infoRow}>
                   <Text style={[styles.infoLabel, { color: colors.muted }]}>Total</Text>
                   <Text style={[styles.totalValue, { color: "#007A53" }]}>
-                    ₱{delivery.totalAmount.toFixed(2)}
+                    ₱{(delivery.totalAmount ?? 0).toFixed(2)}
                   </Text>
                 </View>
 
@@ -566,7 +601,7 @@ const Deliveries = () => {
                 {isInTransit && (
                   <Pressable
                     onPress={() => startProofFlow(delivery._id)}
-                    disabled={qrLoading && activeOrderId === delivery._id}
+                    disabled={qrLoadingId === delivery._id}
                     style={[
                       styles.scanButton,
                       {
@@ -576,7 +611,7 @@ const Deliveries = () => {
                       },
                     ]}
                   >
-                    {qrLoading && activeOrderId === delivery._id ? (
+                    {qrLoadingId === delivery._id ? (
                       <ActivityIndicator size="small" color="#007A53" />
                     ) : (
                       <>
@@ -588,6 +623,30 @@ const Deliveries = () => {
                     )}
                   </Pressable>
                 )}
+
+                {/* Message customer — per-order delivery chat */}
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(rider)/chat",
+                      params: { orderId: delivery._id },
+                    })
+                  }
+                  style={[
+                    styles.chatButton,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      marginTop: isInTransit ? 8 : 0,
+                    },
+                  ]}
+                >
+                  <MessageCircle size={16} color="#007A53" />
+                  <Text style={[styles.chatText, { color: "#007A53" }]}>
+                    Message Customer
+                  </Text>
+                  <ChevronRight size={16} color="#007A53" />
+                </Pressable>
 
                 {/* Proof of delivery photo (once delivered) */}
                 {delivery.proofOfDelivery?.photoUrl && (
@@ -622,7 +681,7 @@ const Deliveries = () => {
             <View>
               <Text style={styles.modalTitle}>Scan Customer QR</Text>
               <Text style={styles.modalSubtitle}>
-                Point your camera at the QR code on the customer's phone
+                Point your camera at the QR code on the customer&apos;s phone
               </Text>
             </View>
             <Pressable onPress={closeFlow} style={styles.closeBtn}>
@@ -832,6 +891,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   scanText: { fontSize: 13, fontWeight: "600" },
+
+  chatButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  chatText: { fontSize: 13, fontWeight: "700" },
 
   proofContainer: { marginTop: 10, borderRadius: 12, overflow: "hidden" },
   proofImage: { width: "100%", height: 150 },

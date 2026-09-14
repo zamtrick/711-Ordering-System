@@ -2,7 +2,8 @@ import express from "express";
 import multer from "multer";
 import mongoose from "mongoose";
 import { getProofDeliveryUploader } from "../../utils/uploads.js";
-import { generateDeliveryQR, verifyQRPayload } from "../../utils/qr-delivery.js";
+import { generateDeliveryQR, verifyOrderToken } from "../../utils/qr-delivery.js";
+import { getDeliveryVerificationMode } from "../../controllers/settings.controller.js";
 import Order from "../../models/Order.js";
 import Rider from "../../models/Rider.js";
 import AuditLog from "../../models/AuditLog.js";
@@ -15,8 +16,8 @@ const proofUpload = getProofDeliveryUploader();
 
 /**
  * GET /api/rider/deliveries/:id/qr
- * Generate/download QR code for an order (for rider to show to customer
- * or for customer to show to rider)
+ * Generate the signed QR value for an order (customer shows it, rider scans it).
+ * In "photo_only" mode the QR flow is disabled platform-wide.
  */
 router.get("/:id/qr", async (req, res) => {
   try {
@@ -24,6 +25,14 @@ router.get("/:id/qr", async (req, res) => {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: "Invalid order ID" });
+    }
+
+    const verificationMode = await getDeliveryVerificationMode();
+    if (verificationMode === "photo_only") {
+      return res.status(400).json({
+        success: false,
+        message: "QR verification is disabled — photo proof only",
+      });
     }
 
     const order = await Order.findById(id).populate("user", "firstname lastname");
@@ -99,11 +108,37 @@ router.post("/:id/scan", async (req, res) => {
       });
     }
 
-    // Verify QR payload - should contain the order ID
-    const payload = verifyQRPayload(qrData);
+    // In "photo_only" mode the QR scan step is skipped entirely, so a
+    // straggler client posting a stale scan must not mark anything verified.
+    const verificationMode = await getDeliveryVerificationMode();
+    if (verificationMode === "photo_only") {
+      return res.status(400).json({
+        success: false,
+        message: "QR scanning is disabled — use photo proof only",
+      });
+    }
+
+    // Verify QR signature — must be a server-signed token for this order.
+    // A trailing legacy "-suffix" is stripped before verifying so proof
+    // filenames built on a signed value still pass; raw orderIds never do.
+    // (The rider-mobile client forwards the scanned data opaquely.)
+    const rawQr = typeof qrData === "string" ? qrData.trim() : "";
+    if (!rawQr) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid QR code — bad signature",
+      });
+    }
+    const scannedOrderId = verifyOrderToken(rawQr.split("-")[0]);
+    if (!scannedOrderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid QR code — bad signature",
+      });
+    }
 
     // Verify the QR matches this order
-    if (payload.orderId !== order._id.toString()) {
+    if (scannedOrderId !== order._id.toString()) {
       return res.status(400).json({
         success: false,
         message: "QR code does not match this order",
@@ -172,9 +207,9 @@ router.post(
         });
       }
 
-      // qrToken is optional. If supplied it must equal the order ID (the
-      // value encoded in the QR) or start with it followed by a dash
-      // (legacy format). If absent, we auto-generate a record token.
+      // qrToken is optional and informational only. If supplied it must equal
+      // the order ID or start with it followed by a dash (legacy format).
+      // If absent, we auto-generate a record token.
       let finalQrToken;
       if (!qrToken) {
         finalQrToken = `${order._id}-${Date.now()}-manual`;
@@ -225,7 +260,10 @@ router.post(
         photoUrl,
         scannedAt: new Date(),
         riderId: rider._id,
-        qrToken: finalQrToken,
+        // In photo_only mode there is no scan; keep scannedAt as the
+        // completion timestamp and flag the record so admins can tell
+        // the two flows apart.
+        qrToken: finalQrToken || `${order._id}-${Date.now()}-photo-only`,
       };
 
       await order.save();

@@ -43,7 +43,7 @@ const History = () => {
       setLoading(true);
       const res = await api.get("/rider/deliveries/history");
       setDeliveries(res.data?.deliveries ?? []);
-    } catch (err) {
+    } catch (err: any) {
       console.log("Fetch history error:", err);
       if (err?.response?.status === 401) {
         router.replace("/(auth)/login");
@@ -54,6 +54,7 @@ const History = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetching on mount
     fetchHistory();
   }, [fetchHistory]);
 
@@ -118,7 +119,7 @@ const History = () => {
               <View style={styles.cardHeader}>
                 <View>
                   <Text style={[styles.orderId, { color: colors.headline }]}>
-                    #{delivery._id.slice(-6).toUpperCase()}
+                    #{(delivery._id?.slice?.(-6) ?? "—").toUpperCase()}
                   </Text>
                   <Text style={[styles.orderDate, { color: colors.muted }]}>
                     {formatDate(delivery.updatedAt)}
@@ -138,7 +139,7 @@ const History = () => {
               <View style={styles.infoRow}>
                 <Text style={[styles.infoLabel, { color: colors.muted }]}>Customer</Text>
                 <Text style={[styles.infoValue, { color: colors.headline }]}>
-                  {delivery.user?.firstname} {delivery.user?.lastname}
+                  {delivery.user?.firstname ?? "—"} {delivery.user?.lastname ?? ""}
                 </Text>
               </View>
 
@@ -172,7 +173,7 @@ const History = () => {
               <View style={styles.totalRow}>
                 <Text style={[styles.totalLabel, { color: colors.muted }]}>Total</Text>
                 <Text style={[styles.totalValue, { color: "#007A53" }]}>
-                  ₱{delivery.totalAmount.toFixed(2)}
+                  ₱{(delivery.totalAmount ?? 0).toFixed(2)}
                 </Text>
               </View>
             </View>

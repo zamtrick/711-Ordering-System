@@ -3,6 +3,7 @@ import express from "express";
 import {
   getAdminOrders,
   updateOrderStatus,
+  assignOrderRider,
 } from "../../controllers/admin/order.controller.js";
 import { resolveAdminBranch } from "../../middlewares/branchScope.middleware.js";
 
@@ -16,5 +17,8 @@ router.get("/", getAdminOrders);
 
 // Transition an order: processing | completed | cancelled | refunded
 router.patch("/:id/status", updateOrderStatus);
+
+// Manually assign / reassign / unassign a rider (branch-scoped, capped)
+router.patch("/:id/rider", assignOrderRider);
 
 export default router;

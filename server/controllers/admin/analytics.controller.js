@@ -31,7 +31,8 @@ export const getAdminDashboard = async (req, res) => {
       const rows = await Order.find({ branch: req.adminBranchId })
         .select("user")
         .lean();
-      const userIds = [...new Set(rows.map((o) => o.user.toString()))];
+      // Orders with deleted users have user == null — skip them
+      const userIds = [...new Set(rows.filter((o) => o.user).map((o) => o.user.toString()))];
       const customers = userIds.length
         ? await Customer.find({ user: { $in: userIds } })
             .select("_id createdAt")

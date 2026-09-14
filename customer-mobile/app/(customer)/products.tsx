@@ -174,7 +174,7 @@ const Products = () => {
   const filtered = products.filter((p) => {
     const matchCat =
       selectedCategory === "All" || p.categoryId?.name === selectedCategory;
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = (p.name ?? "").toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
@@ -245,7 +245,6 @@ const Products = () => {
               isDark
                 ? { backgroundColor: colors.surface, borderColor: colors.border }
                 : { backgroundColor: colors.surface },
-              // eslint-disable-next-line react-native/no-inline-styles
               isDark ? null : styles.softShadow,
             ]}
           >
@@ -267,7 +266,6 @@ const Products = () => {
             isDark
               ? { backgroundColor: colors.surface, borderColor: colors.border }
               : { backgroundColor: colors.surface },
-            // eslint-disable-next-line react-native/no-inline-styles
             isDark ? null : styles.softShadow,
           ]}
         >
@@ -551,7 +549,7 @@ const Products = () => {
                 </View>
 
                 <Text style={[styles.price, { color: colors.primary }]}>
-                  ₱{product.price.toFixed(2)}
+                  ₱{(product.price ?? 0).toFixed(2)}
                 </Text>
               </View>
             </Pressable>

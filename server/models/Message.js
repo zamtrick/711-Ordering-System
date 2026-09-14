@@ -15,10 +15,10 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
 
-    // "customer" | "admin" — stored so the UI can style without extra populates
+    // "customer" | "admin" | "rider" — stored so the UI can style without extra populates
     senderRole: {
       type: String,
-      enum: ["customer", "admin"],
+      enum: ["customer", "admin", "rider"],
       required: true,
     },
 

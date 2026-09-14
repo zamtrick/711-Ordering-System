@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 
 import User from "../../models/User.js";
 import Rider from "../../models/Rider.js";
+import Order from "../../models/Order.js";
+import { ACTIVE_DELIVERY_STATUSES } from "../../utils/riderLoad.js";
 import { notifyRiderCreated } from "../../services/email.service.js";
 import Branch from "../../models/Branch.js";
 import {
@@ -65,13 +67,35 @@ export const getRiders = async (req, res) => {
       .skip(paginated ? skip : 0)
       .limit(paginated ? limit : 0);
 
+    // Active-delivery load per rider so small branches (1-2 riders) can see
+    // at a glance who is free vs overloaded. Computed in one aggregation.
+    const riderIds = riders.map((r) => r._id);
+    const loadRows = riderIds.length
+      ? await Order.aggregate([
+          {
+            $match: {
+              rider: { $in: riderIds },
+              deliveryStatus: { $in: ACTIVE_DELIVERY_STATUSES },
+            },
+          },
+          { $group: { _id: "$rider", activeDeliveries: { $sum: 1 } } },
+        ])
+      : [];
+    const loadByRider = new Map(
+      loadRows.map((row) => [row._id.toString(), row.activeDeliveries]),
+    );
+    const ridersWithLoad = riders.map((r) => ({
+      ...(typeof r.toJSON === "function" ? r.toJSON() : r),
+      activeDeliveries: loadByRider.get(r._id.toString()) ?? 0,
+    }));
+
     // An empty list is a valid 200 — the UI shows its own empty state.
     // (A 404 here made the client fire a false "Failed to load" toast.)
 
     return res.status(200).json({
       success: true,
       message: "Riders retrieved successfully",
-      riders,
+      riders: ridersWithLoad,
       ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
     });
   } catch (err) {
@@ -638,12 +662,7 @@ export const updateRiderById = async (req, res) => {
       data: updatedRider,
     });
   } catch (err) {
-    console.error("Update rider error:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return handleRiderError(err, res);
   }
 };
 

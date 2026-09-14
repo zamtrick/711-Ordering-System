@@ -21,6 +21,7 @@ import {
   Check,
   Plus,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react-native";
 import { router } from "expo-router";
 
@@ -51,6 +52,8 @@ type Branch = {
   openingTime?: string;
   closingTime?: string;
   paymentMethods?: string[];
+  deliveryRange?: number;
+  coordinates?: { lat?: number | null; lng?: number | null };
 };
 
 type SavedAddress = {
@@ -92,6 +95,23 @@ const PAYMENT_LABELS: Record<string, string> = {
 
 const paymentLabel = (m: string) => PAYMENT_LABELS[m] ?? m;
 
+/**
+ * Haversine distance between two points in km — mirrors the server-side
+ * check so the app can warn before the customer even places the order.
+ */
+const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+};
+
+const DEFAULT_RANGE_KM = 2;
+
 // --------------------------------------------------
 // SCREEN
 // --------------------------------------------------
@@ -106,6 +126,7 @@ export default function Checkout() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [deliveryFee, setDeliveryFee] = useState(0);
+  const [defaultRangeKm, setDefaultRangeKm] = useState<number>(DEFAULT_RANGE_KM);
   const [loading, setLoading] = useState(true);
 
   // ── selections ───────────────────────────────────
@@ -125,6 +146,31 @@ export default function Checkout() {
 
   // ── computed ─────────────────────────────────────
   const total = subtotal + (subtotal > 0 ? deliveryFee : 0);
+
+  // Effective range for the selected branch (branch override > default).
+  const branchRangeKm =
+    selectedBranch &&
+    typeof selectedBranch.deliveryRange === "number" &&
+    selectedBranch.deliveryRange > 0
+      ? selectedBranch.deliveryRange
+      : defaultRangeKm;
+
+  // Distance from the selected branch to the pinned custom address (km),
+  // or null when the branch has no map location or no pin was placed.
+  const customAddressDistanceKm =
+    useCustomAddress &&
+    customCoords &&
+    selectedBranch?.coordinates?.lat != null &&
+    selectedBranch?.coordinates?.lng != null
+      ? haversineKm(
+          selectedBranch.coordinates.lat,
+          selectedBranch.coordinates.lng,
+          customCoords.latitude,
+          customCoords.longitude,
+        )
+      : null;
+  const customAddressOutOfRange =
+    customAddressDistanceKm !== null && customAddressDistanceKm > branchRangeKm;
 
   const resolvedDeliveryAddress = useCustomAddress
     ? customAddress.trim()
@@ -148,10 +194,11 @@ export default function Checkout() {
     let mounted = true;
     const load = async () => {
       try {
-        const [branchRes, profileRes, feeRes] = await Promise.all([
+        const [branchRes, profileRes, feeRes, rangeRes] = await Promise.all([
           api.get("/customer/branches"),
           api.get("/customer/profile/me"),
           api.get("/settings/delivery-fee"),
+          api.get("/settings/delivery-range"),
         ]);
 
         const branchList: Branch[] = branchRes.data?.data ?? [];
@@ -170,6 +217,11 @@ export default function Checkout() {
 
         const fee = feeRes.data?.data?.fee;
         if (typeof fee === "number" && mounted) setDeliveryFee(fee);
+
+        const range = rangeRes.data?.data?.rangeKm;
+        if (typeof range === "number" && range > 0 && mounted) {
+          setDefaultRangeKm(range);
+        }
       } catch (err: any) {
         console.log("Checkout load error:", err);
         if (err?.response?.status === 401) router.replace("/(auth)/login");
@@ -211,6 +263,13 @@ export default function Checkout() {
       return;
     }
     if (items.length === 0) return;
+    if (customAddressOutOfRange) {
+      Alert.alert(
+        "Outside Delivery Range",
+        `This address is ~${(customAddressDistanceKm ?? 0).toFixed(1)} km from ${selectedBranch?.name ?? "the branch"}, beyond its ${branchRangeKm} km delivery range. Please pick a closer branch or a different address.`,
+      );
+      return;
+    }
 
     try {
       setPlacing(true);
@@ -221,11 +280,8 @@ export default function Checkout() {
         branch: selectedBranch._id,
         deliveryAddress: resolvedDeliveryAddress,
         paymentMethod,
-        // Forward-compatible: backend currently stores the address string
-        // and ignores this until Order.deliveryLocation lands.
-        ...(useCustomAddress && customCoords
-          ? { deliveryLocation: customCoords }
-          : {}),
+        deliveryLat: customCoords?.latitude,
+        deliveryLng: customCoords?.longitude,
       });
       console.log("[Checkout] Create order response:", JSON.stringify(orderRes.data));
 
@@ -260,18 +316,15 @@ export default function Checkout() {
           Alert.alert("Order Placed!", "Your order has been placed successfully.");
         }, 400);
       } else {
-        // Remove successfully added items from cart; keep failed ones
-        const failedNames = new Set(failures.map((f) => f.name));
-        items
-          .filter((i) => !failedNames.has(i.name))
-          .forEach((i) => removeItem(i.id));
-
+        try {
+          await api.patch(`/orders/${orderId}/cancel`);
+        } catch {}
         Alert.alert(
-          "Partially Placed",
+          "Order Failed",
           failures[0]?.message ??
-            "Some items couldn't be added (stock may have changed). They're still in your cart.",
+            "Some items couldn't be added (stock may have changed). Your order was cancelled. Please try again.",
         );
-        router.replace("/(customer)/orders");
+        return;
       }
     } catch (err: any) {
       console.log("Place order error:", err);
@@ -584,6 +637,20 @@ export default function Checkout() {
             onChange={handleMapAddress}
             colors={colors}
           />
+        )}
+
+        {/* Out-of-range warning — shown when the pinned address falls outside
+            the selected branch's delivery range. The server re-checks this on
+            order placement, this just warns before checkout. */}
+        {customAddressOutOfRange && (
+          <View style={styles.rangeWarning}>
+            <AlertTriangle size={16} color="#DA291C" />
+            <Text style={styles.rangeWarningText}>
+              This address is ~{customAddressDistanceKm?.toFixed(1)} km away — outside{" "}
+              {selectedBranch?.name ?? "the branch"}&apos;s {branchRangeKm} km delivery
+              range. Please pick a closer branch or a different address.
+            </Text>
+          </View>
         )}
 
         {/* ── ORDER SUMMARY ────────────────────────── */}
@@ -1104,6 +1171,18 @@ const styles = StyleSheet.create({
   },
 
   customToggleText: { fontSize: 13, fontWeight: "600" },
+  rangeWarning: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FFF0F0",
+    borderColor: "#DA291C",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  rangeWarningText: { flex: 1, color: "#DA291C", fontSize: 12, fontWeight: "600", lineHeight: 17 },
 
   customInputWrap: {
     flexDirection: "row",

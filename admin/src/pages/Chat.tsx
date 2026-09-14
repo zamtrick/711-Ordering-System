@@ -66,8 +66,8 @@ const formatDateLabel = (iso: string) => {
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
 
-const initials = (c: Conversation["customer"]) =>
-  `${c.firstname[0] ?? ""}${c.lastname[0] ?? ""}`.toUpperCase();
+const initials = (c: Conversation["customer"] | null | undefined) =>
+  `${c?.firstname?.[0] ?? ""}${c?.lastname?.[0] ?? ""}`.toUpperCase() || "?";
 
 // --------------------------------------------------
 // PAGE
@@ -247,13 +247,13 @@ export default function Chat() {
   // FILTER
   // --------------------------------------------------
 
-  const filtered = conversations.filter(
-    (c) =>
-      `${c.customer.firstname} ${c.customer.lastname}`
-        .toLowerCase()
-        .includes(convSearch.toLowerCase()) ||
-      c.customer.email.toLowerCase().includes(convSearch.toLowerCase()),
-  );
+  const filtered = conversations.filter((c) => {
+    if (!convSearch) return true;
+    const q = convSearch.toLowerCase();
+    const name = `${c.customer?.firstname ?? ""} ${c.customer?.lastname ?? ""}`.toLowerCase();
+    const email = (c.customer?.email ?? "").toLowerCase();
+    return name.includes(q) || email.includes(q);
+  });
 
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unreadAdmin ?? 0), 0);
 
@@ -408,7 +408,7 @@ export default function Chat() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <p className={`text-sm font-semibold truncate ${isActive ? "text-accent-ink" : headline}`}>
-                        {conv.customer.firstname} {conv.customer.lastname}
+                        {conv.customer?.firstname ?? "Deleted"} {conv.customer?.lastname ?? "user"}
                       </p>
                       {conv.lastMessageAt && (
                         <p className={`text-xs shrink-0 ml-1 ${muted}`}>
@@ -459,10 +459,10 @@ export default function Chat() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-bold truncate ${headline}`}>
-                  {activeConv.customer.firstname} {activeConv.customer.lastname}
+                  {activeConv.customer?.firstname ?? "Deleted"} {activeConv.customer?.lastname ?? "user"}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className={`text-xs truncate ${muted}`}>{activeConv.customer.email}</p>
+                  <p className={`text-xs truncate ${muted}`}>{activeConv.customer?.email ?? "—"}</p>
                   {activeConv.branch && (
                     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                       isDark ? "bg-accent-soft text-accent-ink" : "bg-accent-soft text-accent"
@@ -542,7 +542,7 @@ export default function Chat() {
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                               isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"
                             }`}>
-                              {user ? `${user.firstname[0]}${user.lastname[0]}`.toUpperCase() : "A"}
+                              {user ? `${user.firstname?.[0] ?? ""}${user.lastname?.[0] ?? ""}`.toUpperCase() || "A" : "A"}
                             </div>
                           )}
                         </div>

@@ -33,6 +33,13 @@ type Order = {
   deliveryStatus?: "unassigned" | "assigned" | "picked_up" | "in_transit" | "delivered";
   totalAmount: number;
   createdAt: string;
+  rider?: {
+    _id?: string;
+    phone?: string;
+    vehicleType?: string;
+    vehiclePlateNumber?: string;
+    user?: { firstname?: string; lastname?: string } | null;
+  } | string | null;
   orderItems: {
     _id: string;
     quantity: number;
@@ -197,10 +204,12 @@ const Orders = () => {
           try {
             setCancellingId(orderId);
             await api.patch(`/orders/${orderId}/cancel`);
-            // Update local state immediately
+            // Update local state immediately (rider released server-side too)
             setOrders((prev) =>
               prev.map((o) =>
-                o._id === orderId ? { ...o, status: "cancelled" } : o,
+                o._id === orderId
+                  ? { ...o, status: "cancelled", rider: null, deliveryStatus: "unassigned" }
+                  : o,
               ),
             );
           } catch (err: any) {
@@ -224,7 +233,7 @@ const Orders = () => {
       ? orders
       : orders.filter(
           (o) =>
-            STATUS_LABEL[o.status].toLowerCase() ===
+            (STATUS_LABEL[o.status] ?? o.status ?? "").toLowerCase() ===
             selectedFilter.toLowerCase(),
         );
 
@@ -310,8 +319,8 @@ const Orders = () => {
         {/* Orders */}
         <View style={styles.ordersContainer}>
           {filtered.map((order) => {
-            const statusColor = STATUS_COLOR[order.status];
-            const statusBg = STATUS_BG[order.status];
+            const statusColor = STATUS_COLOR[order.status] ?? "#888888";
+            const statusBg = STATUS_BG[order.status] ?? "#F0F0F0";
             const cancelling = cancellingId === order._id;
             const canCancel =
               order.status === "pending" || order.status === "processing";
@@ -338,7 +347,7 @@ const Orders = () => {
                 <View style={styles.orderHeader}>
                   <View>
                     <Text style={[styles.orderId, { color: colors.headline }]}>
-                      #{order._id.slice(-6).toUpperCase()}
+                      #{(order._id ?? "").slice(-6).toUpperCase() || "—"}
                     </Text>
                     <Text style={[styles.orderDate, { color: colors.muted }]}>
                       {formatDate(order.createdAt)}
@@ -352,7 +361,7 @@ const Orders = () => {
                       style={[styles.statusDot, { backgroundColor: statusColor }]}
                     />
                     <Text style={[styles.statusText, { color: statusColor }]}>
-                      {STATUS_LABEL[order.status]}
+                      {STATUS_LABEL[order.status] ?? order.status ?? "Unknown"}
                     </Text>
                   </View>
                 </View>
@@ -393,11 +402,15 @@ const Orders = () => {
                 {displayStage && (
                   <Text style={[styles.stageLabel, { color: colors.muted }]}>
                     {STAGE_LABEL[displayStage]}
+                    {typeof order.rider === "object" &&
+                      order.rider !== null &&
+                      order.rider.user &&
+                      ` • ${`${order.rider.user.firstname ?? ""} ${order.rider.user.lastname ?? ""}`.trim()}`}
                   </Text>
                 )}
 
                 {/* Items */}
-                {order.orderItems.length > 0 && (
+                {(order.orderItems ?? []).length > 0 && (
                   <>
                     <View
                       style={[
@@ -407,7 +420,7 @@ const Orders = () => {
                     />
 
                     <View style={styles.items}>
-                      {order.orderItems.slice(0, 3).map((item) => (
+                      {(order.orderItems ?? []).slice(0, 3).map((item) => (
                         <View key={item._id} style={styles.item}>
                           <View
                             style={[
@@ -440,9 +453,9 @@ const Orders = () => {
                         </View>
                       ))}
 
-                      {order.orderItems.length > 3 && (
+                      {(order.orderItems ?? []).length > 3 && (
                         <Text style={[styles.moreItems, { color: colors.muted }]}>
-                          +{order.orderItems.length - 3} more item(s)
+                          +{(order.orderItems ?? []).length - 3} more item(s)
                         </Text>
                       )}
                     </View>
@@ -462,7 +475,7 @@ const Orders = () => {
                         : "Total"}
                     </Text>
                     <Text style={[styles.total, { color: "#007A53" }]}>
-                      ₱{order.totalAmount.toFixed(2)}
+                      ₱{(order.totalAmount ?? 0).toFixed(2)}
                     </Text>
                   </View>
 

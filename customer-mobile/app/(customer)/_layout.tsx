@@ -70,20 +70,41 @@ const CustomerTabs = () => {
   const { socket } = useSocket();
 
   const [unreadChat, setUnreadChat] = useState(0);
-  const convIdRef = useRef<string | null>(null);
+  // Per-conversation unread counts — the badge is their sum.
+  const unreadByConvoRef = useRef<Map<string, number>>(new Map());
+  const sumUnread = () => {
+    let s = 0;
+    unreadByConvoRef.current.forEach((n) => { s += n; });
+    return s;
+  };
 
   useEffect(() => {
-    // Seed the unread badge from the server
-    api
-      .get("/chat/conversation")
-      .then((res) => {
-        const convo = res.data?.data;
-        if (convo?._id) {
-          convIdRef.current = convo._id;
-          setUnreadChat(convo.unreadCustomer ?? 0);
-        }
-      })
-      .catch(() => {});
+    // Seed the unread badge from the server. Customers have one conversation
+    // per branch, and GET /chat/conversation requires ?branchId — so fan out
+    // over the branch list and sum unreadCustomer.
+    let cancelled = false;
+    (async () => {
+      try {
+        const branchesRes = await api.get("/customer/branches");
+        const branches: { _id: string }[] = branchesRes.data?.data ?? [];
+        const convos = await Promise.all(
+          branches.map((b) =>
+            api
+              .get("/chat/conversation", { params: { branchId: b._id } })
+              .then((r) => r.data?.data)
+              .catch(() => null),
+          ),
+        );
+        if (cancelled) return;
+        unreadByConvoRef.current = new Map(
+          convos
+            .filter((c) => c?._id)
+            .map((c) => [c._id, c.unreadCustomer ?? 0]),
+        );
+        setUnreadChat(sumUnread());
+      } catch {}
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Keep badge live via socket
@@ -91,9 +112,9 @@ const CustomerTabs = () => {
     if (!socket) return;
 
     const handleUpdate = (convo: { _id?: string; unreadCustomer?: number }) => {
-      if (convIdRef.current && convo._id === convIdRef.current) {
-        setUnreadChat(convo.unreadCustomer ?? 0);
-      }
+      if (!convo._id) return;
+      unreadByConvoRef.current.set(convo._id, convo.unreadCustomer ?? 0);
+      setUnreadChat(sumUnread());
     };
 
     socket.on("conversation_updated", handleUpdate);
@@ -214,6 +235,15 @@ const CustomerTabs = () => {
       {/* Hidden screen — product detail, opened by tapping a product card */}
       <Tabs.Screen
         name="product/[id]"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      {/* Hidden screen — per-order rider chat, opened from order detail */}
+      <Tabs.Screen
+        name="rider-chat"
         options={{
           href: null,
           headerShown: false,

@@ -189,7 +189,16 @@ export const updateProductById = async (req, res) => {
         return res.status(409).json({ success: false, message: "SKU already exists" });
       }
     }
-    const product = await Product.findByIdAndUpdate(id, { sku, barcode, name, description, categoryId, price, stock }, { new: true, runValidators: true }).populate("categoryId");
+    // Only set provided fields — passing `undefined` would unset existing values
+    const patch = {};
+    if (sku !== undefined) patch.sku = sku;
+    if (barcode !== undefined) patch.barcode = barcode;
+    if (name !== undefined) patch.name = name;
+    if (description !== undefined) patch.description = description;
+    if (categoryId !== undefined) patch.categoryId = categoryId;
+    if (price !== undefined) patch.price = price;
+    if (stock !== undefined) patch.stock = stock;
+    const product = await Product.findByIdAndUpdate(id, { $set: patch }, { new: true, runValidators: true }).populate("categoryId");
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }

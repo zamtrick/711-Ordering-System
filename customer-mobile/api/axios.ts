@@ -4,10 +4,10 @@ import { CookieJar } from "tough-cookie";
 import Constants from "expo-constants";
 
 // Base URL comes from app.json → extra.apiUrl so you only need to change it
-// in one place. Fall back to localhost for web/simulator convenience.
-const baseURL: string =
+// in one place. Fall back to dev LAN (no localhost-on-device trap).
+export const baseURL: string =
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
-  "http://localhost:5000/api";
+  "http://192.168.254.181:5000/api";
 
 // Persist cookies across requests (needed for httpOnly cookie-based auth on native)
 const jar = new CookieJar();
@@ -20,6 +20,7 @@ const api = wrapper(
     },
     jar,
     withCredentials: true,
+    timeout: 15000,
   }),
 );
 

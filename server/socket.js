@@ -108,6 +108,9 @@ export const initSocket = (httpServer) => {
     // Assignment-specific routing is done client-side via order.rider.
     if (role === "rider") {
       socket.join("riders_room");
+      // Personal room so the server can push this rider's delivery chats
+      // (conversation_updated) without broadcasting to every rider.
+      socket.join(`rider:${userId}`);
     }
 
     // ── join_conversation ──────────────────────────
@@ -122,6 +125,11 @@ export const initSocket = (httpServer) => {
       // Customers can only join their own conversation
       if (role === "customer" && convo.customer.toString() !== userId) return;
 
+      // Riders can only join their own delivery chats
+      if (role === "rider") {
+        if (!convo.rider || convo.rider.toString() !== userId) return;
+      }
+
       // Branch admins can only join conversations for their branch.
       // convo.branch may be absent on legacy documents — allow those through
       // so old data doesn't permanently break; new conversations always have it.
@@ -131,8 +139,10 @@ export const initSocket = (httpServer) => {
 
       socket.join(`conv:${conversationId}`);
 
-      // Reset unread counter and mark messages read for this side
-      const otherRole = role === "admin" ? "customer" : "admin";
+      // Reset unread counter and mark messages read for this side.
+      // Order chats are customer<->rider; branch threads are customer<->admin.
+      const otherRole =
+        role === "rider" ? "customer" : convo.rider ? "rider" : "admin";
       await Message.updateMany(
         { conversation: conversationId, senderRole: otherRole, read: false },
         { $set: { read: true } },
@@ -148,6 +158,12 @@ export const initSocket = (httpServer) => {
             unreadAdmin: 0,
           });
         }
+      } else if (role === "rider") {
+        await Conversation.findByIdAndUpdate(conversationId, { unreadRider: 0 });
+        io.to(`rider:${userId}`).emit("conversation_updated", {
+          conversationId,
+          unreadRider: 0,
+        });
       } else {
         await Conversation.findByIdAndUpdate(conversationId, { unreadCustomer: 0 });
         io.to(`customer:${userId}`).emit("conversation_updated", {
@@ -182,6 +198,13 @@ export const initSocket = (httpServer) => {
           return ack?.({ success: false, message: "Forbidden" });
         }
 
+        // Riders can only message their own delivery chats
+        if (role === "rider") {
+          if (!convo.rider || convo.rider.toString() !== userId) {
+            return ack?.({ success: false, message: "Forbidden" });
+          }
+        }
+
         // Branch admins can only message conversations belonging to their branch.
         // Legacy conversations without a branch field are allowed through.
         if (role === "admin" && socket.adminBranchId && convo.branch) {
@@ -193,7 +216,7 @@ export const initSocket = (httpServer) => {
           }
         }
 
-        const senderRole = role === "admin" || role === "superadmin" ? "admin" : "customer";
+        const senderRole = role === "rider" ? "rider" : role === "admin" || role === "superadmin" ? "admin" : "customer";
 
         // Persist
         const message = await Message.create({
@@ -208,11 +231,19 @@ export const initSocket = (httpServer) => {
           "firstname lastname",
         );
 
-        // Update conversation snapshot
+        // Update conversation snapshot. Order chats notify the other two
+        // sides; branch threads keep the original customer<->admin counters.
+        const isOrderChat = !!convo.order;
         const unreadUpdate =
           senderRole === "customer"
-            ? { $inc: { unreadAdmin: 1 } }
-            : { $inc: { unreadCustomer: 1 } };
+            ? isOrderChat
+              ? { $inc: { unreadAdmin: 1, unreadRider: 1 } }
+              : { $inc: { unreadAdmin: 1 } }
+            : senderRole === "rider"
+              ? { $inc: { unreadAdmin: 1, unreadCustomer: 1 } }
+              : isOrderChat
+                ? { $inc: { unreadCustomer: 1, unreadRider: 1 } }
+                : { $inc: { unreadCustomer: 1 } };
 
         await Conversation.findByIdAndUpdate(conversationId, {
           lastMessage: text.trim(),
@@ -228,12 +259,22 @@ export const initSocket = (httpServer) => {
         // Broadcast the message to everyone in this conversation room
         io.to(`conv:${conversationId}`).emit("new_message", populated);
 
-        // Notify the other side's unread counter even if pane isn't open.
-        // Route to the conversation's branch room (branch admin) + admin_room
-        // (superadmin). If the customer sent, notify staff; if staff sent,
-        // notify the customer.
+        // Notify the other sides' unread counters even if pane isn't open.
         const convBranchId = convo.branch?.toString();
+        const convoRiderId = convo.rider?.toString();
         if (senderRole === "customer") {
+          if (convBranchId) {
+            io.to(`branch_room:${convBranchId}`).emit("conversation_updated", updatedConvo);
+          }
+          io.to("admin_room").emit("conversation_updated", updatedConvo);
+          if (isOrderChat && convoRiderId) {
+            io.to(`rider:${convoRiderId}`).emit("conversation_updated", updatedConvo);
+          }
+        } else if (senderRole === "rider") {
+          io.to(`customer:${convo.customer.toString()}`).emit(
+            "conversation_updated",
+            updatedConvo,
+          );
           if (convBranchId) {
             io.to(`branch_room:${convBranchId}`).emit("conversation_updated", updatedConvo);
           }
@@ -243,6 +284,9 @@ export const initSocket = (httpServer) => {
             "conversation_updated",
             updatedConvo,
           );
+          if (isOrderChat && convoRiderId) {
+            io.to(`rider:${convoRiderId}`).emit("conversation_updated", updatedConvo);
+          }
         }
 
         ack?.({ success: true, data: populated });

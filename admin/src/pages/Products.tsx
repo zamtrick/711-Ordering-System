@@ -279,7 +279,7 @@ export default function Products() {
   const loading = isFetching && !data;
 
   useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(meta.totalPages);
+    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
   }, [meta, page]);
 
   // ------------------------------------------------------------------
@@ -522,18 +522,14 @@ export default function Products() {
                         </td>
                       )}
                       <td className="px-4 py-3">
-                        {isSuperadmin ? (
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-sunken cursor-pointer">
-                              <Pencil size={14} className="text-info" />
-                            </button>
-                            <button onClick={() => setDeleteProduct(p)} className="p-1.5 rounded-lg hover:bg-danger-soft cursor-pointer">
-                              <Trash2 size={14} className="text-danger" />
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-faint">—</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEdit(p)} disabled={readOnly} title={readOnly ? "Disabled by superadmin" : "Edit product"} className="p-1.5 rounded-lg hover:bg-sunken cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Pencil size={14} className="text-info" />
+                          </button>
+                          <button onClick={() => setDeleteProduct(p)} disabled={readOnly} title={readOnly ? "Disabled by superadmin" : "Delete product"} className="p-1.5 rounded-lg hover:bg-danger-soft cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Trash2 size={14} className="text-danger" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

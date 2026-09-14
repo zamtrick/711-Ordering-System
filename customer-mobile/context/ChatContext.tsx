@@ -54,7 +54,11 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 // (which fetches the JWT via /auth/token and passes it in the
 // handshake auth). This context no longer opens its own socket.
 
-export const ChatProvider = ({ children }: { children: ReactNode }) => {
+// NOTE: currently unused — chat.tsx implements the multi-branch flow directly
+// (one conversation per branch, branchId passed explicitly). Kept for future
+// reuse. A branchId is required because GET /chat/conversation 400s without
+// ?branchId; with no branchId the provider simply stays empty.
+export const ChatProvider = ({ children, branchId }: { children: ReactNode; branchId?: string }) => {
   const { socket, connected } = useSocket();
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -62,13 +66,14 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   const [unread, setUnread] = useState(0);
 
   // --------------------------------------------------
-  // Load or create the conversation
+  // Load or create the conversation for the given branch
   // --------------------------------------------------
   useEffect(() => {
+    if (!branchId) return;
     let cancelled = false;
 
     api
-      .get("/chat/conversation")
+      .get("/chat/conversation", { params: { branchId } })
       .then((res) => {
         if (cancelled) return;
         const convo: Conversation = res.data?.data;
@@ -82,7 +87,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [branchId]);
 
   // --------------------------------------------------
   // Real-time — conversation updates + new messages

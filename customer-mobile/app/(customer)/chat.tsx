@@ -154,6 +154,7 @@ export default function Chat() {
       socket.emit("leave_conversation", { conversationId: convIdRef.current });
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset chat when branch changes
     setConversation(null);
     setMessages([]);
     convIdRef.current = null;
