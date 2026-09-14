@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import {
   PackageSearch,
   Store,
   Check,
-  LayoutGrid,
 } from "lucide-react-native";
 
 import useTheme from "@/hooks/useTheme";
@@ -60,6 +59,24 @@ type Product = {
   ratingCount?: number;
 };
 
+// Category chips — same emoji map as the Home tab so the two pages feel
+// like one design system.
+const CATEGORY_ICONS: Record<string, string> = {
+  food: "🍔",
+  drinks: "🥤",
+  snacks: "🍿",
+  grocery: "🛒",
+  "personal care": "🧴",
+  bakery: "🥐",
+  "canned goods": "🥫",
+  "dairy & chilled": "🥛",
+  "frozen goods": "🧊",
+  desserts: "🍰",
+};
+
+const iconFor = (name: string) =>
+  CATEGORY_ICONS[(name ?? "").toLowerCase()] ?? "🛍️";
+
 // --------------------------------------------------
 // SCREEN
 // --------------------------------------------------
@@ -68,8 +85,9 @@ const Products = () => {
   const { theme, isDark } = useTheme();
   const { colors } = theme;
 
-  // Soft brand tint for selected/accent backgrounds (theme-aware)
-  const primaryTint = isDark ? "rgba(7,128,128,0.16)" : "rgba(0,122,83,0.08)";
+  // Soft brand tint for selected/accent backgrounds (theme-aware) —
+  // matches index.tsx (Home).
+  const primaryTint = isDark ? "rgba(0,122,83,0.22)" : "rgba(0,122,83,0.08)";
 
   const { addItem, totalCount, items } = useCart();
 
@@ -104,9 +122,9 @@ const Products = () => {
         setError("");
         setLoading(true);
 
-        const params: Record<string, string> = {};
+        const reqParams: Record<string, string> = {};
         if (selectedBranchId !== ALL_BRANCHES_ID) {
-          params.branchId = selectedBranchId;
+          reqParams.branchId = selectedBranchId;
         }
 
         // Fire both requests at the same time — don't wait for branches
@@ -115,7 +133,7 @@ const Products = () => {
           selectedBranchId === ALL_BRANCHES_ID
             ? api.get("/customer/branches")
             : Promise.resolve(null),
-          api.get("/customer/products", { params }),
+          api.get("/customer/products", { params: reqParams }),
         ]);
 
         if (cancelled) return;
@@ -171,30 +189,44 @@ const Products = () => {
   // CLIENT-SIDE FILTER (category + search)
   // --------------------------------------------------
 
-  const filtered = products.filter((p) => {
-    const matchCat =
-      selectedCategory === "All" || p.categoryId?.name === selectedCategory;
-    const matchSearch = (p.name ?? "").toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const filtered = useMemo(
+    () =>
+      products.filter((p) => {
+        const matchCat =
+          selectedCategory === "All" || p.categoryId?.name === selectedCategory;
+        const q = search.trim().toLowerCase();
+        const matchSearch = q === "" || (p.name ?? "").toLowerCase().includes(q);
+        return matchCat && matchSearch;
+      }),
+    [products, selectedCategory, search],
+  );
 
   // --------------------------------------------------
   // ADD TO CART
   // --------------------------------------------------
 
-  const handleAdd = (product: Product) => {
-    const inCart = items.find((i) => i.id === product._id)?.quantity ?? 0;
-    if (inCart >= product.stock) return;
+  const handleAdd = useCallback(
+    (product: Product) => {
+      const inCart = items.find((i) => i.id === product._id)?.quantity ?? 0;
+      if (inCart >= product.stock) return;
 
-    addItem({
-      id: product._id,
-      name: product.name,
-      category: product.categoryId?.name ?? "Product",
-      price: product.price,
-      image: product.image,
-    });
+      addItem({
+        id: product._id,
+        name: product.name,
+        category: product.categoryId?.name ?? "Product",
+        price: product.price,
+        image: product.image,
+      });
+      playTap();
+    },
+    [items, addItem],
+  );
+
+  const openProduct = useCallback((id: string) => {
     playTap();
-  };
+    // Cast: route is valid once Expo regenerates typed routes on next dev start
+    router.push(`/(customer)/product/${id}` as never);
+  }, []);
 
   // --------------------------------------------------
   // LOADING / ERROR
@@ -232,23 +264,23 @@ const Products = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* ── HEADER ─────────────────────────────── */}
+        {/* ── HEADER — same pattern as Home ─────────── */}
         <View style={styles.header}>
           <View>
             <Text style={[styles.smallTitle, { color: colors.muted }]}>Browse</Text>
             <Text style={[styles.title, { color: colors.headline }]}>Our Products</Text>
           </View>
+
           <Pressable
             onPress={() => router.push("/(customer)/cart")}
             style={[
               styles.cartButton,
-              isDark
-                ? { backgroundColor: colors.surface, borderColor: colors.border }
-                : { backgroundColor: colors.surface },
-              isDark ? null : styles.softShadow,
+              { backgroundColor: colors.surface },
+              isDark ? { borderColor: colors.border } : styles.softShadow,
             ]}
           >
-            <ShoppingCart size={21} color={colors.primary} />
+            <ShoppingCart size={22} color={colors.primary} />
+
             {totalCount > 0 && (
               <View style={styles.cartBadge}>
                 <Text style={styles.cartBadgeText}>
@@ -259,14 +291,12 @@ const Products = () => {
           </Pressable>
         </View>
 
-        {/* ── SEARCH ─────────────────────────────── */}
+        {/* ── SEARCH — same style as Home ───────────── */}
         <View
           style={[
             styles.searchContainer,
-            isDark
-              ? { backgroundColor: colors.surface, borderColor: colors.border }
-              : { backgroundColor: colors.surface },
-            isDark ? null : styles.softShadow,
+            { backgroundColor: colors.surface },
+            isDark ? { borderColor: colors.border } : styles.softShadow,
           ]}
         >
           <Search size={20} color={colors.muted} />
@@ -279,8 +309,15 @@ const Products = () => {
           />
         </View>
 
-        {/* ── BRANCH FILTER ──────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: colors.headline }]}>Branch</Text>
+        {/* ── BRANCH — Home-style rail ──────────────── */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.headline }]}>Branch</Text>
+          {selectedBranchId !== ALL_BRANCHES_ID && (
+            <Pressable onPress={() => setSelectedBranchId(ALL_BRANCHES_ID)}>
+              <Text style={[styles.seeAll, { color: colors.primary }]}>Show all</Text>
+            </Pressable>
+          )}
+        </View>
 
         <ScrollView
           horizontal
@@ -302,15 +339,13 @@ const Products = () => {
           >
             <View
               style={[
-                styles.branchIconTile,
-                {
-                  backgroundColor:
-                    selectedBranchId === ALL_BRANCHES_ID ? colors.primary : primaryTint,
-                },
+                styles.branchIconCircle,
+                { backgroundColor: colors.background },
+                selectedBranchId === ALL_BRANCHES_ID && { backgroundColor: colors.primary },
               ]}
             >
               <Store
-                size={16}
+                size={17}
                 color={selectedBranchId === ALL_BRANCHES_ID ? "#FFFFFF" : colors.primary}
               />
             </View>
@@ -348,11 +383,12 @@ const Products = () => {
               >
                 <View
                   style={[
-                    styles.branchIconTile,
-                    { backgroundColor: active ? colors.primary : primaryTint },
+                    styles.branchIconCircle,
+                    { backgroundColor: colors.background },
+                    active && { backgroundColor: colors.primary },
                   ]}
                 >
-                  <Store size={16} color={active ? "#FFFFFF" : colors.primary} />
+                  <Store size={17} color={active ? "#FFFFFF" : colors.primary} />
                 </View>
                 <View style={styles.branchTextWrap}>
                   <Text
@@ -375,15 +411,17 @@ const Products = () => {
           })}
         </ScrollView>
 
-        {/* ── CATEGORIES ─────────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: colors.headline }]}>
-          Categories
-        </Text>
+        {/* ── CATEGORIES — identical to Home tiles ──── */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.headline }]}>
+            Categories
+          </Text>
+        </View>
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterList}
+          contentContainerStyle={styles.categoryList}
         >
           {categories.map((cat) => {
             const active = selectedCategory === cat.name;
@@ -405,19 +443,17 @@ const Products = () => {
                   {cat.image ? (
                     <Image
                       source={{ uri: cat.image }}
-                      style={styles.categoryImage}
+                      style={styles.categoryImageContent}
                       resizeMode="cover"
                     />
                   ) : (
-                    <LayoutGrid
-                      size={22}
-                      color={active ? colors.primary : colors.muted}
-                    />
+                    <Text style={styles.categoryIcon}>{iconFor(cat.name)}</Text>
                   )}
                 </View>
+
                 <Text
                   style={[
-                    styles.categoryTileLabel,
+                    styles.categoryName,
                     { color: active ? colors.primary : colors.headline },
                   ]}
                   numberOfLines={1}
@@ -429,7 +465,7 @@ const Products = () => {
           })}
         </ScrollView>
 
-        {/* ── PRODUCTS ───────────────────────────── */}
+        {/* ── PRODUCTS — same grid + cards as Home ──── */}
         <View style={styles.productHeader}>
           <Text style={[styles.sectionTitle, { color: colors.headline }]}>
             {selectedBranch ? `${selectedBranch.name} Products` : "All Products"}
@@ -443,15 +479,10 @@ const Products = () => {
           {filtered.map((product) => (
             <Pressable
               key={product._id}
-              onPress={() => {
-                playTap();
-                // Cast: route is valid once Expo regenerates typed routes on next dev start
-                router.push(`/(customer)/product/${product._id}` as never);
-              }}
+              onPress={() => openProduct(product._id)}
               style={[
                 styles.productCard,
                 { backgroundColor: colors.surface },
-                // Borderless + soft shadow in light mode; subtle border in dark
                 isDark ? { borderColor: colors.border } : styles.softShadow,
               ]}
             >
@@ -496,10 +527,7 @@ const Products = () => {
                 {product.stock > 0 && (
                   <Pressable
                     onPress={() => handleAdd(product)}
-                    style={[
-                      styles.addButton,
-                      { backgroundColor: colors.primary },
-                    ]}
+                    style={[styles.addButton, { backgroundColor: colors.primary }]}
                   >
                     <Plus size={19} color="#FFFFFF" />
                   </Pressable>
@@ -558,16 +586,7 @@ const Products = () => {
 
         {filtered.length === 0 && !loading && (
           <View style={styles.emptyContainer}>
-            <View
-              style={[
-                styles.emptyIcon,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(7,128,128,0.14)"
-                    : "rgba(0,122,83,0.08)",
-                },
-              ]}
-            >
+            <View style={[styles.emptyIcon, { backgroundColor: primaryTint }]}>
               <PackageSearch size={34} color={colors.primary} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.headline }]}>
@@ -617,7 +636,7 @@ const styles = StyleSheet.create({
   retryButton: {
     height: 44,
     paddingHorizontal: 24,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: "#007A53",
     alignItems: "center",
     justifyContent: "center",
@@ -628,7 +647,7 @@ const styles = StyleSheet.create({
 
   content: { padding: 20, paddingBottom: 35 },
 
-  // Soft elevation used on cards / search / cart button (light mode)
+  // Soft elevation — matches index.tsx (Home)
   softShadow: {
     shadowColor: "#0A3D3D",
     shadowOpacity: 0.08,
@@ -646,7 +665,7 @@ const styles = StyleSheet.create({
 
   smallTitle: { fontSize: 14, marginBottom: 3 },
 
-  title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: "800" },
 
   cartButton: {
     width: 46,
@@ -681,15 +700,24 @@ const styles = StyleSheet.create({
 
   searchInput: { flex: 1, fontSize: 14, marginLeft: 10 },
 
-  sectionTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
-
-  filterList: {
-    gap: 9,
-    paddingTop: 13,
-    paddingBottom: 18,
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
   },
 
-  // Branch cards (horizontal rail)
+  sectionTitle: { fontSize: 16, fontWeight: "800" },
+
+  seeAll: { fontSize: 13, fontWeight: "700" },
+
+  filterList: {
+    gap: 10,
+    paddingTop: 2,
+    paddingBottom: 24,
+  },
+
+  // Branch cards — Home-style: surface card, circular icon tile
   branchCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -701,10 +729,10 @@ const styles = StyleSheet.create({
     maxWidth: 235,
   },
 
-  branchIconTile: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+  branchIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -727,7 +755,12 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
-  // Category tiles (circular, image-first)
+  categoryList: {
+    gap: 10,
+    paddingBottom: 24,
+  },
+
+  // Circular category tiles — identical geometry to Home
   categoryTile: {
     width: 78,
     alignItems: "center",
@@ -743,16 +776,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  categoryImage: {
+  categoryImageContent: {
     width: "100%",
     height: "100%",
   },
 
-  categoryTileLabel: {
+  categoryIcon: {
+    fontSize: 24,
+  },
+
+  categoryName: {
     fontSize: 11.5,
     fontWeight: "600",
-    marginTop: 7,
     textAlign: "center",
+    marginTop: 7,
   },
 
   productHeader: {
@@ -770,7 +807,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  // Borderless card (light) / bordered card (dark)
+  // Borderless card (light) / bordered card (dark) — matches Home cards
   productCard: {
     width: "48%",
     borderRadius: 20,
@@ -792,7 +829,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
 
-  // Floating add-to-cart button over the image
+  // Floating add-to-cart over the image — matches Home
   addButton: {
     position: "absolute",
     right: 8,

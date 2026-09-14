@@ -80,7 +80,8 @@ const Home = () => {
   const { colors } = theme;
 
   // Soft brand tint for accents (theme-aware) — matches products.tsx
-  const primaryTint = isDark ? "rgba(7,128,128,0.16)" : "rgba(0,122,83,0.08)";
+  // Brand tint mirrors the 7-Eleven green primary in both modes
+  const primaryTint = isDark ? "rgba(0,122,83,0.22)" : "rgba(0,122,83,0.08)";
 
   const { addItem, items, totalCount } = useCart();
 

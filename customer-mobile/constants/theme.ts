@@ -55,8 +55,10 @@ export const DarkTheme = {
     background: "#121212",
     surface: "#1E1E1E",
 
-    primary: "#078080",
-    primaryDark: "#056666",
+    // Same 7-Eleven green in both modes — keeps the brand identity consistent
+    // and avoids the teal reading as "blue" on the dark surface.
+    primary: "#007A53",
+    primaryDark: "#006B4A",
 
     secondary: "#F45D48",
 
@@ -80,8 +82,8 @@ export const DarkTheme = {
 
 /*Background     #F8F5F2  → warm cream
 Surface        #FFFFFE  → cards / tab bar
-Primary        #078080  → active tabs, buttons
-Primary Dark   #056666  → pressed/hover states
+Primary        #007A53  → active tabs, buttons (7-Eleven green, both modes)
+Primary Dark   #006B4A  → pressed/hover states
 Secondary      #F45D48  → alerts, badges, important actions
 Headline       #232323  → headings
 Paragraph      #222525  → normal text

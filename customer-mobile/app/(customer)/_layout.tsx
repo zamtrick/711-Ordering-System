@@ -125,7 +125,7 @@ const CustomerTabs = () => {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#078080",
+        tabBarActiveTintColor: "#007A53",
         tabBarInactiveTintColor: "#888",
         tabBarStyle: {
           //attribute of the taskbar
