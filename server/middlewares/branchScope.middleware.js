@@ -14,13 +14,16 @@ import Admin from "../models/Admin.js";
 // address a specific :branchId.
 // --------------------------------------------------
 
-// Variant of resolveAdminBranch that never rejects customers — it simply
-// passes them through (req.adminBranchId stays undefined). Staff get the
-// same treatment as resolveAdminBranch. Use on routes shared by customers
-// and staff (e.g. chat) where a 403 for "no branch" must not hit customers.
+// Variant of resolveAdminBranch that never rejects non-admin roles —
+// customers and riders simply pass through (req.adminBranchId stays
+// undefined). Only admins/superadmins get branch resolution. Use on routes
+// shared by customers, riders and staff (e.g. chat) where a 403 for "no
+// branch" must not hit customers or riders: riders have no Admin document,
+// so resolving their branch would always fail with "No branch assigned to
+// this admin account" and break the per-order delivery chat.
 export const resolveStaffBranch = async (req, res, next) => {
   try {
-    if (req.user.role === "customer") return next();
+    if (req.user.role === "customer" || req.user.role === "rider") return next();
     return resolveAdminBranch(req, res, next);
   } catch (err) {
     return res.status(500).json({ success: false, message: "Internal Server Error" });

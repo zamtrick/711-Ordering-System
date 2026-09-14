@@ -12,9 +12,12 @@ import { resolveStaffBranch } from "../middlewares/branchScope.middleware.js";
 
 const router = express.Router();
 
-// All chat routes require a valid session and (for staff) branch resolution:
-// superadmins get req.adminBranchId = null (see everything), branch admins
-// get their branch (scoped lists/access), customers pass through untouched.
+// All chat routes require a valid session. Branch resolution only applies
+// to admins/superadmins (branch-scoped conversation lists); customers and
+// riders pass through untouched — riders have no Admin doc, so running them
+// through resolveAdminBranch would 403 "No branch assigned to this admin
+// account" and block the per-order delivery chat entirely. Rider access is
+// enforced per-route in the controllers (conversation ownership checks).
 router.use(auth, resolveStaffBranch);
 
 // Customer — get or create their own conversation
