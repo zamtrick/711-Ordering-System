@@ -7,6 +7,12 @@ import {
   branchQuery,
   isBranchScoped,
 } from "../../middlewares/branchScope.middleware.js";
+import { getAdminPermissionsMap } from "../../middlewares/adminPermissions.middleware.js";
+import {
+  parsePagination,
+  buildPaginationMeta,
+  escapeRegex,
+} from "../../utils/pagination.js";
 
 // --------------------------------------------------
 // PRODUCT CATALOGUE + BRANCH STOCK SEPARATION
@@ -17,14 +23,26 @@ import {
 //
 //   Regular admin  → GETs return the catalogue MERGED with their branch's
 //                    availability/stock (stock column shows branch stock);
-//                    writes (create/update/delete/import) are superadmin-only
-//                    because the catalogue is global — enforced here in the
-//                    controller, independent of route middleware.
+//                    writes are allowed while the superadmin's "Manage
+//                    Products" toggle is ON (Settings → Branch Admin
+//                    Permissions) and 403 when it is OFF — enforced here in
+//                    the controller, independent of route middleware.
 //   Superadmin     → GETs return the plain global catalogue and writes pass.
 // --------------------------------------------------
 
 const SUPERADMIN_ONLY_MESSAGE =
-  "The product catalogue is managed by the superadmin. Use Branch Inventory to manage your branch's availability and stock.";
+  "Managing products is disabled by superadmin — read-only access.";
+
+// Write guard. The route middleware already blocks admins when the
+// "Manage Products" toggle is OFF; this controller-side check mirrors that
+// policy so the rule holds no matter how the route is wired. Superadmin
+// always passes; admins pass only while the toggle is ON.
+const canManageCatalogue = async (req) => {
+  if (req.user?.role === "superadmin") return true;
+  if (!isBranchScoped(req)) return true;
+  const perms = await getAdminPermissionsMap();
+  return Boolean(perms.canManageProducts);
+};
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleProductError = (err, res) => {
@@ -44,7 +62,25 @@ const handleProductError = (err, res) => {
 
 export const getProducts = async (req, res) => {
   try {
-    const products = await Product.find().populate("categoryId");
+    const { page, limit, skip, search, paginated } = parsePagination(req);
+
+    // Server-side search over name and SKU
+    const query = search
+      ? {
+          $or: [
+            { name: new RegExp(escapeRegex(search), "i") },
+            { sku: new RegExp(escapeRegex(search), "i") },
+          ],
+        }
+      : {};
+
+    const total = await Product.countDocuments(query);
+
+    const products = await Product.find(query)
+      .populate("categoryId")
+      .sort({ createdAt: -1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0);
 
     // Branch admins get the catalogue merged with their branch inventory:
     //   - stock shows the branch-local value (falls back to global)
@@ -65,14 +101,24 @@ export const getProducts = async (req, res) => {
         };
       });
 
+      const pagination = paginated
+        ? buildPaginationMeta(total, page, limit)
+        : undefined;
+
       return res.status(200).json({
         success: true,
         message: "View all products",
         products: merged,
+        ...(pagination ? { pagination } : {}),
       });
     }
 
-    return res.status(200).json({ success: true, message: "View all products", products });
+    return res.status(200).json({
+      success: true,
+      message: "View all products",
+      products,
+      ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
+    });
   } catch (err) {
     console.error(err.message);
     return res.status(500).json({ success: false, message: "Internal Server Error" });
@@ -101,7 +147,7 @@ export const getProductById = async (req, res) => {
 // --------------------------------------------------
 
 export const createProduct = async (req, res) => {
-  if (isBranchScoped(req)) {
+  if (!(await canManageCatalogue(req))) {
     return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
   }
   try {
@@ -125,7 +171,7 @@ export const createProduct = async (req, res) => {
 };
 
 export const updateProductById = async (req, res) => {
-  if (isBranchScoped(req)) {
+  if (!(await canManageCatalogue(req))) {
     return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
   }
   try {
@@ -154,7 +200,7 @@ export const updateProductById = async (req, res) => {
 };
 
 export const deleteProductById = async (req, res) => {
-  if (isBranchScoped(req)) {
+  if (!(await canManageCatalogue(req))) {
     return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
   }
   try {
@@ -178,7 +224,7 @@ export const deleteProductById = async (req, res) => {
 };
 
 export const uploadProductImage = async (req, res) => {
-  if (isBranchScoped(req)) {
+  if (!(await canManageCatalogue(req))) {
     return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
   }
   try {
@@ -215,7 +261,7 @@ export const uploadProductImage = async (req, res) => {
 };
 
 export const deleteProductImage = async (req, res) => {
-  if (isBranchScoped(req)) {
+  if (!(await canManageCatalogue(req))) {
     return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
   }
   try {
@@ -243,7 +289,7 @@ export const deleteProductImage = async (req, res) => {
 };
 
 export const importProducts = async (req, res) => {
-  if (isBranchScoped(req)) {
+  if (!(await canManageCatalogue(req))) {
     return res.status(403).json({ success: false, message: SUPERADMIN_ONLY_MESSAGE });
   }
   try {
@@ -282,6 +328,7 @@ export const importProducts = async (req, res) => {
         const existing = await Product.findOne({ sku });
         if (existing) {
           results.skipped++;
+          results.errors.push(`Row skipped: SKU "${sku}" already exists`);
           continue;
         }
 

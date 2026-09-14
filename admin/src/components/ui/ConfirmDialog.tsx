@@ -39,10 +39,10 @@ export default function ConfirmDialog({
   return (
     <Modal open={open} onClose={onClose} title={title} width="max-w-sm">
       <div className="flex flex-col items-center text-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-[#FFF0F0] dark:bg-[#3D1515] flex items-center justify-center">
-          <AlertTriangle size={28} className="text-[#DA291C] dark:text-[#FF5C5C]" />
+        <div className="w-14 h-14 rounded-full bg-danger-soft flex items-center justify-center">
+          <AlertTriangle size={28} className="text-danger dark:text-danger" />
         </div>
-        <p className="text-sm text-[#555] dark:text-[#A0A0A0] leading-relaxed">{message}</p>
+        <p className="text-sm text-muted leading-relaxed">{message}</p>
         {required && (
           <div className="w-full text-left">
             <Input

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Upload, X, Tags } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/context/ThemeContext";
@@ -7,17 +8,50 @@ import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Pagination from "@/components/ui/Pagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+
+type PaginationMeta = {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+};
 
 type Category = { _id: string; name: string; description: string; isActive: boolean; image?: string; createdAt: string };
+
+type CategoriesResponse = { categories: Category[]; pagination?: PaginationMeta };
+
+const fetchCategories = ({ page, limit, search }: { page: number; limit: number; search: string }) =>
+  api
+    .get<CategoriesResponse>("/admin/categories", {
+      params: { page, limit, search: search || undefined },
+    })
+    .then((res) => res.data);
+
+function SkeletonRow() {
+  const { isDark } = useTheme();
+  return (
+    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+      ))}
+    </tr>
+  );
+}
 
 export default function Categories() {
   const { isDark } = useTheme();
   const { toasts, removeToast, success, error: toastError } = useToast();
   const { can } = useAdminPermissions();
   const readOnly = !can("canManageCategories");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [showForm, setShowForm] = useState(false);
   const [editCat, setEditCat] = useState<Category | null>(null);
   const [name, setName] = useState("");
@@ -38,17 +72,28 @@ export default function Categories() {
       ? `${apiOrigin}${image}`
       : image;
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/admin/categories");
-      setCategories(res.data?.categories ?? []);
-    } catch { toastError("Failed."); } finally { setLoading(false); }
-  };
+  // Cached per page/limit/search — placeholderData keeps the previous page's
+  // rows visible while the next page loads instead of collapsing to skeleton.
+  const { data, isFetching, error } = useQuery({
+    queryKey: ["categories", { page, limit, search: debouncedSearch }],
+    queryFn: () => fetchCategories({ page, limit, search: debouncedSearch }),
+    placeholderData: (prev) => prev,
+  });
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    if (error) toastError("Failed to load categories.");
+  }, [error, toastError]);
 
-  const filtered = categories.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const categories = data?.categories ?? [];
+  const meta = data?.pagination ?? null;
+  const loading = isFetching && !data;
+
+  // Deleted last row on the last page → step back to a valid page
+  useEffect(() => {
+    if (meta && page > meta.totalPages) setPage(meta.totalPages);
+  }, [meta, page]);
+
+  const filtered = categories;
 
   const uploadImage = async (categoryId: string, file: File) => {
     const fd = new FormData();
@@ -96,7 +141,7 @@ export default function Categories() {
       setImageFile(null);
       setImagePreview("");
       setRemoveImage(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed."); } finally { setSubmitting(false); }
   };
 
@@ -119,57 +164,57 @@ export default function Categories() {
       setImageFile(null);
       setImagePreview("");
       setRemoveImage(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
     } catch (err: unknown) { toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed."); } finally { setSubmitting(false); }
   };
 
   const handleDelete = async (confirmText?: string) => {
     if (!deleteCat) return;
     setDeleting(true);
-    try { await api.delete(`/admin/categories/${deleteCat._id}`, { data: { confirmText } }); success("Deleted."); setDeleteCat(null); fetchData(); } catch { toastError("Failed."); } finally { setDeleting(false); }
+    try { await api.delete(`/admin/categories/${deleteCat._id}`, { data: { confirmText } }); success("Deleted."); setDeleteCat(null); queryClient.invalidateQueries({ queryKey: ["categories"] }); } catch { toastError("Failed."); } finally { setDeleting(false); }
   };
 
-  const inputClass = `h-11 px-3 rounded-xl border text-sm outline-none transition-colors w-full ${isDark ? "bg-[#121212] border-[#2E2E2E] text-white focus:border-[#078080]" : "bg-white border-[#E5E2DE] text-[#232323] focus:border-[#007A53]"} focus:ring-2 focus:ring-[#007A53]/20`;
+  const inputClass = `h-11 px-3 rounded-xl border text-sm outline-none transition-colors w-full ${isDark ? "bg-surface border-line text-ink focus:border-accent" : "bg-white border-line text-ink focus:border-accent"} focus:ring-2 focus:ring-accent/20`;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div><h1 className="text-2xl font-bold text-[#232323] dark:text-white">Categories</h1><p className="text-sm text-[#777] dark:text-[#A0A0A0] mt-0.5">Manage product categories</p></div>
-        <button onClick={() => { setName(""); setDescription(""); setEditCat(null); setImageFile(null); setImagePreview(""); setRemoveImage(false); setShowForm(true); }} disabled={readOnly} className="flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white bg-[#007A53] dark:bg-[#078080] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Plus size={16} /> Add Category</button>
+        <div><h1 className="text-2xl font-bold text-ink">Categories</h1><p className="text-sm text-muted mt-0.5">Manage product categories</p></div>
+        <button onClick={() => { setName(""); setDescription(""); setEditCat(null); setImageFile(null); setImagePreview(""); setRemoveImage(false); setShowForm(true); }} disabled={readOnly} className="flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white bg-accent hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Plus size={16} /> Add Category</button>
       </div>
 
       <div className="mb-4 max-w-sm">
-        <div className={`flex items-center h-10 px-3 rounded-xl border gap-2 ${isDark ? "bg-[#1E1E1E] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>
-          <Search size={16} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />
-          <input placeholder="Search categories..." value={search} onChange={(e) => setSearch(e.target.value)} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-[#555]" : "text-[#232323] placeholder:text-[#aaa]"}`} />
+        <div className={`flex items-center h-10 px-3 rounded-xl border gap-2 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
+          <Search size={16} className={isDark ? "text-muted" : "text-muted"} />
+          <input placeholder="Search categories..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} />
         </div>
       </div>
 
-      <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-[#1E1E1E] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>          <table className="w-full text-sm">
-            <thead><tr className={`border-b ${isDark ? "bg-[#2A2A2A] border-[#2E2E2E]" : "bg-[#F8F5F2] border-[#E5E2DE]"}`}>
-              <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Image</th>
-              <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Name</th>
-            <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Description</th>
-            <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Actions</th>
+      <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>          <table className="w-full text-sm">
+            <thead><tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
+              <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Image</th>
+              <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Name</th>
+            <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Description</th>
+            <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Actions</th>
           </tr></thead>
-          <tbody>              {loading ? <tr><td colSpan={4} className="px-4 py-8 text-center text-[#777]">Loading...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={4} className="px-4 py-12 text-center text-[#777]">No categories found.</td></tr>
+          <tbody>              {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}</>
+            : filtered.length === 0 ? <tr><td colSpan={4} className="px-4 py-12 text-center text-muted">No categories found.</td></tr>
             : filtered.map((c) => (
-              <tr key={c._id} className={`border-b ${isDark ? "border-[#2E2E2E] hover:bg-[#2A2A2A]" : "border-[#F0F0F0] hover:bg-[#FAFAFA]"}`}>
+              <tr key={c._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
                 <td className="px-4 py-3">
                   {toAbsolute(c.image) ? (
                     <img src={toAbsolute(c.image)} alt={c.name} className="w-10 h-10 rounded-lg object-cover" />
                   ) : (
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
-                      <Tags size={16} className="text-[#aaa]" />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+                      <Tags size={16} className="text-faint" />
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 font-medium text-[#232323] dark:text-white">{c.name}</td>
-                <td className="px-4 py-3 text-[#555] dark:text-[#A0A0A0]">{c.description || "—"}</td>
+                <td className="px-4 py-3 font-medium text-ink">{c.name}</td>
+                <td className="px-4 py-3 text-muted">{c.description || "—"}</td>
                 <td className="px-4 py-3"><div className="flex items-center gap-1">
-                  <button onClick={() => { setEditCat(c); setName(c.name); setDescription(c.description); setImageFile(null); if (c.image) { setImagePreview(toAbsolute(c.image) ?? ""); setRemoveImage(false); } else { setImagePreview(""); setRemoveImage(false); } setShowForm(true); }} className="p-1.5 rounded-lg hover:bg-[#F0F0F0] dark:hover:bg-[#2A2A2A] cursor-pointer"><Pencil size={14} className="text-[#4F46E5]" /></button>
-                  <button onClick={() => setDeleteCat(c)} className="p-1.5 rounded-lg hover:bg-[#FFF0F0] dark:hover:bg-[#3D1515] cursor-pointer"><Trash2 size={14} className="text-[#DA291C]" /></button>
+                  <button onClick={() => { setEditCat(c); setName(c.name); setDescription(c.description); setImageFile(null); if (c.image) { setImagePreview(toAbsolute(c.image) ?? ""); setRemoveImage(false); } else { setImagePreview(""); setRemoveImage(false); } setShowForm(true); }} disabled={readOnly} className="p-1.5 rounded-lg hover:bg-sunken cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Pencil size={14} className="text-info" /></button>
+                  <button onClick={() => setDeleteCat(c)} disabled={readOnly} className="p-1.5 rounded-lg hover:bg-danger-soft cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><Trash2 size={14} className="text-danger" /></button>
                 </div></td>
               </tr>
             ))}
@@ -180,38 +225,38 @@ export default function Categories() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowForm(false)} />
-          <div className={`relative w-full max-w-md rounded-2xl shadow-2xl z-10 p-6 ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
-            <h3 className={`text-lg font-bold mb-4 ${isDark ? "text-white" : "text-[#232323]"}`}>{editCat ? "Edit Category" : "Add Category"}</h3>
+          <div className={`relative w-full max-w-md rounded-2xl shadow-2xl z-10 p-6 ${isDark ? "bg-surface" : "bg-white"}`}>
+            <h3 className={`text-lg font-bold mb-4 ${isDark ? "text-white" : "text-ink"}`}>{editCat ? "Edit Category" : "Add Category"}</h3>
             <form onSubmit={editCat ? handleEdit : handleCreate}>
               <div className="space-y-3">
-                <div><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Name *</label><input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} /></div>
-                <div><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Description</label><textarea className={inputClass + " h-20 resize-none"} value={description} onChange={(e) => setDescription(e.target.value)} disabled={submitting} /></div>
+                <div><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Name *</label><input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} /></div>
+                <div><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Description</label><textarea className={inputClass + " h-20 resize-none"} value={description} onChange={(e) => setDescription(e.target.value)} disabled={submitting} /></div>
 
                 {/* Optional image picker */}
                 <div>
-                  <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-[#A0A0A0]" : "text-[#555]"}`}>Category Image (optional)</label>
-                  <div className={`flex items-center gap-3 p-3 rounded-xl border border-dashed ${isDark ? "border-[#2E2E2E]" : "border-[#E5E2DE]"}`}>
+                  <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Category Image (optional)</label>
+                  <div className={`flex items-center gap-3 p-3 rounded-xl border border-dashed ${isDark ? "border-line" : "border-line"}`}>
                     {/* Preview / placeholder */}
                     {imagePreview ? (
                       <img
                         src={imagePreview}
                         alt="Preview"
-                        className="w-16 h-16 rounded-lg object-cover border border-[#E5E2DE] dark:border-[#2E2E2E]"
+                        className="w-16 h-16 rounded-lg object-cover border border-line"
                       />
                     ) : editCat && toAbsolute(editCat.image) ? (
                       <img
                         src={toAbsolute(editCat.image)}
                         alt="Current"
-                        className="w-16 h-16 rounded-lg object-cover border border-[#E5E2DE] dark:border-[#2E2E2E]"
+                        className="w-16 h-16 rounded-lg object-cover border border-line"
                       />
                     ) : (
-                      <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"}`}>
-                        <Tags size={22} className="text-[#aaa]" />
+                      <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+                        <Tags size={22} className="text-faint" />
                       </div>
                     )}
 
                     <div className="flex flex-col gap-2">
-                      <label className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold cursor-pointer transition-colors ${isDark ? "bg-[#2A2A2A] text-white hover:bg-[#333]" : "bg-[#F0ECE6] text-[#232323] hover:bg-[#E5E2DE]"}`}>
+                      <label className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold cursor-pointer transition-colors ${isDark ? "bg-sunken text-white hover:bg-sunken" : "bg-sunken text-ink hover:bg-line"}`}>
                         <Upload size={13} />
                         {imageFile ? "Change image" : imagePreview || (editCat && toAbsolute(editCat.image)) ? "Replace image" : "Upload image"}
                         <input
@@ -228,13 +273,13 @@ export default function Categories() {
                           type="button"
                           onClick={clearPickedImage}
                           disabled={submitting}
-                          className={`inline-flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold transition-colors cursor-pointer ${isDark ? "text-[#FF6B61] hover:bg-[#3D1515]" : "text-[#DA291C] hover:bg-[#FFF0F0]"}`}
+                          className={`inline-flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold transition-colors cursor-pointer ${isDark ? "text-danger hover:bg-danger-soft" : "text-danger hover:bg-danger-soft"}`}
                         >
                           <X size={13} />
                           {removeImage ? "Image will be removed" : "Remove image"}
                         </button>
                       ) : (
-                        <p className={`text-[11px] ${isDark ? "text-[#777]" : "text-[#aaa]"}`}>
+                        <p className={`text-[11px] ${isDark ? "text-muted" : "text-faint"}`}>
                           JPG, PNG, WEBP, GIF or AVIF — max 5 MB.
                         </p>
                       )}
@@ -243,8 +288,8 @@ export default function Categories() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-4">
-                <button type="button" onClick={() => setShowForm(false)} className={`px-4 h-10 rounded-xl text-sm font-medium border cursor-pointer ${isDark ? "border-[#2E2E2E] text-white" : "border-[#E5E2DE] text-[#232323]"}`}>Cancel</button>
-                <button type="submit" disabled={submitting} className="px-4 h-10 rounded-xl text-sm font-bold text-white bg-[#007A53] dark:bg-[#078080] hover:opacity-90 cursor-pointer">Save</button>
+                <button type="button" onClick={() => setShowForm(false)} className={`px-4 h-10 rounded-xl text-sm font-medium border cursor-pointer ${isDark ? "border-line text-white" : "border-line text-ink"}`}>Cancel</button>
+                <button type="submit" disabled={submitting} className="px-4 h-10 rounded-xl text-sm font-bold text-white bg-accent hover:opacity-90 cursor-pointer">Save</button>
               </div>
             </form>
           </div>
@@ -260,6 +305,18 @@ export default function Categories() {
         message={`Are you sure you want to delete "${deleteCat?.name}"? This action cannot be undone.`}
         loading={deleting}
       />
+
+      {!loading && meta && categories.length > 0 && (
+        <Pagination
+          page={meta.page}
+          totalPages={meta.totalPages}
+          total={meta.total}
+          limit={limit}
+          onPageChange={setPage}
+          onLimitChange={(l) => { setLimit(l); setPage(1); }}
+          label="categories"
+        />
+      )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>

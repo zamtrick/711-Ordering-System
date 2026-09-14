@@ -8,11 +8,8 @@ export const getBranches = async (req, res) => {
   try {
     const branches = await Branch.find().sort({ createdAt: -1 });
 
-    if (branches.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No branch created yet!" });
-    }
+    // An empty list is a valid state (e.g. brand-new install) — clients
+    // render their own empty state, so this must not be a 404.
 
     return res.status(200).json({
       success: true,

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Category from "../../models/Category.js";
 import { removeUploadedFile } from "../../utils/uploads.js";
+import { parsePagination, buildPaginationMeta, escapeRegex } from "../../utils/pagination.js";
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleCategoryError = (err, res) => {
@@ -23,12 +24,21 @@ const handleCategoryError = (err, res) => {
 // Get all categories
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find();
+    const { page, limit, skip, search, paginated } = parsePagination(req);
+
+    const query = search ? { name: new RegExp(escapeRegex(search), "i") } : {};
+    const total = await Category.countDocuments(query);
+
+    const categories = await Category.find(query)
+      .sort({ createdAt: -1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0);
 
     return res.status(200).json({
       success: true,
       message: "Categories retrieved successfully",
       categories,
+      ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
     });
   } catch (err) {
     console.error(err.message);

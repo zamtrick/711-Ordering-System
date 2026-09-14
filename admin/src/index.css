@@ -1,13 +1,70 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
-.dark {
-  color-scheme: dark;
+/* --------------------------------------------------
+   DARK MODE = the in-app toggle, not the OS setting.
+   Tailwind v4 defaults `dark:` to prefers-color-scheme,
+   which made the UI hybrid (toggle on light + dark OS =
+   mixed themes). This line binds every `dark:` utility
+   to the .dark class ThemeContext toggles.
+   -------------------------------------------------- */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* --------------------------------------------------
+   DESIGN TOKENS
+   Single source of truth for the whole admin. Utilities
+   like bg-surface / text-ink / border-line resolve to
+   these variables, and the .dark block below re-points
+   them — so one class covers both themes and stray
+   hard-coded colors can't drift anymore.
+   -------------------------------------------------- */
+@theme {
+  --color-canvas: #F6F6F7;      /* app background */
+  --color-surface: #FFFFFF;     /* cards, sidebar, modals */
+  --color-sunken: #F4F4F5;      /* table headers, hovers, wells */
+  --color-line: #E4E4E7;        /* hairline borders */
+  --color-ink: #18181B;         /* headings / primary text */
+  --color-muted: #52525B;       /* body / secondary text */
+  --color-faint: #76767E;       /* labels, placeholders, icons */
+  --color-accent: #007A53;      /* brand green */
+  --color-accent-soft: #E7F4EE;
+  --color-accent-ink: #007A53;
+  --color-danger: #DC2626;
+  --color-danger-soft: #FDECEC;
+  --color-warning: #C2410C;
+  --color-warning-soft: #FFF1E7;
+  --color-info: #4F46E5;
+  --color-info-soft: #EEF0FE;
 }
 
-.dark body {
-  background-color: #121212;
-  color: #E5E5E5;
+.dark {
+  color-scheme: dark;
+
+  --color-canvas: #0F0F11;
+  --color-surface: #17171A;
+  --color-sunken: #1F1F23;
+  --color-line: #29292E;
+  --color-ink: #F4F4F5;
+  --color-muted: #A6A6AF;
+  --color-faint: #6E6E76;
+  --color-accent: #10B981;
+  --color-accent-soft: #0B2B21;
+  --color-accent-ink: #4ADE80;
+  --color-danger: #F87171;
+  --color-danger-soft: #2E1517;
+  --color-warning: #FB923C;
+  --color-warning-soft: #2C1F12;
+  --color-info: #A5B4FC;
+  --color-info-soft: #1B1C33;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
 }
 
 * {

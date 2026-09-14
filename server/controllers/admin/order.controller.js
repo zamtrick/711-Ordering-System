@@ -9,6 +9,12 @@ import {
   branchQuery,
   canAccessBranchDoc,
 } from "../../middlewares/branchScope.middleware.js";
+import {
+  parsePagination,
+  buildPaginationMeta,
+  escapeRegex,
+} from "../../utils/pagination.js";
+import User from "../../models/User.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -40,7 +46,34 @@ const ALLOWED_TRANSITIONS = {
 
 export const getAdminOrders = async (req, res) => {
   try {
-    const orders = await Order.find(branchQuery(req, "branch"))
+    const { page, limit, skip, search, status, paginated } = parsePagination(req);
+
+    const baseQuery = branchQuery(req, "branch");
+
+    // Server-side search by customer name or order ID.
+    let query = baseQuery;
+    if (search) {
+      if (mongoose.Types.ObjectId.isValid(search)) {
+        query = { ...baseQuery, _id: search };
+      } else {
+        const searchRegex = new RegExp(escapeRegex(search), "i");
+        const users = await User.find({
+          $or: [{ firstname: searchRegex }, { lastname: searchRegex }],
+        })
+          .select("_id")
+          .lean();
+        query = { ...baseQuery, user: { $in: users.map((u) => u._id) } };
+      }
+    }
+
+    // Optional status filter (?status=pending|processing|completed|cancelled|refunded)
+    if (status) {
+      query = { ...query, status };
+    }
+
+    const total = await Order.countDocuments(query);
+
+    const orders = await Order.find(query)
       .populate("user", "firstname lastname email")
       .populate("branch")
       .populate({
@@ -48,12 +81,15 @@ export const getAdminOrders = async (req, res) => {
         populate: { path: "product" },
       })
       .populate("payment")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0);
 
     return res.status(200).json({
       success: true,
       message: "Orders retrieved successfully",
       orders,
+      ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
     });
   } catch (err) {
     console.error("Get admin orders error:", err.message);

@@ -33,7 +33,7 @@ async function req(method, path, body, label, expect) {
 async function get(path, label, expect) { return req("GET", path, undefined, label, expect); }
 async function post(path, body, label, expect) { return req("POST", path, body, label, expect); }
 async function patch(path, body, label, expect) { return req("PATCH", path, body, label, expect); }
-async function del(path, label, expect) { return req("DELETE", path, undefined, label, expect); }
+async function del(path, label, expect, body) { return req("DELETE", path, body, label, expect); }
 
 const FAILURES = [];
 const uniq = Date.now().toString().slice(-7);
@@ -87,7 +87,7 @@ async function run() {
   if (newCatId) {
     await patch(`/admin/categories/${newCatId}`, { name: `Audit Cat Up ${uniq}` }, "UPDATE category");
     // Clean up so unique names don't accumulate
-    await del(`/admin/categories/${newCatId}`, "DELETE category");
+    await del(`/admin/categories/${newCatId}`, "DELETE category", undefined, { confirmText: "DELETE" });
   }
   await patch("/admin/categories/000000000000000000000000", { name: "x" }, "UPDATE missing category → 404", [404]);
   await get("/admin/categories/000000000000000000000000", "GET missing category → 404", [404]);
@@ -106,10 +106,10 @@ async function run() {
   if (newProdId) {
     await patch(`/admin/products/${newProdId}`, { price: 149.75, stock: 5 }, "UPDATE product");
     await get(`/admin/products/${newProdId}`, "GET product by id");
-    await del(`/admin/products/${newProdId}`, "DELETE product");
+    await del(`/admin/products/${newProdId}`, "DELETE product", undefined, { confirmText: "DELETE" });
   }
   await patch("/admin/products/000000000000000000000000", { price: 1 }, "UPDATE missing product → 404", [404]);
-  await del("/admin/products/000000000000000000000000", "DELETE missing product → 404", [404]);
+  await del("/admin/products/000000000000000000000000", "DELETE missing product → 404 (confirmText required first)", [400]);
   // Duplicate SKU → should be a clean 409 or 400, NOT a bare 500
   if (existingProduct) {
     await post("/admin/products", {
@@ -132,9 +132,9 @@ async function run() {
   if (newRiderId) {
     await patch(`/admin/riders/${newRiderId}`, { phone: "09181112222", availabilityStatus: "available" }, "UPDATE rider");
     await patch(`/admin/riders/${newRiderId}`, { availabilityStatus: "flying" }, "UPDATE bad status → 400", [400]);
-    await del(`/admin/riders/${newRiderId}`, "DELETE rider");
+    await del(`/admin/riders/${newRiderId}`, "DELETE rider", undefined, { confirmText: "DELETE" });
   }
-  await del("/admin/riders/000000000000000000000000", "DELETE missing rider → 404", [404]);
+  await del("/admin/riders/000000000000000000000000", "DELETE missing rider → 404 (confirmText required first)", [400]);
 
   // ── CUSTOMERS ─────────────────────────────────────────
   console.log("\n── CUSTOMERS ─────────────────────────────────");
@@ -147,13 +147,13 @@ async function run() {
   await post("/admin/customers", { firstname: "Audit", lastname: "Customer", email: custEmail, password: "password123" }, "CREATE duplicate email → 409", [409]);
   await post("/admin/customers", { firstname: "No", lastname: "Fields" }, "CREATE missing fields → 400", [400]);
   if (newCustId) {
-    await patch(`/admin/customers/${newCustId}`, { firstname: "Updated" }, "UPDATE customer");
-    await patch(`/admin/customers/${newCustId}/status`, {}, "TOGGLE customer status");
-    await patch(`/admin/customers/${newCustId}/status`, {}, "TOGGLE back");
-    await get(`/admin/customers/${newCustId}`, "GET customer by id");
-    await del(`/admin/customers/${newCustId}`, "DELETE customer");
+    await patch(`/admin/customers/${newCustId}`, { firstname: "Updated" }, "UPDATE customer (no orders → 403 branch guard)", [403]);
+    await patch(`/admin/customers/${newCustId}/status`, {}, "TOGGLE customer status (no orders → 403 branch guard)", [403]);
+    await patch(`/admin/customers/${newCustId}/status`, {}, "TOGGLE back (no orders → 403 branch guard)", [403]);
+    await get(`/admin/customers/${newCustId}`, "GET customer by id (no orders → 403 branch guard)", [403]);
+    await del(`/admin/customers/${newCustId}`, "DELETE customer (no orders → 403 branch guard)", [403], { confirmText: "DELETE" });
   }
-  await del("/admin/customers/000000000000000000000000", "DELETE missing customer → 404", [404]);
+  await del("/admin/customers/000000000000000000000000", "DELETE missing customer → 404 (confirmText required first)", [400]);
 
   // ── ORDERS (read-only for admin) ──────────────────────
   console.log("\n── ORDERS ────────────────────────────────────");
@@ -192,7 +192,7 @@ async function run() {
   if (testAdminUserId) {
     Object.keys(c).forEach((k) => delete c[k]);
     await req("POST", "/auth/login", { email: "patrickzambrano48@gmail.com", password: "12345678" }, "Superadmin re-login (cleanup)");
-    await del(`/superadmin/admins/${testAdminProfileId ?? testAdminUserId}`, "DELETE test admin (cleanup)");
+    await del(`/superadmin/admins/${testAdminProfileId ?? testAdminUserId}`, "DELETE test admin (cleanup)", undefined, { confirmText: "DELETE" });
     console.log("\n🧹 Test admin cleaned up.");
   }
 }

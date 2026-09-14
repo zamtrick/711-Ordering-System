@@ -916,9 +916,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   reviewBtnText: { fontSize: 11, fontWeight: "700", marginLeft: 3 },
-  centered: { alignItems: "center", justifyContent: "center", padding: 20 },
-  loadingText: { marginTop: 12, fontSize: 14 },
-  errorText: { fontSize: 14, textAlign: "center" },
   mutedText: { fontSize: 12, textAlign: "center", marginTop: 8 },
   qrContainer: {
     alignItems: "center",

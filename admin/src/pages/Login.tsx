@@ -42,55 +42,55 @@ export default function Login() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8F5F2] dark:bg-[#121212]">
-        <div className="w-8 h-8 border-4 border-[#007A53] dark:border-[#078080] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-sunken dark:bg-surface">
+        <div className="w-8 h-8 border-4 border-accent dark:border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-[#F8F5F2] dark:bg-[#121212]">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-sunken dark:bg-surface">
       <div className="w-full max-w-md">
         {/* Green header banner */}
         <div className="rounded-t-3xl px-6 pt-10 pb-8 text-center" style={{ backgroundColor: isDark ? "#078080" : "#007A53" }}>
           <div className="flex items-center justify-center gap-1.5 mb-4">
-            <div className="w-10 h-1.5 rounded-full bg-[#FF6720]" />
-            <div className="w-6 h-1.5 rounded-full bg-[#DA291C]" />
+            <div className="w-10 h-1.5 rounded-full bg-warning" />
+            <div className="w-6 h-1.5 rounded-full bg-danger" />
           </div>
           <div className="w-14 h-14 mx-auto flex items-center justify-center bg-white rounded-2xl mb-4 overflow-hidden">
-            <span className="text-[#007A53] text-xl font-bold">711</span>
+            <span className="text-accent text-xl font-bold">711</span>
           </div>
           <h1 className="text-2xl font-extrabold text-white">Welcome Back</h1>
           <p className="text-sm text-white/80 mt-1.5">Login to admin panel</p>
         </div>
 
         {/* Form Card */}
-        <div className={`rounded-b-3xl shadow-lg px-7 py-7 ${isDark ? "bg-[#1E1E1E]" : "bg-white"}`}>
+        <div className={`rounded-b-3xl shadow-lg px-7 py-7 ${isDark ? "bg-surface" : "bg-white"}`}>
           <form onSubmit={handleSubmit} noValidate>
-            <h2 className={`text-xl font-extrabold mb-1 ${isDark ? "text-white" : "text-[#232323]"}`}>Sign in</h2>
-            <p className={`text-sm mb-6 ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>Enter your admin credentials</p>
+            <h2 className={`text-xl font-extrabold mb-1 ${isDark ? "text-white" : "text-ink"}`}>Sign in</h2>
+            <p className={`text-sm mb-6 ${isDark ? "text-muted" : "text-muted"}`}>Enter your admin credentials</p>
 
             {error && (
-              <div className="mb-5 px-4 py-3 rounded-xl bg-[#FFF0F0] dark:bg-[#3D1515] border border-[#DA291C]/30">
-                <p className="text-sm text-[#DA291C]">{error}</p>
+              <div className="mb-5 px-4 py-3 rounded-xl bg-danger-soft border border-danger/30">
+                <p className="text-sm text-danger">{error}</p>
               </div>
             )}
 
             <div className="mb-4">
-              <label className={`text-sm font-semibold mb-1.5 block ${isDark ? "text-white" : "text-[#232323]"}`}>Email</label>
-              <div className={`flex items-center h-12 px-3 rounded-xl border gap-2 focus-within:border-[#007A53] dark:focus-within:border-[#078080] focus-within:ring-2 focus-within:ring-[#007A53]/20 ${isDark ? "bg-[#121212] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>
-                <Mail size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />
-                <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-[#555]" : "text-[#232323] placeholder:text-[#aaa]"}`} disabled={submitting} />
+              <label className={`text-sm font-semibold mb-1.5 block ${isDark ? "text-white" : "text-ink"}`}>Email</label>
+              <div className={`flex items-center h-12 px-3 rounded-xl border gap-2 focus-within:border-accent dark:focus-within:border-accent focus-within:ring-2 focus-within:ring-[#007A53]/20 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
+                <Mail size={18} className={isDark ? "text-muted" : "text-muted"} />
+                <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} disabled={submitting} />
               </div>
             </div>
 
             <div className="mb-2">
-              <label className={`text-sm font-semibold mb-1.5 block ${isDark ? "text-white" : "text-[#232323]"}`}>Password</label>
-              <div className={`flex items-center h-12 px-3 rounded-xl border gap-2 focus-within:border-[#007A53] dark:focus-within:border-[#078080] focus-within:ring-2 focus-within:ring-[#007A53]/20 ${isDark ? "bg-[#121212] border-[#2E2E2E]" : "bg-white border-[#E5E2DE]"}`}>
-                <Lock size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />
-                <input type={showPassword ? "text" : "password"} placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-[#555]" : "text-[#232323] placeholder:text-[#aaa]"}`} disabled={submitting} />
+              <label className={`text-sm font-semibold mb-1.5 block ${isDark ? "text-white" : "text-ink"}`}>Password</label>
+              <div className={`flex items-center h-12 px-3 rounded-xl border gap-2 focus-within:border-accent dark:focus-within:border-accent focus-within:ring-2 focus-within:ring-[#007A53]/20 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
+                <Lock size={18} className={isDark ? "text-muted" : "text-muted"} />
+                <input type={showPassword ? "text" : "password"} placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} disabled={submitting} />
                 <button type="button" onClick={() => setShowPassword((p) => !p)} className="cursor-pointer" tabIndex={-1}>
-                  {showPassword ? <EyeOff size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} /> : <Eye size={18} className={isDark ? "text-[#A0A0A0]" : "text-[#777]"} />}
+                  {showPassword ? <EyeOff size={18} className={isDark ? "text-muted" : "text-muted"} /> : <Eye size={18} className={isDark ? "text-muted" : "text-muted"} />}
                 </button>
               </div>
             </div>
@@ -103,13 +103,13 @@ export default function Login() {
           </form>
 
           <div className="flex items-center justify-center gap-1.5 mt-7">
-            <div className="w-8 h-1 rounded-full bg-[#007A53] dark:bg-[#078080]" />
-            <div className="w-8 h-1 rounded-full bg-[#FF6720]" />
-            <div className="w-8 h-1 rounded-full bg-[#DA291C]" />
+            <div className="w-8 h-1 rounded-full bg-accent" />
+            <div className="w-8 h-1 rounded-full bg-warning" />
+            <div className="w-8 h-1 rounded-full bg-danger" />
           </div>
         </div>
 
-        <p className={`text-center text-xs mt-5 ${isDark ? "text-[#A0A0A0]" : "text-[#777]"}`}>
+        <p className={`text-center text-xs mt-5 ${isDark ? "text-muted" : "text-muted"}`}>
           © 2026 Admin Portal. All rights reserved.
         </p>
       </div>

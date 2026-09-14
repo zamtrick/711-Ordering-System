@@ -6,11 +6,11 @@ type Props = {
 };
 
 const variantClass: Record<Variant, string> = {
-  green: "bg-[#E8F5EF] text-[#007A53]",
-  red: "bg-[#FFF0F0] text-[#DA291C]",
-  orange: "bg-[#FFF3E8] text-[#FF6720]",
-  gray: "bg-[#F0F0F0] text-[#777] dark:text-[#A0A0A0]",
-  blue: "bg-[#EEF2FF] text-[#4F46E5]",
+  green: "bg-accent-soft text-accent",
+  red: "bg-danger-soft text-danger",
+  orange: "bg-warning-soft text-warning",
+  gray: "bg-sunken text-muted",
+  blue: "bg-info-soft text-info",
 };
 
 export default function Badge({ variant = "gray", children }: Props) {

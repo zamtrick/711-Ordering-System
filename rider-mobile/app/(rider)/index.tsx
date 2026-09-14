@@ -69,7 +69,7 @@ const Home = () => {
 
       if (statsRes.data?.data) setStats(statsRes.data.data);
       if (deliveriesRes.data?.deliveries) setDeliveries(deliveriesRes.data.deliveries);
-    } catch (err) {
+    } catch (err: any) {
       console.log("Fetch data error:", err);
       if (err?.response?.status === 401) {
         router.replace("/(auth)/login");
@@ -116,7 +116,7 @@ const Home = () => {
       setStats((prev) =>
         prev ? { ...prev, availabilityStatus: res.data?.data?.availabilityStatus || newStatus } : prev,
       );
-    } catch (err) {
+    } catch (err: any) {
       Alert.alert("Error", err?.response?.data?.message || "Failed to update status");
     } finally {
       setTogglingAvailability(false);

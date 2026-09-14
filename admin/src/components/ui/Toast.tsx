@@ -39,21 +39,21 @@ function ToastItem({
   return (
     <div
       className={[
-        "flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg min-w-72 max-w-sm bg-white dark:bg-[#1E1E1E]",
+        "flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg min-w-72 max-w-sm bg-white dark:bg-surface",
         isSuccess
-          ? "border border-[#007A53]/30"
-          : "border border-[#DA291C]/30",
+          ? "border border-accent/30"
+          : "border border-danger/30",
       ].join(" ")}
     >
       {isSuccess ? (
-        <CheckCircle size={20} className="text-[#007A53] shrink-0" />
+        <CheckCircle size={20} className="text-accent shrink-0" />
       ) : (
-        <XCircle size={20} className="text-[#DA291C] shrink-0" />
+        <XCircle size={20} className="text-danger shrink-0" />
       )}
-      <p className="text-sm text-[#232323] dark:text-white flex-1">{toast.message}</p>
+      <p className="text-sm text-ink flex-1">{toast.message}</p>
       <button
         onClick={() => onRemove(toast.id)}
-        className="text-[#777] dark:text-[#A0A0A0] hover:text-[#232323] dark:text-white transition-colors cursor-pointer"
+        className="text-muted hover:text-ink dark:hover:text-white transition-colors cursor-pointer"
       >
         <X size={15} />
       </button>

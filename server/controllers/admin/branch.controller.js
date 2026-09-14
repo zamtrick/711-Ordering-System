@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Branch from "../../models/Branch.js";
 import { branchQuery } from "../../middlewares/branchScope.middleware.js";
+import { parsePagination, buildPaginationMeta, escapeRegex } from "../../utils/pagination.js";
 
 // ==========================================
 // GET BRANCHES (Admin lookup for forms)
@@ -8,8 +9,32 @@ import { branchQuery } from "../../middlewares/branchScope.middleware.js";
 // Regular admins only see their assigned branch; superadmins see all.
 export const getBranchesForAdmin = async (req, res) => {
   try {
-    const branches = await Branch.find(branchQuery(req, "_id")).sort({ name: 1 });
-    return res.status(200).json({ success: true, branches });
+    const { page, limit, skip, search, paginated } = parsePagination(req);
+
+    const baseQuery = branchQuery(req, "_id");
+    const query = search
+      ? {
+          ...baseQuery,
+          $or: [
+            { name: new RegExp(escapeRegex(search), "i") },
+            { branchCode: new RegExp(escapeRegex(search), "i") },
+            { location: new RegExp(escapeRegex(search), "i") },
+          ],
+        }
+      : baseQuery;
+
+    const total = await Branch.countDocuments(query);
+
+    const branches = await Branch.find(query)
+      .sort({ name: 1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0);
+
+    return res.status(200).json({
+      success: true,
+      branches,
+      ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
+    });
   } catch (err) {
     console.error("Admin branch lookup error:", err.message);
     return res.status(500).json({ success: false, message: "Internal Server Error" });

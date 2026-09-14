@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import BranchProduct from "../../models/BranchProduct.js";
 import Product from "../../models/Product.js";
 import Branch from "../../models/Branch.js";
+import Category from "../../models/Category.js";
+import { parsePagination, buildPaginationMeta, escapeRegex } from "../../utils/pagination.js";
 
 // --------------------------------------------------
 // GET INVENTORY FOR A BRANCH
@@ -24,10 +26,36 @@ export const getBranchInventory = async (req, res) => {
       return res.status(404).json({ success: false, message: "Branch not found" });
     }
 
+    const { page, limit, skip, search, paginated } = parsePagination(req);
+
+    // Active products, narrowed by the optional server-side search over
+    // product name / SKU / category name.
+    let productQuery = { isActive: true };
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      const matchingCategories = await Category.find({ name: searchRegex })
+        .select("_id")
+        .lean();
+      productQuery = {
+        isActive: true,
+        $or: [
+          { name: searchRegex },
+          { sku: searchRegex },
+          ...(matchingCategories.length > 0
+            ? [{ categoryId: { $in: matchingCategories.map((c) => c._id) } }]
+            : []),
+        ],
+      };
+    }
+
+    const total = await Product.countDocuments(productQuery);
+
     // All active products
-    const products = await Product.find({ isActive: true })
+    const products = await Product.find(productQuery)
       .populate("categoryId", "name")
       .sort({ createdAt: -1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0)
       .lean();
 
     // All existing records for this branch
@@ -46,7 +74,13 @@ export const getBranchInventory = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: { branch, inventory },
+      data: {
+        branch,
+        inventory,
+        ...(paginated
+          ? { pagination: buildPaginationMeta(total, page, limit) }
+          : {}),
+      },
     });
   } catch (err) {
     console.error("Get branch inventory error:", err.message);

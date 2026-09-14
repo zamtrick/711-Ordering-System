@@ -10,6 +10,11 @@ import {
   canAccessBranchDoc,
   isBranchScoped,
 } from "../../middlewares/branchScope.middleware.js";
+import {
+  parsePagination,
+  buildPaginationMeta,
+  escapeRegex,
+} from "../../utils/pagination.js";
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleRiderError = (err, res) => {
@@ -37,10 +42,28 @@ const handleRiderError = (err, res) => {
 
 export const getRiders = async (req, res) => {
   try {
-    const riders = await Rider.find(branchQuery(req, "assignedBranch"))
+    const { page, limit, skip, search, paginated } = parsePagination(req);
+
+    const baseQuery = branchQuery(req, "assignedBranch");
+
+    // Server-side search over the rider's name (stored on the User document).
+    let query = baseQuery;
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      const users = await User.find({ $or: [{ firstname: searchRegex }, { lastname: searchRegex }] })
+        .select("_id")
+        .lean();
+      query = { ...baseQuery, user: { $in: users.map((u) => u._id) } };
+    }
+
+    const total = await Rider.countDocuments(query);
+
+    const riders = await Rider.find(query)
       .populate("user", "-password")
       .populate("assignedBranch")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0);
 
     // An empty list is a valid 200 — the UI shows its own empty state.
     // (A 404 here made the client fire a false "Failed to load" toast.)
@@ -49,6 +72,7 @@ export const getRiders = async (req, res) => {
       success: true,
       message: "Riders retrieved successfully",
       riders,
+      ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
     });
   } catch (err) {
     console.error("Get riders error:", err.message);

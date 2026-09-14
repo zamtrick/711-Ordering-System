@@ -17,7 +17,7 @@ const Input = forwardRef<HTMLInputElement, Props>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-semibold text-[#232323] dark:text-white"
+            className="text-sm font-semibold text-ink"
           >
             {label}
           </label>
@@ -25,31 +25,31 @@ const Input = forwardRef<HTMLInputElement, Props>(
 
         <div
           className={[
-            "flex items-center h-11 px-3 rounded-xl border bg-white dark:bg-[#1E1E1E] gap-2 transition-colors",
-            "focus-within:border-[#007A53] focus-within:ring-2 focus-within:ring-[#007A53]/20",
-            error ? "border-[#D64545]" : "border-[#E5E2DE] dark:border-[#2E2E2E]",
+            "flex items-center h-11 px-3 rounded-xl border bg-white dark:bg-surface gap-2 transition-colors",
+            "focus-within:border-accent focus-within:ring-2 focus-within:ring-[#007A53]/20",
+            error ? "border-danger" : "border-line",
           ].join(" ")}
         >
           {leftIcon && (
-            <span className="text-[#777] dark:text-[#A0A0A0] shrink-0">{leftIcon}</span>
+            <span className="text-muted shrink-0">{leftIcon}</span>
           )}
 
           <input
             ref={ref}
             id={inputId}
             className={[
-              "flex-1 h-full outline-none bg-transparent text-sm text-[#232323] dark:text-white placeholder:text-[#aaa]",
+              "flex-1 h-full outline-none bg-transparent text-sm text-ink placeholder:text-faint",
               className,
             ].join(" ")}
             {...rest}
           />
 
           {rightIcon && (
-            <span className="text-[#777] dark:text-[#A0A0A0] shrink-0">{rightIcon}</span>
+            <span className="text-muted shrink-0">{rightIcon}</span>
           )}
         </div>
 
-        {error && <p className="text-xs text-[#D64545]">{error}</p>}
+        {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     );
   },

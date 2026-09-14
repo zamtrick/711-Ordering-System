@@ -5,6 +5,7 @@ import User from "../../models/User.js";
 import Customer from "../../models/Customer.js";
 import Order from "../../models/Order.js";
 import { isBranchScoped } from "../../middlewares/branchScope.middleware.js";
+import { parsePagination, buildPaginationMeta, escapeRegex } from "../../utils/pagination.js";
 
 // Maps common Mongoose errors to proper 4xx responses instead of a bare 500
 const handleCustomerError = (err, res) => {
@@ -30,12 +31,10 @@ const handleCustomerError = (err, res) => {
 // collection's branch field). Superadmins see everyone.
 // --------------------------------------------------
 
-// Distinct customer ids that have ordered from the requester's branch
+// Distinct customer (User) ids that have ordered from the requester's branch
 const branchCustomerIds = async (branchId) => {
-  const rows = await Order.find({ branch: branchId })
-    .select("user")
-    .lean();
-  return [...new Set(rows.map((o) => o.user.toString()))];
+  const ids = await Order.distinct("user", { branch: branchId });
+  return ids.map((id) => id.toString());
 };
 
 // Guard for document-addressing routes. Returns the customer when allowed,
@@ -74,17 +73,46 @@ const findAccessibleCustomer = async (req, res) => {
 
 export const getCustomers = async (req, res) => {
   try {
+    const { page, limit, skip, search, paginated } = parsePagination(req);
+
     let query = {};
     if (isBranchScoped(req)) {
       const ids = await branchCustomerIds(req.adminBranchId);
       // No orders yet at this branch → no customers visible (valid empty state)
-      query = { _id: { $in: ids } };
+      // NOTE: Customer.user holds the User id — Customer._id does not.
+      query = { user: { $in: ids } };
     }
 
+    // Server-side search over the populated User fields.
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      const matchingUsers = await User.find({
+        $or: [
+          { firstname: searchRegex },
+          { lastname: searchRegex },
+          { email: searchRegex },
+        ],
+      })
+        .select("_id")
+        .lean();
+
+      const allowedIds = query.user?.$in?.map(String);
+      const matchingIds = matchingUsers.map((u) => u._id.toString());
+      const finalIds = allowedIds
+        ? matchingIds.filter((id) => allowedIds.includes(id))
+        : matchingIds;
+      query = { user: { $in: finalIds } };
+    }
+
+    const total = await Customer.countDocuments(query);
+
     // Get customers and populate User information
+    // skip=0/limit=0 → fetch everything (legacy, non-paginated callers)
     const customers = await Customer.find(query)
       .populate("user", "firstname lastname email isActive")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(paginated ? skip : 0)
+      .limit(paginated ? limit : 0);
 
     // An empty list is a valid 200 — the UI shows its own empty state.
     // (A 404 here made the client fire a false "Failed to load" toast.)
@@ -94,6 +122,7 @@ export const getCustomers = async (req, res) => {
       success: true,
       message: "Customers retrieved successfully",
       customers,
+      ...(paginated ? { pagination: buildPaginationMeta(total, page, limit) } : {}),
     });
   } catch (err) {
     console.error("Get customers error:", err.message);

@@ -13,13 +13,13 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClass: Record<Variant, string> = {
   primary:
-    "bg-[#007A53] hover:bg-[#056666] text-white border-transparent",
+    "bg-accent hover:bg-accent/90 text-white border-transparent",
   secondary:
-    "bg-white dark:bg-[#1E1E1E] hover:bg-gray-50 text-[#232323] dark:text-white border-[#E5E2DE] dark:border-[#2E2E2E]",
+    "bg-white dark:bg-surface hover:bg-gray-50 text-ink border-line",
   danger:
-    "bg-[#DA291C] hover:bg-[#b52116] text-white border-transparent",
+    "bg-danger hover:bg-danger/90 text-white border-transparent",
   ghost:
-    "bg-transparent hover:bg-gray-100 text-[#007A53] border-transparent",
+    "bg-transparent hover:bg-gray-100 text-accent border-transparent",
 };
 
 const sizeClass: Record<Size, string> = {

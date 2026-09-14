@@ -40,18 +40,18 @@ export default function Modal({
       {/* Sheet */}
       <div
         className={[
-          "relative w-full bg-white dark:bg-[#1E1E1E] rounded-2xl shadow-2xl z-10",
+          "relative w-full bg-white dark:bg-surface rounded-2xl shadow-2xl z-10",
           width,
         ].join(" ")}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E2DE] dark:border-[#2E2E2E]">
-          <h2 className="text-lg font-bold text-[#232323] dark:text-white">{title}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
+          <h2 className="text-lg font-bold text-ink">{title}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
           >
-            <X size={18} className="text-[#777] dark:text-[#A0A0A0]" />
+            <X size={18} className="text-muted" />
           </button>
         </div>
 

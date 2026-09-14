@@ -274,22 +274,24 @@ export default function Chat() {
   // COLOUR TOKENS
   // --------------------------------------------------
 
-  const surface = isDark ? "bg-[#1E1E1E]" : "bg-white";
-  const border = isDark ? "border-[#2E2E2E]" : "border-[#E5E2DE]";
-  const headline = isDark ? "text-white" : "text-[#232323]";
-  const muted = isDark ? "text-[#A0A0A0]" : "text-[#777]";
+  const surface = isDark ? "bg-surface" : "bg-white";
+  const border = isDark ? "border-line" : "border-line";
+  const headline = isDark ? "text-white" : "text-ink";
+  const muted = isDark ? "text-muted" : "text-muted";
   const inputBg = isDark
-    ? "bg-[#121212] border-[#2E2E2E] text-white"
-    : "bg-[#F8F5F2] border-[#E5E2DE] text-[#232323]";
-  const hoverRow = isDark ? "hover:bg-[#2A2A2A]" : "hover:bg-[#F8F5F2]";
-  const activeRow = isDark ? "bg-[#0A3D3D]" : "bg-[#E8F5EF]";
+    ? "bg-surface border-line text-white"
+    : "bg-sunken border-line text-ink";
+  const hoverRow = isDark ? "hover:bg-sunken" : "hover:bg-sunken";
+  const activeRow = isDark ? "bg-accent-soft" : "bg-accent-soft";
 
   // --------------------------------------------------
   // PAGE
   // --------------------------------------------------
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] gap-4">
+    // h-full fills the padded content area AppLayout gives this route exactly
+    // (no viewport math), so nothing overflows or gets clipped at the bottom.
+    <div className="flex h-full min-h-[480px] gap-4">
 
       {/* ══════════════════════════════════════════
           LEFT PANEL — conversation list
@@ -299,11 +301,11 @@ export default function Chat() {
         {/* Header */}
         <div className={`px-4 py-4 border-b ${border}`}>
           <div className="flex items-center gap-2 mb-3">
-            <MessageCircle size={18} className="text-[#007A53] dark:text-[#078080]" />
+            <MessageCircle size={18} className="text-accent" />
             <h2 className={`text-base font-bold ${headline}`}>Support Chat</h2>
 
             {totalUnread > 0 && (
-              <span className="ml-auto text-xs font-bold bg-[#DA291C] text-white px-2 py-0.5 rounded-full">
+              <span className="text-xs font-bold bg-danger text-white px-2 py-0.5 rounded-full">
                 {totalUnread > 99 ? "99+" : totalUnread}
               </span>
             )}
@@ -311,11 +313,11 @@ export default function Chat() {
             <span
               className={`ml-auto flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${
                 connected
-                  ? isDark ? "bg-[#0A3D3D] text-[#4CAF50]" : "bg-[#E8F5EF] text-[#007A53]"
-                  : isDark ? "bg-[#2E2E2E] text-[#A0A0A0]" : "bg-[#F0F0F0] text-[#777]"
+                  ? isDark ? "bg-accent-soft text-accent-ink" : "bg-accent-soft text-accent"
+                  : isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-[#22C55E]" : "bg-[#9CA3AF]"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-accent-ink" : "bg-faint"}`} />
               {connected ? "Live" : "Off"}
             </span>
           </div>
@@ -324,7 +326,7 @@ export default function Chat() {
           {isSuperAdmin && (
             <div className="mb-2">
               <div className={`flex items-center gap-2 h-9 px-3 rounded-xl border ${inputBg}`}>
-                <Store size={13} className="text-[#007A53] shrink-0" />
+                <Store size={13} className="text-accent shrink-0" />
                 <select
                   value={branchFilter}
                   onChange={(e) => {
@@ -353,7 +355,7 @@ export default function Chat() {
               placeholder="Search customers…"
               value={convSearch}
               onChange={(e) => setConvSearch(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-xs placeholder-[#999]"
+              className="flex-1 bg-transparent outline-none text-xs text-ink placeholder:text-faint"
             />
           </div>
         </div>
@@ -361,14 +363,25 @@ export default function Chat() {
         {/* List */}
         <div className="flex-1 overflow-y-auto">
           {loadingConvs ? (
-            <div className={`flex flex-col items-center justify-center h-full gap-2 ${muted}`}>
-              <div className="w-5 h-5 border-2 border-[#007A53] border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs">Loading…</p>
+            // Skeleton rows keep the panel height stable while loading
+            <div className="p-3 space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 animate-pulse">
+                  <div className={`w-10 h-10 rounded-full ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                  <div className="flex-1 space-y-1.5">
+                    <div className={`h-3 rounded w-1/2 ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                    <div className={`h-2.5 rounded w-3/4 ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className={`flex flex-col items-center justify-center h-full gap-2 ${muted}`}>
+            <div className={`flex flex-col items-center justify-center h-full gap-2 px-6 text-center ${muted}`}>
               <Users size={32} />
               <p className="text-sm font-medium">No conversations</p>
+              <p className="text-xs">
+                {convSearch ? "No customers match your search." : "Customer chats will appear here."}
+              </p>
             </div>
           ) : (
             filtered.map((conv) => {
@@ -381,14 +394,20 @@ export default function Chat() {
                     ${isActive ? activeRow : hoverRow}`}
                 >
                   {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-[#007A53] dark:bg-[#078080] flex items-center justify-center shrink-0 text-white text-sm font-bold">
-                    {initials(conv.customer)}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold">
+                      {initials(conv.customer)}
+                    </div>
+                    {/* Unread dot on avatar — visible even when scrolled */}
+                    {conv.unreadAdmin > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-danger rounded-full border-2 border-white dark:border-surface" />
+                    )}
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className={`text-sm font-semibold truncate ${isActive ? "text-[#007A53] dark:text-[#4CAF50]" : headline}`}>
+                      <p className={`text-sm font-semibold truncate ${isActive ? "text-accent-ink" : headline}`}>
                         {conv.customer.firstname} {conv.customer.lastname}
                       </p>
                       {conv.lastMessageAt && (
@@ -398,24 +417,24 @@ export default function Chat() {
                       )}
                     </div>
 
-                    {/* Branch badge */}
+                    {/* Branch badge (superadmin sees all branches) */}
                     {conv.branch && (
                       <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 ${
-                        isDark ? "bg-[#0A3D3D] text-[#4CAF50]" : "bg-[#E8F5EF] text-[#007A53]"
+                        isDark ? "bg-accent-soft text-accent-ink" : "bg-accent-soft text-accent"
                       }`}>
                         <Store size={9} />
                         {conv.branch.name}
                       </span>
                     )}
 
-                    <p className={`text-xs truncate mt-0.5 ${muted}`}>
+                    <p className={`text-xs truncate mt-0.5 ${conv.unreadAdmin > 0 ? "font-medium text-ink" : muted}`}>
                       {conv.lastMessage || "No messages yet"}
                     </p>
                   </div>
 
-                  {/* Unread badge */}
+                  {/* Unread count */}
                   {conv.unreadAdmin > 0 && (
-                    <span className="shrink-0 min-w-[18px] h-[18px] bg-[#DA291C] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                    <span className="shrink-0 min-w-[18px] h-[18px] bg-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                       {conv.unreadAdmin > 9 ? "9+" : conv.unreadAdmin}
                     </span>
                   )}
@@ -435,18 +454,18 @@ export default function Chat() {
           <>
             {/* Thread header */}
             <div className={`flex items-center gap-3 px-5 py-3.5 border-b ${border}`}>
-              <div className="w-9 h-9 rounded-full bg-[#007A53] dark:bg-[#078080] flex items-center justify-center text-white text-sm font-bold shrink-0">
+              <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-white text-sm font-bold shrink-0">
                 {initials(activeConv.customer)}
               </div>
-              <div className="flex-1">
-                <p className={`text-sm font-bold ${headline}`}>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-bold truncate ${headline}`}>
                   {activeConv.customer.firstname} {activeConv.customer.lastname}
                 </p>
-                <div className="flex items-center gap-2">
-                  <p className={`text-xs ${muted}`}>{activeConv.customer.email}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={`text-xs truncate ${muted}`}>{activeConv.customer.email}</p>
                   {activeConv.branch && (
                     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                      isDark ? "bg-[#0A3D3D] text-[#4CAF50]" : "bg-[#E8F5EF] text-[#007A53]"
+                      isDark ? "bg-accent-soft text-accent-ink" : "bg-accent-soft text-accent"
                     }`}>
                       <Store size={9} />
                       {activeConv.branch.name}
@@ -456,18 +475,25 @@ export default function Chat() {
               </div>
 
               {!connected && (
-                <div className={`flex items-center gap-1.5 text-xs ${muted}`}>
-                  <WifiOff size={14} />
+                <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
+                  isDark ? "bg-warning-soft text-warning" : "bg-warning-soft text-warning"
+                }`}>
+                  <WifiOff size={13} />
                   Reconnecting…
                 </div>
               )}
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1">
+            <div className="flex-1 overflow-y-auto px-5 py-4">
               {loadingMsgs ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="w-6 h-6 border-2 border-[#007A53] border-t-transparent rounded-full animate-spin" />
+                // Bubble skeletons while the thread loads
+                <div className="space-y-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className={`flex ${i % 2 ? "justify-end" : "justify-start"} animate-pulse`}>
+                      <div className={`h-10 rounded-2xl ${i % 2 ? "w-52" : "w-64"} ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                    </div>
+                  ))}
                 </div>
               ) : grouped.length === 0 ? (
                 <div className={`flex flex-col items-center justify-center h-full gap-2 ${muted}`}>
@@ -479,17 +505,17 @@ export default function Chat() {
                 grouped.map((group) => (
                   <div key={group.date}>
                     <div className="flex items-center gap-3 my-4">
-                      <div className={`flex-1 h-px ${isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />
+                      <div className={`flex-1 h-px ${isDark ? "bg-sunken" : "bg-line"}`} />
                       <span className={`text-xs font-semibold ${muted}`}>{group.date}</span>
-                      <div className={`flex-1 h-px ${isDark ? "bg-[#2E2E2E]" : "bg-[#E5E2DE]"}`} />
+                      <div className={`flex-1 h-px ${isDark ? "bg-sunken" : "bg-line"}`} />
                     </div>
 
                     {group.msgs.map((msg) => {
                       const isAdmin = msg.senderRole === "admin";
                       return (
-                        <div key={msg._id} className={`flex mb-2 ${isAdmin ? "justify-end" : "justify-start"}`}>
+                        <div key={msg._id} className={`flex items-end mb-2 gap-2 ${isAdmin ? "justify-end" : "justify-start"}`}>
                           {!isAdmin && (
-                            <div className="w-7 h-7 rounded-full bg-[#007A53] dark:bg-[#078080] flex items-center justify-center text-white text-xs font-bold mr-2 mt-1 shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-accent flex items-center justify-center text-white text-xs font-bold shrink-0">
                               {initials(activeConv.customer)}
                             </div>
                           )}
@@ -497,15 +523,15 @@ export default function Chat() {
                           <div
                             className={`max-w-[68%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                               isAdmin
-                                ? "bg-[#007A53] dark:bg-[#078080] text-white rounded-br-sm"
+                                ? "bg-accent text-white rounded-br-sm"
                                 : isDark
-                                ? "bg-[#2A2A2A] text-white rounded-bl-sm border border-[#2E2E2E]"
-                                : "bg-[#F8F5F2] text-[#232323] rounded-bl-sm border border-[#E5E2DE]"
+                                ? "bg-sunken text-white rounded-bl-sm border border-line"
+                                : "bg-sunken text-ink rounded-bl-sm border border-line"
                             }`}
                           >
-                            <p>{msg.text}</p>
+                            <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                             <p className={`text-[10px] mt-1 text-right ${
-                              isAdmin ? "text-white/60" : isDark ? "text-[#A0A0A0]" : "text-[#777]"
+                              isAdmin ? "text-white/60" : isDark ? "text-muted" : "text-muted"
                             }`}>
                               {formatTime(msg.createdAt)}
                               {isAdmin && <span className="ml-1">{msg.read ? " ✓✓" : " ✓"}</span>}
@@ -513,8 +539,8 @@ export default function Chat() {
                           </div>
 
                           {isAdmin && (
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ml-2 mt-1 shrink-0 ${
-                              isDark ? "bg-[#2A2A2A] text-[#A0A0A0]" : "bg-[#F8F5F2] text-[#777]"
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                              isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"
                             }`}>
                               {user ? `${user.firstname[0]}${user.lastname[0]}`.toUpperCase() : "A"}
                             </div>
@@ -531,8 +557,9 @@ export default function Chat() {
             {/* Input bar — branch admin only. Superadmin is read-only. */}
             {isSuperAdmin ? (
               <div className={`px-4 py-3 border-t ${border} flex items-center justify-center gap-2`}>
-                <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${isDark ? "bg-[#2A2A2A] text-[#A0A0A0]" : "bg-[#F8F5F2] text-[#777]"}`}>
-                  👁 View only — only the branch admin can reply
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"}`}>
+                  <MessageCircle size={12} />
+                  View only — only the branch admin can reply
                 </span>
               </div>
             ) : (
@@ -543,7 +570,7 @@ export default function Chat() {
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
                   rows={1}
-                  className={`flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none max-h-28 ${inputBg} placeholder-[#999]`}
+                  className={`flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none max-h-28 ${inputBg} placeholder:text-faint`}
                   style={{ overflowY: "auto" }}
                   disabled={!connected}
                 />
@@ -552,10 +579,10 @@ export default function Chat() {
                   disabled={!text.trim() || sending || !connected}
                   className={`h-10 w-10 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
                     text.trim() && connected
-                      ? "bg-[#007A53] dark:bg-[#078080] text-white cursor-pointer hover:opacity-90"
+                      ? "bg-accent text-white cursor-pointer hover:opacity-90"
                       : isDark
-                      ? "bg-[#2E2E2E] text-[#555] cursor-not-allowed"
-                      : "bg-[#E5E2DE] text-[#aaa] cursor-not-allowed"
+                      ? "bg-sunken text-muted cursor-not-allowed"
+                      : "bg-line text-faint cursor-not-allowed"
                   }`}
                 >
                   {sending ? (
@@ -569,8 +596,8 @@ export default function Chat() {
           </>
         ) : (
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${muted}`}>
-            <div className={`w-20 h-20 rounded-3xl ${isDark ? "bg-[#2A2A2A]" : "bg-[#F8F5F2]"} flex items-center justify-center`}>
-              <MessageCircle size={38} className="text-[#007A53] dark:text-[#078080]" />
+            <div className={`w-20 h-20 rounded-3xl ${isDark ? "bg-sunken" : "bg-sunken"} flex items-center justify-center`}>
+              <MessageCircle size={38} className="text-accent" />
             </div>
             <p className={`text-base font-bold ${headline}`}>Select a conversation</p>
             <p className="text-sm text-center max-w-xs">
