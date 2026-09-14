@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import {
   View,
@@ -34,6 +34,9 @@ import {
 
 import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
+import DeliveryMapPicker, {
+  type DeliveryCoords,
+} from "@/components/DeliveryMapPicker";
 import { router } from "expo-router";
 import api from "@/api/axios";
 
@@ -45,6 +48,8 @@ type AddressItem = {
   _id: string;
   label: string;
   address: string;
+  lat?: number | null;
+  lng?: number | null;
   isDefault: boolean;
 };
 
@@ -94,10 +99,30 @@ const Profile = () => {
   const [addAddressVisible, setAddAddressVisible] = useState(false);
   const [newAddressLabel, setNewAddressLabel] = useState("");
   const [newAddress, setNewAddress] = useState("");
+  const [newAddressCoords, setNewAddressCoords] = useState<DeliveryCoords | null>(null);
 
   // Edit address modal
   const [editAddressVisible, setEditAddressVisible] = useState(false);
   const [editAddressItemId, setEditAddressItemId] = useState<string | null>(null);
+  const [editAddressCoords, setEditAddressCoords] = useState<DeliveryCoords | null>(null);
+
+  // Map picker auto-fills the text field via reverse geocoding. Manual edits
+  // keep the last known pin coords so the address still carries them.
+  const handleMapAddress = useCallback(
+    (address: string, coords: DeliveryCoords | null) => {
+      setNewAddress(address);
+      if (coords) setNewAddressCoords(coords);
+    },
+    [],
+  );
+
+  const handleEditMapAddress = useCallback(
+    (address: string, coords: DeliveryCoords | null) => {
+      setNewAddress(address);
+      if (coords) setEditAddressCoords(coords);
+    },
+    [],
+  );
 
 // --------------------------------------------------
   // FETCH PROFILE
@@ -180,6 +205,7 @@ const Profile = () => {
   const openAddAddress = () => {
     setNewAddressLabel("");
     setNewAddress("");
+    setNewAddressCoords(null);
     setAddAddressVisible(true);
   };
 
@@ -193,11 +219,14 @@ const Profile = () => {
       const response = await api.post("/customer/profile/me/addresses", {
         label: newAddressLabel.trim() || "Address",
         address: newAddress.trim(),
+        lat: newAddressCoords?.latitude,
+        lng: newAddressCoords?.longitude,
       });
       if (response.data?.data) setProfile(response.data.data);
       setAddAddressVisible(false);
       setNewAddressLabel("");
       setNewAddress("");
+      setNewAddressCoords(null);
     } catch (error: any) {
       console.log("Add address error:", error);
       const message =
@@ -215,6 +244,7 @@ const Profile = () => {
   const openEditAddress = (item: AddressItem) => {
     setNewAddressLabel(item.label);
     setNewAddress(item.address);
+    setEditAddressCoords(null);
     setEditAddressItemId(item._id);
     setEditAddressVisible(true);
   };
@@ -232,6 +262,9 @@ const Profile = () => {
         {
           label: newAddressLabel.trim() || "Address",
           address: newAddress.trim(),
+          ...(editAddressCoords
+            ? { lat: editAddressCoords.latitude, lng: editAddressCoords.longitude }
+            : {}),
         },
       );
       if (response.data?.data) setProfile(response.data.data);
@@ -239,6 +272,7 @@ const Profile = () => {
       setNewAddressLabel("");
       setNewAddress("");
       setEditAddressItemId(null);
+      setEditAddressCoords(null);
     } catch (error: any) {
       console.log("Update address error:", error);
       const message =
@@ -537,6 +571,14 @@ const Profile = () => {
           />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <MenuItem
+            icon={<MapPin size={20} color="#FF6720" />}
+            title="Store Locator"
+            subtitle="Find branches that deliver to you"
+            onPress={() => router.push("/(customer)/store-locator")}
+            colors={colors}
+          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <MenuItem
             icon={<HelpCircle size={20} color="#FF6720" />}
             title="Help & Support"
             subtitle="Get assistance"
@@ -682,11 +724,11 @@ const Profile = () => {
               placeholder="e.g. Home"
               colors={colors}
             />
-            <EditField
-              label="Address"
+            {/* Map picker — same as checkout: tap the map or drag the pin,
+                the address field auto-fills via reverse geocoding. */}
+            <DeliveryMapPicker
               value={newAddress}
-              onChangeText={setNewAddress}
-              placeholder="Enter full address"
+              onChange={handleMapAddress}
               colors={colors}
             />
             <Pressable
@@ -739,11 +781,12 @@ const Profile = () => {
               placeholder="e.g. Home"
               colors={colors}
             />
-            <EditField
-              label="Address"
+            {/* Map picker — same as checkout and the add modal. The pin
+                starts wherever GPS lands; adjusting it updates the address
+                text and saves the exact coordinates with the address. */}
+            <DeliveryMapPicker
               value={newAddress}
-              onChangeText={setNewAddress}
-              placeholder="Enter full address"
+              onChange={handleEditMapAddress}
               colors={colors}
             />
             <Pressable

@@ -17,7 +17,14 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import { Search, ShoppingCart, ChevronRight, PackageSearch, Plus } from "lucide-react-native";
+import {
+  Search,
+  ShoppingCart,
+  ChevronRight,
+  PackageSearch,
+  Plus,
+  MapPin,
+} from "lucide-react-native";
 import { playTap } from "@/utils/sound";
 
 import useTheme from "@/hooks/useTheme";
@@ -342,6 +349,30 @@ const Home = () => {
             )}
           </View>
         )}
+
+        {/* Find-a-store — delivery range locator entry */}
+        <Pressable
+          onPress={() => router.push("/(customer)/store-locator")}
+          style={[
+            styles.locatorCard,
+            { backgroundColor: colors.surface },
+            isDark ? { borderColor: colors.border } : styles.softShadow,
+          ]}
+        >
+          <View style={[styles.locatorIcon, { backgroundColor: primaryTint }]}
+          >
+            <MapPin size={20} color={colors.primary} />
+          </View>
+          <View style={styles.locatorTextWrap}>
+            <Text style={[styles.locatorTitle, { color: colors.headline }]}>
+              Find a store near you
+            </Text>
+            <Text style={[styles.locatorSub, { color: colors.muted }]}>
+              See which branches deliver to your area
+            </Text>
+          </View>
+          <ChevronRight size={18} color={colors.muted} />
+        </Pressable>
 
         {/* Categories */}
         <View style={styles.sectionHeader}>
@@ -733,6 +764,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
+
+  locatorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "transparent",
+    padding: 14,
+    marginBottom: 28,
+  },
+
+  locatorIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  locatorTextWrap: { flex: 1 },
+
+  locatorTitle: { fontSize: 14, fontWeight: "800" },
+
+  locatorSub: { fontSize: 11.5, marginTop: 2 },
 
   sectionTitle: {
     fontSize: 16,

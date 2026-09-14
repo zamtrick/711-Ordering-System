@@ -43,6 +43,7 @@ import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
 import riderDeliveryRoutes from "./routes/rider/delivery.routes.js";
 import managePromos from "./routes/superadmin/promo.routes.js";
+import manageAppOpenAd from "./routes/appOpenAd.routes.js";
 import manageCustomerPromos from "./routes/customer/promo.routes.js";
 import manageCustomerFavorites from "./routes/customer/favorite.routes.js";
 import manageCustomerReviews from "./routes/customer/review.routes.js";
@@ -162,6 +163,10 @@ app.use("/api/superadmin/audit", auth, authorize("superadmin"), manageAudit);
 app.use("/api/superadmin/profile", auth, authorize("superadmin"), manageProfile);
 app.use("/api/superadmin/analytics", auth, authorize("superadmin"), manageAnalytics);
 app.use("/api/superadmin/promos", auth, authorize("superadmin"), managePromos);
+
+// App open ad — public /active for the customer app, managed by
+// superadmins (and permitted branch admins) under /api/app-open-ad
+app.use("/api/app-open-ad", manageAppOpenAd);
 
 //manage by admin
 app.use("/api/admin/riders", auth, authorize("admin", "superadmin"), manageRiders);

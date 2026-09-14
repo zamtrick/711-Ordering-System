@@ -30,6 +30,10 @@ import ThemedView from "@/components/ThemedView";
 import DeliveryMapPicker, {
   type DeliveryCoords,
 } from "@/components/DeliveryMapPicker";
+import {
+  haversineKm,
+  DEFAULT_RANGE_KM,
+} from "@/utils/geo";
 import { useCart } from "@/context/CartContext";
 import api from "@/api/axios";
 
@@ -60,6 +64,8 @@ type SavedAddress = {
   _id: string;
   label: string;
   address: string;
+  lat?: number | null;
+  lng?: number | null;
   isDefault: boolean;
 };
 
@@ -94,23 +100,6 @@ const PAYMENT_LABELS: Record<string, string> = {
 };
 
 const paymentLabel = (m: string) => PAYMENT_LABELS[m] ?? m;
-
-/**
- * Haversine distance between two points in km — mirrors the server-side
- * check so the app can warn before the customer even places the order.
- */
-const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-};
-
-const DEFAULT_RANGE_KM = 2;
 
 // --------------------------------------------------
 // SCREEN
@@ -155,18 +144,26 @@ export default function Checkout() {
       ? selectedBranch.deliveryRange
       : defaultRangeKm;
 
-  // Distance from the selected branch to the pinned custom address (km),
-  // or null when the branch has no map location or no pin was placed.
+  // Which address is actually being delivered to (custom pin OR saved
+  // address). Saved addresses now carry their own map coordinates, captured
+  // in the profile map picker, so they get the same range check.
+  const activeCoords: DeliveryCoords | null = useCustomAddress
+    ? customCoords
+    : selectedAddress?.lat != null && selectedAddress?.lng != null
+      ? { latitude: selectedAddress.lat, longitude: selectedAddress.lng }
+      : null;
+
+  // Distance from the selected branch to the active delivery pin (km),
+  // or null when the branch has no map location or no pin is known.
   const customAddressDistanceKm =
-    useCustomAddress &&
-    customCoords &&
+    activeCoords &&
     selectedBranch?.coordinates?.lat != null &&
     selectedBranch?.coordinates?.lng != null
       ? haversineKm(
           selectedBranch.coordinates.lat,
           selectedBranch.coordinates.lng,
-          customCoords.latitude,
-          customCoords.longitude,
+          activeCoords.latitude,
+          activeCoords.longitude,
         )
       : null;
   const customAddressOutOfRange =
@@ -280,8 +277,8 @@ export default function Checkout() {
         branch: selectedBranch._id,
         deliveryAddress: resolvedDeliveryAddress,
         paymentMethod,
-        deliveryLat: customCoords?.latitude,
-        deliveryLng: customCoords?.longitude,
+        deliveryLat: activeCoords?.latitude,
+        deliveryLng: activeCoords?.longitude,
       });
       console.log("[Checkout] Create order response:", JSON.stringify(orderRes.data));
 

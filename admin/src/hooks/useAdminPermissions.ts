@@ -6,6 +6,7 @@ export type AdminPermissions = {
   canManageProducts: boolean;
   canManageCategories: boolean;
   canManageRiders: boolean;
+  canManageAds: boolean;
 };
 
 // Fail-closed: before the fetch resolves (or if it fails), branch admins
@@ -14,6 +15,7 @@ const DEFAULTS: AdminPermissions = {
   canManageProducts: false,
   canManageCategories: false,
   canManageRiders: false,
+  canManageAds: false,
 };
 
 export function useAdminPermissions() {
@@ -39,6 +41,7 @@ export function useAdminPermissions() {
             canManageProducts: d.canManageProducts ?? false,
             canManageCategories: d.canManageCategories ?? false,
             canManageRiders: d.canManageRiders ?? false,
+            canManageAds: d.canManageAds ?? false,
           });
         }
       })

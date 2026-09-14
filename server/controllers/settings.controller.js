@@ -209,7 +209,8 @@ export const getAdminPermissionsHandler = async (req, res) => {
 
 export const updateAdminPermissionsHandler = async (req, res) => {
   try {
-    const { canManageProducts, canManageCategories, canManageRiders } = req.body ?? {};
+    const { canManageProducts, canManageCategories, canManageRiders, canManageAds } =
+      req.body ?? {};
     const current = await getAdminPermissionsMap();
 
     const next = {
@@ -221,6 +222,8 @@ export const updateAdminPermissionsHandler = async (req, res) => {
           : current.canManageCategories,
       canManageRiders:
         typeof canManageRiders === "boolean" ? canManageRiders : current.canManageRiders,
+      canManageAds:
+        typeof canManageAds === "boolean" ? canManageAds : current.canManageAds,
     };
 
     const setting = await Setting.findOneAndUpdate(

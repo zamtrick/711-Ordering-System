@@ -24,6 +24,21 @@ const customerSchema = new mongoose.Schema(
           type: String,
           trim: true,
         },
+        // Map pin position (WGS84) captured by the in-app map picker.
+        // Optional — manually typed addresses have no coordinates and skip
+        // the branch delivery-range check at order time.
+        lat: {
+          type: Number,
+          min: -90,
+          max: 90,
+          default: null,
+        },
+        lng: {
+          type: Number,
+          min: -180,
+          max: 180,
+          default: null,
+        },
         isDefault: {
           type: Boolean,
           default: false,

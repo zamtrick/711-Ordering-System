@@ -41,7 +41,7 @@ export const getMyProfile = async (req, res) => {
 
 export const addAddress = async (req, res) => {
   try {
-    const { label, address } = req.body;
+    const { label, address, lat, lng } = req.body;
 
     const customer = await Customer.findOne({ user: req.user.userId });
 
@@ -52,12 +52,24 @@ export const addAddress = async (req, res) => {
       });
     }
 
+    // Coordinates from the map picker are optional — validate them when
+    // present so a bad payload can't poison the delivery-range check.
+    const parsedLat = lat === undefined || lat === null ? null : Number(lat);
+    const parsedLng = lng === undefined || lng === null ? null : Number(lng);
+    const validCoords =
+      parsedLat !== null &&
+      parsedLng !== null &&
+      Number.isFinite(parsedLat) && parsedLat >= -90 && parsedLat <= 90 &&
+      Number.isFinite(parsedLng) && parsedLng >= -180 && parsedLng <= 180;
+
     // Add new address. Only auto-default when it's the very first one —
     // subsequent addresses are not default unless the customer explicitly
     // sets them via updateAddress.
     customer.addresses.push({
       label: label || "Address",
       address,
+      lat: validCoords ? parsedLat : null,
+      lng: validCoords ? parsedLng : null,
       isDefault: customer.addresses.length === 0,
     });
 
@@ -86,7 +98,7 @@ export const addAddress = async (req, res) => {
 export const updateAddress = async (req, res) => {
   try {
     const { addressId } = req.params;
-    const { label, address, isDefault } = req.body;
+    const { label, address, lat, lng, isDefault } = req.body;
 
     const customer = await Customer.findOne({ user: req.user.userId });
 
@@ -108,6 +120,20 @@ export const updateAddress = async (req, res) => {
 
     if (label !== undefined) addr.label = label;
     if (address !== undefined) addr.address = address;
+
+    // Optional coordinate update (same validation as add).
+    if (lat !== undefined || lng !== undefined) {
+      const parsedLat = lat === undefined || lat === null ? null : Number(lat);
+      const parsedLng = lng === undefined || lng === null ? null : Number(lng);
+      const validCoords =
+        parsedLat !== null &&
+        parsedLng !== null &&
+        Number.isFinite(parsedLat) && parsedLat >= -90 && parsedLat <= 90 &&
+        Number.isFinite(parsedLng) && parsedLng >= -180 && parsedLng <= 180;
+      addr.lat = validCoords ? parsedLat : null;
+      addr.lng = validCoords ? parsedLng : null;
+    }
+
     if (isDefault !== undefined) {
       // If setting this as default, clear other defaults
       customer.addresses.forEach((a) => {

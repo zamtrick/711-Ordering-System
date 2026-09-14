@@ -1,11 +1,12 @@
 import Setting from "../models/Setting.js";
 
-export const ADMIN_PERMISSIONS_KEY = "adminPermissions";
-
-export const DEFAULT_ADMIN_PERMISSIONS = {
+export const ADMIN_PERMISSIONS_KEY = "adminPermissions";export const DEFAULT_ADMIN_PERMISSIONS = {
   canManageProducts: true,
   canManageCategories: true,
   canManageRiders: true,
+  // App-open-ad management is superadmin-owned by default — branch admins
+  // only get write access when the superadmin flips this on.
+  canManageAds: false,
 };
 
 export const getAdminPermissionsMap = async () => {
@@ -19,8 +20,8 @@ export const getAdminPermissionsMap = async () => {
       canManageCategories:
         parsed.canManageCategories ??
         DEFAULT_ADMIN_PERMISSIONS.canManageCategories,
-      canManageRiders:
-        parsed.canManageRiders ?? DEFAULT_ADMIN_PERMISSIONS.canManageRiders,
+      canManageRiders: parsed.canManageRiders ?? DEFAULT_ADMIN_PERMISSIONS.canManageRiders,
+      canManageAds: parsed.canManageAds ?? DEFAULT_ADMIN_PERMISSIONS.canManageAds,
     };
   } catch {
     return { ...DEFAULT_ADMIN_PERMISSIONS };

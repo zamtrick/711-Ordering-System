@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import MapView, {
   Marker,
-  UrlTile,
   type LatLng,
   type MapPressEvent,
   type Region,
@@ -49,9 +48,8 @@ const DEFAULT_COORDS: DeliveryCoords = {
 
 const REGION_DELTA = 0.008;
 
-// Leaflet-style tiles (OpenStreetMap). No Google API key required — the
-// map renders in Expo Go, dev builds and production builds alike.
-const OSM_TILE_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+// (OSM UrlTile template removed — the standard map type renders without
+// external tile sources and can't go blank.)
 
 // --------------------------------------------------
 // HELPERS
@@ -219,6 +217,10 @@ const DeliveryMapPicker = ({
           { borderColor: colors.border, backgroundColor: colors.background },
         ]}
       >
+        {/* Use the provider's default map rendering. The previous setup
+            (mapType="none" + OSM UrlTile) showed a blank/gray map on many
+            devices — tiles silently failed to load and there was no
+            fallback. "standard" always renders. */}
         <MapView
           ref={mapRef}
           style={styles.map}
@@ -227,13 +229,7 @@ const DeliveryMapPicker = ({
           showsUserLocation
           showsMyLocationButton={false}
           toolbarEnabled={false}
-          mapType="none"
         >
-          <UrlTile
-            urlTemplate={OSM_TILE_TEMPLATE}
-            maximumZ={19}
-            flipY={false}
-          />
           <Marker
             coordinate={marker as LatLng}
             draggable

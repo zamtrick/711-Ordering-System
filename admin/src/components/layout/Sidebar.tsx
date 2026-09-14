@@ -16,11 +16,13 @@ import {
   Shield,
   UserCircle,
   Megaphone,
+  MonitorPlay,
   ScrollText,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import { useState, useEffect, useRef } from "react";
 import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
@@ -53,6 +55,7 @@ const superadminNav: NavSection[] = [
       { to: "/products",   label: "Products",   icon: Package },
       { to: "/categories", label: "Categories", icon: Tags },
       { to: "/promos",     label: "Promos",     icon: Megaphone },
+      { to: "/app-open-ads", label: "App Open Ad", icon: MonitorPlay },
     ],
   },
   {
@@ -111,16 +114,40 @@ const adminNav: NavSection[] = [
   },
 ];
 
+// Optional nav entries shown only when the superadmin's permission toggle
+// is ON for this branch admin (App Open Ads management).
+const adminNavExtras: { to: string; label: string; icon: React.ElementType; perm: "canManageAds" }[] = [
+  { to: "/app-open-ads", label: "App Open Ad", icon: MonitorPlay, perm: "canManageAds" },
+];
+
 const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
+  const { perms } = useAdminPermissions();
   const navigate = useNavigate();
   const location = useLocation();
 
   const isSuperAdmin = user?.role === "superadmin";
-  const sections = isSuperAdmin ? superadminNav : adminNav;
+
+  // Branch admins get the App Open Ad entry only when the superadmin's
+  // "Manage App Open Ads" toggle is ON for their account.
+  const sections: NavSection[] = isSuperAdmin
+    ? superadminNav
+    : adminNav.map((section, idx) =>
+        idx === 1
+          ? {
+              ...section,
+              items: [
+                ...section.items,
+                ...adminNavExtras
+                  .filter((e) => perms[e.perm])
+                  .map(({ to, label, icon }) => ({ to, label, icon, badge: undefined })),
+              ],
+            }
+          : section,
+      );
 
   const [unreadChat, setUnreadChat]       = useState(0);
   const [pendingOrders, setPendingOrders] = useState(0);

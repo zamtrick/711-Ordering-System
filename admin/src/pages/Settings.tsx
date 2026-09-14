@@ -14,12 +14,14 @@ type AdminPermissions = {
   canManageProducts: boolean;
   canManageCategories: boolean;
   canManageRiders: boolean;
+  canManageAds: boolean;
 };
 
 const PERMISSION_LABELS: { key: keyof AdminPermissions; label: string; hint: string }[] = [
   { key: "canManageProducts", label: "Manage Products", hint: "Branch admins can create, edit and delete catalogue products" },
   { key: "canManageCategories", label: "Manage Categories", hint: "Branch admins can create, edit and delete categories" },
   { key: "canManageRiders", label: "Manage Riders", hint: "Branch admins can add, edit and remove riders" },
+  { key: "canManageAds", label: "Manage App Open Ads", hint: "Branch admins can create, edit and remove App Open Ad campaigns (customer app launch screen)" },
 ];
 
 // --------------------------------------------------

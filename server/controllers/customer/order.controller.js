@@ -351,13 +351,32 @@ export const getOrders = async (req, res) => {
           ? {}
           : { user: userId };
 
+    // Optional status filter (?status=pending|processing|completed|cancelled|refunded)
+    const { status } = req.query;
+    const VALID_STATUSES = ["pending", "processing", "completed", "cancelled", "refunded"];
+    if (status && VALID_STATUSES.includes(String(status))) {
+      orderQuery.status = status;
+    }
+
+    // Optional pagination (?page=1&limit=10). When page is absent the
+    // endpoint behaves exactly as before — returns the full list — so
+    // existing callers keep working.
+    const pageParam = Number(req.query.page);
+    const limitParam = Number(req.query.limit);
+    const paginated =
+      Number.isFinite(pageParam) && pageParam >= 1 &&
+      Number.isFinite(limitParam) && limitParam >= 1;
+    const page = paginated ? Math.floor(pageParam) : 1;
+    const limit = paginated ? Math.min(Math.floor(limitParam), 50) : 0;
+    const skip = paginated ? (page - 1) * limit : 0;
+
     /*
     |--------------------------------------------------------------------------
     | FIND CUSTOMER ORDERS
     |--------------------------------------------------------------------------
     */
 
-    const orders = await Order.find(orderQuery)
+    let query = Order.find(orderQuery)
       .populate("user", "firstname lastname email")
       .populate("branch")
       .populate({
@@ -368,6 +387,15 @@ export const getOrders = async (req, res) => {
       })
       .populate("payment")
       .sort({ createdAt: -1 });
+
+    if (paginated) {
+      query = query.skip(skip).limit(limit);
+    }
+
+    const orders = await query;
+
+    // Total count for pagination metadata (only computed when paginating)
+    const total = paginated ? await Order.countDocuments(orderQuery) : orders.length;
 
     /*
     |--------------------------------------------------------------------------
@@ -385,6 +413,17 @@ export const getOrders = async (req, res) => {
       success: true,
       message: "Orders retrieved successfully",
       orders,
+      ...(paginated
+        ? {
+            pagination: {
+              page,
+              limit,
+              total,
+              totalPages: Math.max(1, Math.ceil(total / limit)),
+              hasMore: skip + orders.length < total,
+            },
+          }
+        : {}),
     });
   } catch (err) {
     console.error("Get customer orders error:", err.message);

@@ -15,6 +15,7 @@ import Orders from "@/pages/Orders";
 import Admins from "@/pages/Admins";
 import Settings from "@/pages/Settings";
 import Promos from "@/pages/Promos";
+import AppOpenAds from "@/pages/AppOpenAds";
 import Profile from "@/pages/Profile";
 import ActivityLog from "@/pages/ActivityLog";
 import type { JSX } from "react";
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route path="/admins" element={<ProtectedRoute superadminOnly><Admins /></ProtectedRoute>} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/promos" element={<ProtectedRoute superadminOnly><Promos /></ProtectedRoute>} />
+        <Route path="/app-open-ads" element={<AppOpenAds />} />
         <Route path="/activity-log" element={<ProtectedRoute superadminOnly><ActivityLog /></ProtectedRoute>} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/branches" element={<Branches />} />

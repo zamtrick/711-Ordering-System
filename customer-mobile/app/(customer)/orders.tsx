@@ -1,11 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
+  FlatList,
   ActivityIndicator,
+  RefreshControl,
   Alert,
 } from "react-native";
 import {
@@ -48,11 +50,18 @@ type Order = {
   deliveryFee?: number;
 };
 
+type Pagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+};
+
 // --------------------------------------------------
 // LIVE STAGE — the 5-step pipeline shown on each order card
 // --------------------------------------------------
-// Maps (status, deliveryStatus) to a customer-friendly stage so the card
-// always reflects the rider's progress, not just the admin status.
+
 const STAGES = ["placed", "preparing", "assigned", "picked_up", "in_transit", "completed"] as const;
 type Stage = (typeof STAGES)[number];
 
@@ -72,7 +81,6 @@ const orderStage = (
   if (status === "completed") return "completed";
   if (status === "cancelled" || status === "refunded") return null; // terminal — no pipeline
   if (status === "processing") {
-    // Map deliveryStatus to the appropriate stage
     switch (deliveryStatus) {
       case "assigned":
         return "assigned";
@@ -128,7 +136,17 @@ const formatDate = (iso: string) => {
   });
 };
 
-const FILTERS = ["All", "Pending", "Processing", "Completed", "Cancelled", "Refunded"];
+// Filter values map to the server's ?status= values
+const FILTERS: { label: string; value: "all" | ServerStatus }[] = [
+  { label: "All", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "Processing", value: "processing" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "Refunded", value: "refunded" },
+];
+
+const PAGE_SIZE = 10;
 
 // --------------------------------------------------
 // SCREEN
@@ -138,42 +156,107 @@ const Orders = () => {
   const { theme } = useTheme();
   const { colors } = theme;
 
-  const [selectedFilter, setSelectedFilter] = useState("All");
+  const [selectedFilter, setSelectedFilter] = useState<"all" | ServerStatus>("all");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { socket } = useSocket();
 
+  // Guards so flat list doesn't double-fetch while a request is in flight
+  const fetchingRef = useRef(false);
+  const endReachedRef = useRef(false);
+
   // --------------------------------------------------
-  // FETCH ORDERS
+  // FETCH PAGE 1 (filter change / focus / pull-to-refresh)
   // --------------------------------------------------
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await api.get("/orders");
-      setOrders(response.data?.orders ?? []);
-    } catch (err: any) {
-      console.log("[Orders] FETCH ERROR:", err?.response?.status, err?.response?.data ?? err?.message);
-      if (err?.response?.status === 401) {
-        router.replace("/(auth)/login");
+  const fetchOrders = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (fetchingRef.current) return;
+      fetchingRef.current = true;
+      try {
+        if (!opts?.silent) setLoading(true);
+        const params: Record<string, string | number> = { page: 1, limit: PAGE_SIZE };
+        if (selectedFilter !== "all") params.status = selectedFilter;
+
+        const response = await api.get("/orders", { params });
+        const list: Order[] = response.data?.orders ?? [];
+        setOrders(list);
+        setPagination(response.data?.pagination ?? null);
+        setPage(1);
+        endReachedRef.current = !(response.data?.pagination?.hasMore ?? false);
+      } catch (err: any) {
+        console.log("[Orders] FETCH ERROR:", err?.response?.status, err?.response?.data ?? err?.message);
+        if (err?.response?.status === 401) {
+          router.replace("/(auth)/login");
+        }
+      } finally {
+        fetchingRef.current = false;
+        if (!opts?.silent) setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [selectedFilter],
+  );
 
-  // Re-fetch every time this screen comes into focus so a freshly placed
-  // order shows up immediately without requiring a manual refresh.
+  // Re-fetch whenever the status filter changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refetch on filter change
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Refresh when the screen regains focus (freshly placed order shows up)
   useFocusEffect(
     useCallback(() => {
-      fetchOrders();
+      fetchOrders({ silent: orders.length > 0 });
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- orders.length is just a hint
     }, [fetchOrders]),
   );
 
-  // Live status updates pushed by the server (rider accept / delivery /
-  // customer cancel). Merge into the list without a full refetch.
+  // --------------------------------------------------
+  // LOAD MORE (infinite scroll)
+  // --------------------------------------------------
+
+  const loadMore = useCallback(async () => {
+    if (fetchingRef.current || endReachedRef.current) return;
+    if (!pagination?.hasMore) return;
+
+    fetchingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const params: Record<string, string | number> = { page: nextPage, limit: PAGE_SIZE };
+      if (selectedFilter !== "all") params.status = selectedFilter;
+
+      const response = await api.get("/orders", { params });
+      const list: Order[] = response.data?.orders ?? [];
+
+      setOrders((prev) => {
+        const seen = new Set(prev.map((o) => o._id));
+        const fresh = list.filter((o) => !seen.has(o._id));
+        return [...prev, ...fresh];
+      });
+      setPagination(response.data?.pagination ?? null);
+      setPage(nextPage);
+      endReachedRef.current = !(response.data?.pagination?.hasMore ?? false);
+    } catch (err: any) {
+      console.log("[Orders] LOAD MORE ERROR:", err?.response?.status, err?.message);
+      // Don't lock the user out — allow retry on next scroll
+      endReachedRef.current = false;
+    } finally {
+      fetchingRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [page, pagination?.hasMore, selectedFilter]);
+
+  // --------------------------------------------------
+  // LIVE STATUS UPDATES
+  // --------------------------------------------------
+
   useEffect(() => {
     if (!socket) return;
     const handler = (updated: Order) => {
@@ -184,11 +267,22 @@ const Orders = () => {
         return prev.map((o) => (o._id === updated._id ? { ...o, ...updated } : o));
       });
     };
+    // Live updates merge into the currently loaded pages — good enough for
+    // status tracking; a fresh pull-to-refresh reloads page 1 cleanly.
     socket.on("order_updated", handler);
     return () => {
       socket.off("order_updated", handler);
     };
   }, [socket]);
+
+  // --------------------------------------------------
+  // PULL TO REFRESH
+  // --------------------------------------------------
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchOrders({ silent: true }).finally(() => setRefreshing(false));
+  }, [fetchOrders]);
 
   // --------------------------------------------------
   // CANCEL ORDER
@@ -204,7 +298,6 @@ const Orders = () => {
           try {
             setCancellingId(orderId);
             await api.patch(`/orders/${orderId}/cancel`);
-            // Update local state immediately (rider released server-side too)
             setOrders((prev) =>
               prev.map((o) =>
                 o._id === orderId
@@ -225,17 +318,175 @@ const Orders = () => {
   };
 
   // --------------------------------------------------
-  // FILTER
+  // RENDER ORDER CARD
   // --------------------------------------------------
 
-  const filtered =
-    selectedFilter === "All"
-      ? orders
-      : orders.filter(
-          (o) =>
-            (STATUS_LABEL[o.status] ?? o.status ?? "").toLowerCase() ===
-            selectedFilter.toLowerCase(),
-        );
+  const renderOrder = useCallback(
+    ({ item }: { item: Order }) => {
+      const statusColor = STATUS_COLOR[item.status] ?? "#888888";
+      const statusBg = STATUS_BG[item.status] ?? "#F0F0F0";
+      const cancelling = cancellingId === item._id;
+      const canCancel =
+        item.status === "pending" || item.status === "processing";
+      const stage = orderStage(item.status, item.deliveryStatus);
+      const stageIndex = stage ? STAGES.indexOf(stage) : -1;
+      const displayStage =
+        item.status === "completed" && item.deliveryStatus === "delivered" ? "completed" : stage;
+
+      return (
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/(customer)/orders/[id]",
+              params: { id: item._id },
+            })
+          }
+          style={[styles.orderCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          {/* Order Header */}
+          <View style={styles.orderHeader}>
+            <View>
+              <Text style={[styles.orderId, { color: colors.headline }]}>
+                #{(item._id ?? "").slice(-6).toUpperCase() || "—"}
+              </Text>
+              <Text style={[styles.orderDate, { color: colors.muted }]}>
+                {formatDate(item.createdAt)}
+              </Text>
+            </View>
+
+            <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {STATUS_LABEL[item.status] ?? item.status ?? "Unknown"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Live pipeline */}
+          {displayStage && (
+            <View style={styles.pipeline}>
+              {STAGES.map((s, i) => {
+                const done = i < stageIndex;
+                const current = i === stageIndex;
+                return (
+                  <View key={s} style={styles.pipelineStep}>
+                    <View
+                      style={[
+                        styles.pipelineDot,
+                        { backgroundColor: done || current ? "#007A53" : colors.border },
+                      ]}
+                    />
+                    {i < STAGES.length - 1 && (
+                      <View
+                        style={[
+                          styles.pipelineLine,
+                          { backgroundColor: done ? "#007A53" : colors.border },
+                        ]}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+          {displayStage && (
+            <Text style={[styles.stageLabel, { color: colors.muted }]}>
+              {STAGE_LABEL[displayStage]}
+              {typeof item.rider === "object" &&
+                item.rider !== null &&
+                item.rider.user &&
+                ` • ${`${item.rider.user.firstname ?? ""} ${item.rider.user.lastname ?? ""}`.trim()}`}
+            </Text>
+          )}
+
+          {/* Items */}
+          {(item.orderItems ?? []).length > 0 && (
+            <>
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
+              <View style={styles.items}>
+                {(item.orderItems ?? []).slice(0, 3).map((orderItem) => (
+                  <View key={orderItem._id} style={styles.item}>
+                    <View style={[styles.itemImage, { backgroundColor: colors.background }]}>
+                      <Text style={styles.itemEmoji}>📦</Text>
+                    </View>
+                    <View style={styles.itemDetails}>
+                      <Text style={[styles.itemName, { color: colors.headline }]} numberOfLines={1}>
+                        {orderItem.product?.name ?? "Product"}
+                      </Text>
+                      <Text style={[styles.itemQuantity, { color: colors.muted }]}>
+                        Qty: {orderItem.quantity}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                {(item.orderItems ?? []).length > 3 && (
+                  <Text style={[styles.moreItems, { color: colors.muted }]}>
+                    +{(item.orderItems ?? []).length - 3} more item(s)
+                  </Text>
+                )}
+              </View>
+            </>
+          )}
+
+          {/* Bottom */}
+          <View style={[styles.separator, { backgroundColor: colors.border }]} />
+
+          <View style={styles.orderBottom}>
+            <View>
+              <Text style={[styles.totalLabel, { color: colors.muted }]}>
+                {(item.deliveryFee ?? 0) > 0
+                  ? `Total (incl. ₱${(item.deliveryFee ?? 0).toFixed(2)} delivery)`
+                  : "Total"}
+              </Text>
+              <Text style={[styles.total, { color: "#007A53" }]}>
+                ₱{(item.totalAmount ?? 0).toFixed(2)}
+              </Text>
+            </View>
+
+            {item.status === "completed" ? (
+              <Pressable
+                style={[styles.actionButton, { borderColor: "#007A53" }]}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  router.push({
+                    pathname: "/(customer)/orders/[id]",
+                    params: { id: item._id },
+                  });
+                }}
+              >
+                <RotateCcw size={16} color="#007A53" />
+                <Text style={[styles.actionText, { color: "#007A53" }]}>Reorder</Text>
+              </Pressable>
+            ) : canCancel ? (
+              <Pressable
+                style={[
+                  styles.actionButton,
+                  { borderColor: "#DA291C", opacity: cancelling ? 0.6 : 1 },
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleCancel(item._id);
+                }}
+                disabled={cancelling}
+              >
+                {cancelling ? (
+                  <ActivityIndicator size="small" color="#DA291C" />
+                ) : (
+                  <Text style={[styles.actionText, { color: "#DA291C" }]}>Cancel</Text>
+                )}
+              </Pressable>
+            ) : (
+              <View style={styles.viewOrder}>
+                <Text style={[styles.viewOrderText, { color: "#007A53" }]}>View details</Text>
+                <ChevronRight size={17} color="#007A53" />
+              </View>
+            )}
+          </View>
+        </Pressable>
+      );
+    },
+    [colors, cancellingId],
+  );
 
   // --------------------------------------------------
   // LOADING
@@ -258,302 +509,104 @@ const Orders = () => {
 
   return (
     <ThemedView>
-      <ScrollView
+      <FlatList
+        data={orders}
+        keyExtractor={(o) => o._id}
+        renderItem={renderOrder}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
-      >
-        {/* Header */}
-        <View style={styles.header}>
+        // Load the next page when the user scrolls near the bottom
+        onEndReachedThreshold={0.4}
+        onEndReached={loadMore}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#007A53"
+            colors={["#007A53"]}
+          />
+        }
+        ListHeaderComponent={
           <View>
-            <Text style={[styles.smallTitle, { color: colors.muted }]}>
-              Track your purchases
-            </Text>
-            <Text style={[styles.title, { color: colors.headline }]}>
-              My Orders
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.headerIcon,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <ClipboardList size={21} color="#007A53" />
-          </View>
-        </View>
-
-        {/* Filters */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterList}
-        >
-          {FILTERS.map((filter) => {
-            const active = selectedFilter === filter;
-            return (
-              <Pressable
-                key={filter}
-                onPress={() => setSelectedFilter(filter)}
-                style={[
-                  styles.filterButton,
-                  {
-                    backgroundColor: active ? "#007A53" : colors.surface,
-                    borderColor: active ? "#007A53" : colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    { color: active ? "#FFFFFF" : colors.headline },
-                  ]}
-                >
-                  {filter}
+            {/* Header */}
+            <View style={styles.header}>
+              <View>
+                <Text style={[styles.smallTitle, { color: colors.muted }]}>
+                  Track your purchases
                 </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                <Text style={[styles.title, { color: colors.headline }]}>My Orders</Text>
+              </View>
 
-        {/* Orders */}
-        <View style={styles.ordersContainer}>
-          {filtered.map((order) => {
-            const statusColor = STATUS_COLOR[order.status] ?? "#888888";
-            const statusBg = STATUS_BG[order.status] ?? "#F0F0F0";
-            const cancelling = cancellingId === order._id;
-            const canCancel =
-              order.status === "pending" || order.status === "processing";
-            const stage = orderStage(order.status, order.deliveryStatus);
-            const stageIndex = stage ? STAGES.indexOf(stage) : -1;
-            // For completed orders via delivery, show the final delivery stage
-            const displayStage = order.status === "completed" && order.deliveryStatus === "delivered" ? "completed" : stage;
-
-            return (
-              <Pressable
-                key={order._id}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(customer)/orders/[id]",
-                    params: { id: order._id },
-                  })
-                }
+              <View
                 style={[
-                  styles.orderCard,
+                  styles.headerIcon,
                   { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
               >
-                {/* Order Header */}
-                <View style={styles.orderHeader}>
-                  <View>
-                    <Text style={[styles.orderId, { color: colors.headline }]}>
-                      #{(order._id ?? "").slice(-6).toUpperCase() || "—"}
-                    </Text>
-                    <Text style={[styles.orderDate, { color: colors.muted }]}>
-                      {formatDate(order.createdAt)}
-                    </Text>
-                  </View>
+                <ClipboardList size={21} color="#007A53" />
+              </View>
+            </View>
 
-                  <View
-                    style={[styles.statusBadge, { backgroundColor: statusBg }]}
+            {/* Filters */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterList}
+            >
+              {FILTERS.map((filter) => {
+                const active = selectedFilter === filter.value;
+                return (
+                  <Pressable
+                    key={filter.label}
+                    onPress={() => setSelectedFilter(filter.value)}
+                    style={[
+                      styles.filterButton,
+                      {
+                        backgroundColor: active ? "#007A53" : colors.surface,
+                        borderColor: active ? "#007A53" : colors.border,
+                      },
+                    ]}
                   >
-                    <View
-                      style={[styles.statusDot, { backgroundColor: statusColor }]}
-                    />
-                    <Text style={[styles.statusText, { color: statusColor }]}>
-                      {STATUS_LABEL[order.status] ?? order.status ?? "Unknown"}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Live pipeline — Placed → Preparing → Rider Assigned → Picked Up → In Transit → Completed */}
-                {displayStage && (
-                  <View style={styles.pipeline}>
-                    {STAGES.map((s, i) => {
-                      const done = i < stageIndex;
-                      const current = i === stageIndex;
-                      return (
-                        <View key={s} style={styles.pipelineStep}>
-                          <View
-                            style={[
-                              styles.pipelineDot,
-                              {
-                                backgroundColor:
-                                  done || current ? "#007A53" : colors.border,
-                              },
-                            ]}
-                          />
-                          {i < STAGES.length - 1 && (
-                            <View
-                              style={[
-                                styles.pipelineLine,
-                                {
-                                  backgroundColor:
-                                    done ? "#007A53" : colors.border,
-                                },
-                              ]}
-                            />
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-                {displayStage && (
-                  <Text style={[styles.stageLabel, { color: colors.muted }]}>
-                    {STAGE_LABEL[displayStage]}
-                    {typeof order.rider === "object" &&
-                      order.rider !== null &&
-                      order.rider.user &&
-                      ` • ${`${order.rider.user.firstname ?? ""} ${order.rider.user.lastname ?? ""}`.trim()}`}
-                  </Text>
-                )}
-
-                {/* Items */}
-                {(order.orderItems ?? []).length > 0 && (
-                  <>
-                    <View
-                      style={[
-                        styles.separator,
-                        { backgroundColor: colors.border },
-                      ]}
-                    />
-
-                    <View style={styles.items}>
-                      {(order.orderItems ?? []).slice(0, 3).map((item) => (
-                        <View key={item._id} style={styles.item}>
-                          <View
-                            style={[
-                              styles.itemImage,
-                              { backgroundColor: colors.background },
-                            ]}
-                          >
-                            <Text style={styles.itemEmoji}>📦</Text>
-                          </View>
-
-                          <View style={styles.itemDetails}>
-                            <Text
-                              style={[
-                                styles.itemName,
-                                { color: colors.headline },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {item.product?.name ?? "Product"}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.itemQuantity,
-                                { color: colors.muted },
-                              ]}
-                            >
-                              Qty: {item.quantity}
-                            </Text>
-                          </View>
-                        </View>
-                      ))}
-
-                      {(order.orderItems ?? []).length > 3 && (
-                        <Text style={[styles.moreItems, { color: colors.muted }]}>
-                          +{(order.orderItems ?? []).length - 3} more item(s)
-                        </Text>
-                      )}
-                    </View>
-                  </>
-                )}
-
-                {/* Bottom */}
-                <View
-                  style={[styles.separator, { backgroundColor: colors.border }]}
-                />
-
-                <View style={styles.orderBottom}>
-                  <View>
-                    <Text style={[styles.totalLabel, { color: colors.muted }]}>
-                      {(order.deliveryFee ?? 0) > 0
-                        ? `Total (incl. ₱${(order.deliveryFee ?? 0).toFixed(2)} delivery)`
-                        : "Total"}
-                    </Text>
-                    <Text style={[styles.total, { color: "#007A53" }]}>
-                      ₱{(order.totalAmount ?? 0).toFixed(2)}
-                    </Text>
-                  </View>
-
-                  {order.status === "completed" ? (
-                    <Pressable
-                      style={[styles.actionButton, { borderColor: "#007A53" }]}
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        router.push({
-                          pathname: "/(customer)/orders/[id]",
-                          params: { id: order._id },
-                        });
-                      }}
+                    <Text
+                      style={[styles.filterText, { color: active ? "#FFFFFF" : colors.headline }]}
                     >
-                      <RotateCcw size={16} color="#007A53" />
-                      <Text style={[styles.actionText, { color: "#007A53" }]}>
-                        Reorder
-                      </Text>
-                    </Pressable>
-                  ) : canCancel ? (
-                    <Pressable
-                      style={[
-                        styles.actionButton,
-                        {
-                          borderColor: "#DA291C",
-                          opacity: cancelling ? 0.6 : 1,
-                        },
-                      ]}
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        handleCancel(order._id);
-                      }}
-                      disabled={cancelling}
-                    >
-                      {cancelling ? (
-                        <ActivityIndicator size="small" color="#DA291C" />
-                      ) : (
-                        <>
-                          <Text
-                            style={[styles.actionText, { color: "#DA291C" }]}
-                          >
-                            Cancel
-                          </Text>
-                        </>
-                      )}
-                    </Pressable>
-                  ) : (
-                    <View style={styles.viewOrder}>
-                      <Text style={[styles.viewOrderText, { color: "#007A53" }]}>
-                        View details
-                      </Text>
-                      <ChevronRight size={17} color="#007A53" />
-                    </View>
-                  )}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Empty State */}
-        {filtered.length === 0 && (
+                      {filter.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color="#007A53" />
+              <Text style={[styles.footerText, { color: colors.muted }]}>Loading more…</Text>
+            </View>
+          ) : pagination && !pagination.hasMore && orders.length > 0 ? (
+            <View style={styles.footerLoader}>
+              <Text style={[styles.footerText, { color: colors.muted }]}>
+                {pagination.total} order{pagination.total === 1 ? "" : "s"} total
+              </Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
               <PackageCheck size={42} color="#007A53" />
             </View>
 
-            <Text style={[styles.emptyTitle, { color: colors.headline }]}>
-              No orders found
-            </Text>
+            <Text style={[styles.emptyTitle, { color: colors.headline }]}>No orders found</Text>
 
             <Text style={[styles.emptyText, { color: colors.muted }]}>
-              {selectedFilter === "All"
+              {selectedFilter === "all"
                 ? "You haven't placed any orders yet."
                 : `No ${selectedFilter.toLowerCase()} orders.`}
             </Text>
 
-            {selectedFilter === "All" && (
+            {selectedFilter === "all" && (
               <Pressable
                 onPress={() => router.push("/(customer)/products")}
                 style={[styles.shopButton, { backgroundColor: "#007A53" }]}
@@ -562,8 +615,8 @@ const Orders = () => {
               </Pressable>
             )}
           </View>
-        )}
-      </ScrollView>
+        }
+      />
     </ThemedView>
   );
 };
@@ -634,14 +687,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  ordersContainer: {
-    gap: 13,
-  },
-
   orderCard: {
     borderRadius: 18,
     borderWidth: 1,
     padding: 14,
+    marginBottom: 13,
   },
 
   orderHeader: {
@@ -797,6 +847,18 @@ const styles = StyleSheet.create({
   viewOrderText: {
     fontSize: 12,
     fontWeight: "700",
+  },
+
+  footerLoader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 18,
+  },
+
+  footerText: {
+    fontSize: 12,
   },
 
   emptyContainer: {

@@ -181,6 +181,44 @@ export const getPromoImageUploader = () => {
 };
 
 // --------------------------------------------------
+// App-open-ad creative upload — Cloudinary via multer storage engine.
+// Portrait-first creative: capped at 1280x1920 so it fills tall screens.
+// --------------------------------------------------
+
+let appOpenAdImageUploader = null;
+export const getAppOpenAdImageUploader = () => {
+  if (appOpenAdImageUploader) return appOpenAdImageUploader;
+
+  ensureCloudinary();
+
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder: "app-open-ads",
+      allowed_formats: ["jpg", "png", "jpeg", "webp"],
+      public_id: `app-open-ad-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+      transformation: [
+        { width: 1280, height: 1920, crop: "limit", quality: "auto", fetch_format: "auto" },
+      ],
+    }),
+  });
+
+  appOpenAdImageUploader = multer({
+    storage,
+    limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB for a full-screen creative
+    fileFilter: (req, file, cb) => {
+      if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only image files are allowed (JPG, PNG, WEBP)"));
+      }
+    },
+  });
+
+  return appOpenAdImageUploader;
+};
+
+// --------------------------------------------------
 // Proof of delivery image upload — Cloudinary via multer storage engine
 // Images land in the "proof-of-delivery" folder, capped at 10MB for photos.
 // --------------------------------------------------

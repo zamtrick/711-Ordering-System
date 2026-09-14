@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Tabs, router } from "expo-router";
 import { type ColorValue, ActivityIndicator, Text, StyleSheet, View } from "react-native";
 import {
@@ -12,12 +12,19 @@ import useTheme from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import CartTabIcon from "@/components/CartTabIcon";
+import AppOpenAdModal from "@/components/AppOpenAdModal";
 import { useSettings } from "@/context/SettingsContext";
 import { useSocket, SocketProvider } from "@/context/SocketContext";
 
 const CustomerLayout = () => {
   const { theme } = useTheme();
   const [checking, setChecking] = useState(true);
+
+  // App Open Ad — one impression per app open. The modal fetches the active
+  // campaign itself and auto-dismisses when none is scheduled; this flag
+  // just makes sure it never re-triggers during the session.
+  const [adVisible, setAdVisible] = useState(true);
+  const closeAd = useCallback(() => setAdVisible(false), []);
 
   useEffect(() => {
     let mounted = true;
@@ -56,6 +63,9 @@ const CustomerLayout = () => {
   return (
     <SocketProvider>
       <CustomerTabs />
+      {/* App Open Ad — shown once per app open, managed from the admin panel.
+          If no active campaign exists the modal auto-dismisses instantly. */}
+      <AppOpenAdModal visible={adVisible} onClose={closeAd} />
     </SocketProvider>
   );
 };
@@ -244,6 +254,15 @@ const CustomerTabs = () => {
       {/* Hidden screen — per-order rider chat, opened from order detail */}
       <Tabs.Screen
         name="rider-chat"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+
+      {/* Hidden screen — store locator with delivery range map */}
+      <Tabs.Screen
+        name="store-locator"
         options={{
           href: null,
           headerShown: false,
