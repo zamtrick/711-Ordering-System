@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 16.0.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    // Production: standalone APK you can sideload / share directly.
+    // Not an .aab — a store upload would need "internal" distribution + Play Console.
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    // Day-to-day development on a device via expo start / dev client.
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    // Internal testing builds (same as production but flagged for testers).
+    "preview": {
+      "distribution": "internal"
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}
