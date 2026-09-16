@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Shield } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -112,7 +112,17 @@ export default function Admins() {
 
   const { data, isFetching, error } = useQuery({
     queryKey: ["admins", { page, limit, search: debouncedSearch }],
-    queryFn: () => fetchAdmins({ page, limit, search: debouncedSearch }),
+    queryFn: async () => {
+      // Deleted the last row on the last page → the requested page can end
+      // up past totalPages. Refetch the last valid page instead of
+      // redirecting with setState (which would cascade renders).
+      const res = await fetchAdmins({ page, limit, search: debouncedSearch });
+      const max = res.pagination?.totalPages ?? 0;
+      if (max > 0 && page > max) {
+        return fetchAdmins({ page: Math.max(1, max), limit, search: debouncedSearch });
+      }
+      return res;
+    },
     placeholderData: (prev) => prev,
   });
 
@@ -130,11 +140,6 @@ export default function Admins() {
   const meta = data?.pagination ?? null;
   const branches = branchesData?.branches ?? [];
   const loading = isFetching && !data;
-
-  // Deleted last row on the last page → step back to a valid page
-  useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(meta.totalPages);
-  }, [meta, page]);
 
   // --------------------------------------------------
   // ACTIONS

@@ -12,8 +12,6 @@ import { useAuth } from "@/context/AuthContext";
 import { SocketProvider } from "@/context/SocketContext";
 
 const Layout = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { user, loading } = useAuth();
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shield, Mail, Lock, Save } from "lucide-react";
 import api from "@/api/axios";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
@@ -49,10 +49,12 @@ export default function Profile() {
   const profileBase = isSuperadmin ? "/superadmin/profile" : "/admin/profile";
 
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<FormData>({
-    firstname: "",
-    lastname: "",
-    email: "",
+  // Name/email are user edits layered over the fetched profile; passwords
+  // are pure local state. `form` is derived below from both.
+  const [profileEdits, setProfileEdits] = useState<
+    Partial<Pick<FormData, "firstname" | "lastname" | "email">>
+  >({});
+  const [passwords, setPasswords] = useState({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
@@ -68,16 +70,16 @@ export default function Profile() {
     if (error) toastError("Failed to load profile.");
   }, [error, toastError]);
 
-  useEffect(() => {
-    if (data) {
-      setForm((prev) => ({
-        ...prev,
-        firstname: data.firstname,
-        lastname: data.lastname,
-        email: data.email,
-      }));
-    }
-  }, [data]);
+  // Form values derive from server data overlaid with local edits — the
+  // fields hydrate automatically when the query resolves, no effect needed.
+  const form: FormData = {
+    firstname: profileEdits.firstname ?? data?.firstname ?? "",
+    lastname: profileEdits.lastname ?? data?.lastname ?? "",
+    email: profileEdits.email ?? data?.email ?? "",
+    currentPassword: passwords.currentPassword,
+    newPassword: passwords.newPassword,
+    confirmPassword: passwords.confirmPassword,
+  };
 
   const validate = (): FormErrors => {
     const errs: FormErrors = {};
@@ -128,7 +130,7 @@ export default function Profile() {
       }
 
       // Clear password fields after a successful save
-      setForm((prev) => ({ ...prev, currentPassword: "", newPassword: "", confirmPassword: "" }));
+      setPasswords({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setErrors({});
       success("Profile updated successfully.");
     } catch (err: unknown) {
@@ -219,7 +221,7 @@ export default function Profile() {
                   placeholder="Enter first name"
                   value={form.firstname}
                   onChange={(e) => {
-                    setForm((p) => ({ ...p, firstname: e.target.value }));
+                    setProfileEdits((p) => ({ ...p, firstname: e.target.value }));
                     setErrors((p) => ({ ...p, firstname: undefined }));
                   }}
                   error={errors.firstname}
@@ -230,7 +232,7 @@ export default function Profile() {
                   placeholder="Enter last name"
                   value={form.lastname}
                   onChange={(e) => {
-                    setForm((p) => ({ ...p, lastname: e.target.value }));
+                    setProfileEdits((p) => ({ ...p, lastname: e.target.value }));
                     setErrors((p) => ({ ...p, lastname: undefined }));
                   }}
                   error={errors.lastname}
@@ -243,7 +245,7 @@ export default function Profile() {
                     placeholder="Enter email"
                     value={form.email}
                     onChange={(e) => {
-                      setForm((p) => ({ ...p, email: e.target.value }));
+                      setProfileEdits((p) => ({ ...p, email: e.target.value }));
                       setErrors((p) => ({ ...p, email: undefined }));
                     }}
                     error={errors.email}
@@ -263,7 +265,7 @@ export default function Profile() {
                       placeholder="Enter current password"
                       value={form.currentPassword}
                       onChange={(e) => {
-                        setForm((p) => ({ ...p, currentPassword: e.target.value }));
+                        setPasswords((p) => ({ ...p, currentPassword: e.target.value }));
                         setErrors((p) => ({ ...p, currentPassword: undefined }));
                       }}
                       error={errors.currentPassword}
@@ -276,7 +278,7 @@ export default function Profile() {
                     placeholder="Enter new password"
                     value={form.newPassword}
                     onChange={(e) => {
-                      setForm((p) => ({ ...p, newPassword: e.target.value }));
+                      setPasswords((p) => ({ ...p, newPassword: e.target.value }));
                       setErrors((p) => ({ ...p, newPassword: undefined }));
                     }}
                     error={errors.newPassword}
@@ -288,7 +290,7 @@ export default function Profile() {
                     placeholder="Confirm new password"
                     value={form.confirmPassword}
                     onChange={(e) => {
-                      setForm((p) => ({ ...p, confirmPassword: e.target.value }));
+                      setPasswords((p) => ({ ...p, confirmPassword: e.target.value }));
                       setErrors((p) => ({ ...p, confirmPassword: undefined }));
                     }}
                     error={errors.confirmPassword}

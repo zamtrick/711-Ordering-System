@@ -1,10 +1,8 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import dotenv from "dotenv";
+import "../config/env.js";
 import User from "../models/User.js";
 import Branch from "../models/Branch.js";
-
-dotenv.config();
 
 const seed = async () => {
   try {

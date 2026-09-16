@@ -1,7 +1,7 @@
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react-native";
 import { View, Text, type ColorValue } from "react-native";
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function CartTabIcon({ color, size }: { color: ColorValue; size: number }) {
   const { theme } = useTheme();

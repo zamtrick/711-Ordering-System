@@ -1,0 +1,51 @@
+# Render Blueprint for the 7-11 API server.
+# Deploy with: Render Dashboard → New → Blueprint → pick this repo.
+# Everything with `sync: false` is a secret you fill in via the dashboard
+# when the blueprint syncs (never commit real values here).
+
+services:
+  - type: web
+    name: 711-api
+    runtime: node
+    plan: free
+    region: singapore # closest region to the Philippines
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/settings/delivery-fee # public GET, returns 200
+    autoDeploy: true # redeploy on every push to the branch
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_URI
+        sync: false # MongoDB Atlas SRV string
+      - key: JWT_SECRET
+        generateValue: true # random secret generated on first sync
+      - key: CORS_ORIGINS
+        sync: false # e.g. https://your-admin.vercel.app
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false # optional — leave empty for log-only email
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # Seed-account values (only needed if you run `npm run seed` from
+      # Render; see server/DEPLOY.md — seeding locally is recommended)
+      - key: SUPERADMIN_EMAIL
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+      - key: SUPERADMIN_FIRSTNAME
+        sync: false
+      - key: SUPERADMIN_LASTNAME
+        sync: false

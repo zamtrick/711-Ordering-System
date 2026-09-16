@@ -24,7 +24,7 @@ import {
 import api from "@/api/axios";
 import ThemedView from "@/components/ThemedView";
 import FavoriteHeartButton from "@/components/FavoriteHeartButton";
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import { useCart } from "@/context/CartContext";
 import { playTap } from "@/utils/sound";
 

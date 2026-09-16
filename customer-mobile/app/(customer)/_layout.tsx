@@ -8,12 +8,11 @@ import {
   User,
   MessageCircle,
 } from "lucide-react-native";
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import CartTabIcon from "@/components/CartTabIcon";
 import AppOpenAdModal from "@/components/AppOpenAdModal";
-import { useSettings } from "@/context/SettingsContext";
 import { useSocket, SocketProvider } from "@/context/SocketContext";
 
 const CustomerLayout = () => {

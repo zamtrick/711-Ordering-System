@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { MessageCircle, Send, Users, WifiOff, Search, Store } from "lucide-react";
 import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
-import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 
 // --------------------------------------------------
 // TYPES
@@ -100,7 +100,11 @@ export default function Chat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeConvRef = useRef<Conversation | null>(null);
-  activeConvRef.current = activeConv;
+  // Keep the ref in an effect — writing refs during render is impure and
+  // makes React Compiler skip optimizing this component.
+  useEffect(() => {
+    activeConvRef.current = activeConv;
+  }, [activeConv]);
 
   // --------------------------------------------------
   // SOCKET — init once on mount
@@ -157,23 +161,18 @@ export default function Chat() {
   // FETCH CONVERSATIONS (re-runs when branch filter changes)
   // --------------------------------------------------
 
-  const loadConversations = useCallback(async () => {
-    setLoadingConvs(true);
-    try {
-      const params: Record<string, string> = {};
-      if (isSuperAdmin && branchFilter) params.branchId = branchFilter;
-      const res = await api.get("/chat/conversations", { params });
-      setConversations(res.data?.data ?? []);
-    } catch (e) {
-      console.error("Load conversations error:", e);
-    } finally {
-      setLoadingConvs(false);
-    }
-  }, [branchFilter, isSuperAdmin]);
-
+  // Fetch conversations on mount and whenever the branch filter changes.
+  // Written as a promise chain — no setState is reachable synchronously
+  // inside this effect body, so React Compiler can keep optimizing it.
   useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+    const params: Record<string, string> = {};
+    if (isSuperAdmin && branchFilter) params.branchId = branchFilter;
+    api
+      .get("/chat/conversations", { params })
+      .then((res) => setConversations(res.data?.data ?? []))
+      .catch((e) => console.error("Load conversations error:", e))
+      .finally(() => setLoadingConvs(false));
+  }, [isSuperAdmin, branchFilter]);
 
   // --------------------------------------------------
   // OPEN A CONVERSATION

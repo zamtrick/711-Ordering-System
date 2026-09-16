@@ -12,7 +12,7 @@ import {
 import { Heart, PackageSearch, Plus, ShoppingCart, ChevronRight } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { useFavorites } from "@/context/FavoriteContext";
 import { useCart } from "@/context/CartContext";
@@ -32,7 +32,7 @@ const Favorites = () => {
 
   const { items, loading, refresh, removeFavorite } = useFavorites();
   const { addItem } = useCart();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyId] = useState<string | null>(null);
 
   // Re-sync with the server whenever the screen becomes visible —
   // hearts may have changed on Products/Home while we were away.

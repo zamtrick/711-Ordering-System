@@ -17,7 +17,7 @@ import {
   PackageCheck,
 } from "lucide-react-native";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { router, useFocusEffect } from "expo-router";
 import { useSocket } from "@/context/SocketContext";

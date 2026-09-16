@@ -126,7 +126,6 @@ const Deliveries = () => {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? DarkTheme : LightTheme;
   const { colors } = theme;
-  const isDark = colorScheme === "dark";
 
   // ── data ─────────────────────────────────────────
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);

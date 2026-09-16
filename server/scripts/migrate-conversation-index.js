@@ -6,7 +6,7 @@
  * Run once: node server/scripts/migrate-conversation-index.js
  */
 
-import "dotenv/config";
+import "../config/env.js";
 import mongoose from "mongoose";
 
 const { DB_URI } = process.env;

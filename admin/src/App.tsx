@@ -1,34 +1,42 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
+import type { JSX } from "react";
+import { AuthProvider } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/context/ThemeContext";
 import AppLayout from "@/components/layout/AppLayout";
-import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
-import Branches from "@/pages/Branches";
-import Products from "@/pages/Products";
-import Categories from "@/pages/Categories";
-import Riders from "@/pages/Riders";
-import Customers from "@/pages/Customers";
-import BranchInventory from "@/pages/BranchInventory";
-import Chat from "@/pages/Chat";
-import Orders from "@/pages/Orders";
-import Admins from "@/pages/Admins";
-import Settings from "@/pages/Settings";
-import Promos from "@/pages/Promos";
-import AppOpenAds from "@/pages/AppOpenAds";
-import Profile from "@/pages/Profile";
-import ActivityLog from "@/pages/ActivityLog";
-import type { JSX } from "react";
+
+// Route-level code splitting: each page ships as its own chunk and is
+// fetched on first visit, keeping the initial bundle small. All pages
+// use default exports, which is what React.lazy expects.
+const Login = lazy(() => import("@/pages/Login"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Branches = lazy(() => import("@/pages/Branches"));
+const Products = lazy(() => import("@/pages/Products"));
+const Categories = lazy(() => import("@/pages/Categories"));
+const Riders = lazy(() => import("@/pages/Riders"));
+const Customers = lazy(() => import("@/pages/Customers"));
+const BranchInventory = lazy(() => import("@/pages/BranchInventory"));
+const Chat = lazy(() => import("@/pages/Chat"));
+const Orders = lazy(() => import("@/pages/Orders"));
+const Admins = lazy(() => import("@/pages/Admins"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const Promos = lazy(() => import("@/pages/Promos"));
+const AppOpenAds = lazy(() => import("@/pages/AppOpenAds"));
+const Profile = lazy(() => import("@/pages/Profile"));
+const ActivityLog = lazy(() => import("@/pages/ActivityLog"));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-canvas">
+      <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children, superadminOnly = false }: { children: JSX.Element; superadminOnly?: boolean }) {
   const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-canvas">
-        <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
   if (!user || (user.role !== "admin" && user.role !== "superadmin")) return <Navigate to="/login" replace />;
   if (superadminOnly && user.role !== "superadmin") return <Navigate to="/dashboard" replace />;
   return children;
@@ -36,39 +44,41 @@ function ProtectedRoute({ children, superadminOnly = false }: { children: JSX.El
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/admins" element={<ProtectedRoute superadminOnly><Admins /></ProtectedRoute>} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/promos" element={<ProtectedRoute superadminOnly><Promos /></ProtectedRoute>} />
-        <Route path="/app-open-ads" element={<AppOpenAds />} />
-        <Route path="/activity-log" element={<ProtectedRoute superadminOnly><ActivityLog /></ProtectedRoute>} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/branches" element={<Branches />} />
-        <Route path="/branch-inventory" element={<BranchInventory />} />
-        <Route path="/products" element={<Products />} />
-        <Route path="/categories" element={<Categories />} />
-        <Route path="/riders" element={<Riders />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/orders" element={<Orders />} />
-        <Route path="/chat" element={<Chat />} />
-      </Route>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/admins" element={<ProtectedRoute superadminOnly><Admins /></ProtectedRoute>} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/promos" element={<ProtectedRoute superadminOnly><Promos /></ProtectedRoute>} />
+          <Route path="/app-open-ads" element={<AppOpenAds />} />
+          <Route path="/activity-log" element={<ProtectedRoute superadminOnly><ActivityLog /></ProtectedRoute>} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/branches" element={<Branches />} />
+          <Route path="/branch-inventory" element={<BranchInventory />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/riders" element={<Riders />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/chat" element={<Chat />} />
+        </Route>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
           <AppRoutes />
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

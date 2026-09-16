@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, UserCheck, UserX } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
 import Pagination from "@/components/ui/Pagination";

@@ -3,7 +3,11 @@
 // (e.g. email.service.js captures SMTP_* at load to decide log-only vs SMTP).
 // ES module imports are hoisted and evaluated before this module body runs,
 // so dotenv.config() further down would be too late.
-import "dotenv/config";
+//
+// config/env.js pins server/.env (cwd-independent) and overrides stale shell
+// vars (e.g. an old DB_URI exported in the terminal would otherwise win and
+// point the app at localhost:27017 instead of the DB in .env).
+import "./config/env.js";
 import express from "express";
 import { createServer } from "http";
 import morgan from "morgan";
@@ -15,6 +19,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { initSocket } from "./socket.js";
+import { isOriginAllowed } from "./config/cors.js";
 import chatRoutes from "./routes/chat.routes.js";
 
 import authRoutes from "./routes/auth.routes.js";
@@ -57,56 +62,41 @@ const httpServer = createServer(app);
 const { PORT, DB_URI } = process.env;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Fail fast (with a clear message) instead of hanging forever when the
+// database is unreachable — mongoose retries silently by default.
+const DB_CONNECT_TIMEOUT_MS = 30000;
+const dbConnectTimeout = setTimeout(() => {
+  console.error(
+    `Could not connect to MongoDB after ${DB_CONNECT_TIMEOUT_MS / 1000}s.\n` +
+      `  Check DB_URI in server/.env (currently: ${DB_URI ? DB_URI.replace(/:\/\/[^@/]*@/, "://***@") : "NOT SET"}).\n` +
+      "  If it is an Atlas cluster, verify network access (IP allowlist) and that the cluster is running.",
+  );
+  process.exit(1);
+}, DB_CONNECT_TIMEOUT_MS);
+
+// --------------------------------------------------
+// Proxy awareness — required behind Render/Railway/Heroku-style hosts.
+// Without it: req.protocol stays "http" so res.json image URL resolution
+// builds http:// URLs for Cloudinary-origin assets and secure cookie /
+// rate-limit keying misbehaves.
+// --------------------------------------------------
+app.set("trust proxy", 1);
+
 //middlewares
-app.use(morgan("dev"));
+// compact log in production, full dev log locally
+app.use(morgan(process.env.NODE_ENV === "production" ? "tiny" : "dev"));
 app.use(express.json());
 app.use(
-  cors({
-    // Allow the machine's own interfaces (Expo web/mobile on LAN), localhost dev
-    // servers, and anything listed in CORS_ORIGINS. Computing the LAN IPs at
-    // startup avoids stale hardcoded addresses breaking when the network changes.
-    // In production set CORS_ORIGINS to your real domains.
-    origin: (origin, callback) => {
-      const allowed = new Set([
-        "http://localhost:8081",        // Expo web (loopback)
-        "http://127.0.0.1:8081",        // Expo web (ipv4)
-        "http://localhost:5173",        // Vite admin client
-        "http://localhost:5174",        // Vite admin client (alt port)
-
-      ]);
-
-      // The server host's own LAN IPs — covers http://<lan-ip>:8081 (Expo web)
-      // and exp://<lan-ip>:8081 (Expo Go) for every interface of this machine.
-      const nets = os.networkInterfaces();
-      for (const addrs of Object.values(nets)) {
-        for (const net of addrs ?? []) {
-          if (net.family === "IPv4" && net.address) {
-            allowed.add(`http://${net.address}:8081`);
-            allowed.add(`http://${net.address}:19000`);
-            allowed.add(`exp://${net.address}:8081`);
-          }
-        }
-      }
-
-      for (const extra of (process.env.CORS_ORIGINS ?? "").split(",")) {
-        const trimmed = extra.trim();
-        if (trimmed) allowed.add(trimmed);
-      }
-
-      // No Origin header = native apps / curl / same-origin — always allowed.
-      if (!origin || allowed.has(origin)) return callback(null, true);
-
-      // Any localhost port is allowed for dev convenience.
-      if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(null, false);
-    },
-    credentials: true, // Required for Set-Cookie to be accepted cross-origin
+  cors((req, callback) => {
+    // Shared allowlist (see config/cors.js): LAN/dev origins, localhost, and
+    // anything listed in CORS_ORIGINS. No Origin header (native apps, curl,
+    // same-origin) always passes — CORS is a browser-only mechanism.
+    callback(null, {
+      origin: isOriginAllowed(req.headers.origin),
+      credentials: true, // Required for Set-Cookie to be accepted cross-origin
+    });
   }),
 );
-app.use(cookieParser());
 
 // Serve uploaded files (e.g. product images) at /uploads/...
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -142,6 +132,9 @@ const resolveRelativeImages = (node, origin) => {
 
 app.use((req, res, next) => {
   const send = res.json.bind(res);
+  // Behind a TLS-terminating proxy (Render etc.) the socket may look
+  // insecure — trust proxy (set above) makes req.protocol honor
+  // X-Forwarded-Proto so resolved image URLs keep https://.
   const origin = `${req.protocol}://${req.get("host")}`;
   res.json = (body) => {
     resolveRelativeImages(body, origin);
@@ -359,6 +352,7 @@ app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
 mongoose
   .connect(DB_URI)
   .then(async () => {
+    clearTimeout(dbConnectTimeout);
     // One-time index migration for per-order delivery chats: the old
     // customer_1_branch_1 unique index (no filter) would reject a second
     // order chat for the same customer+branch. The model now defines it as

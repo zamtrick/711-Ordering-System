@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Pressable, StyleSheet } from "react-native";
 import { Heart } from "lucide-react-native";
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import { useFavorites } from "@/context/FavoriteContext";
 
 // --------------------------------------------------

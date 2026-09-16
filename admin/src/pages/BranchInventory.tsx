@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Store, PackageSearch, ToggleLeft, ToggleRight, ChevronDown } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
 import Pagination from "@/components/ui/Pagination";
@@ -82,7 +82,9 @@ export default function BranchInventory() {
   const { toasts, removeToast, success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  // Auto-select the first branch by default; user picks override it.
+  // Derived during render — no effect needed to seed the selection.
+  const [pickedBranch, setPickedBranch] = useState<Branch | null>(null);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [page, setPage] = useState(1);
@@ -92,7 +94,8 @@ export default function BranchInventory() {
   const [saving, setSaving] = useState<Record<string, boolean>>({});
 
   // Inline stock edit state
-  const [editingStock, setEditingStock] = useState<Record<string, string>>({});
+  // Per-product edits made by the user; server values act as the base.
+  const [stockEdits, setStockEdits] = useState<Record<string, string>>({});
 
   // --------------------------------------------------
   // BRANCHES (cached, shared with Riders page)
@@ -109,12 +112,7 @@ export default function BranchInventory() {
 
   const branches = branchesData?.branches ?? [];
   const loadingBranches = !branchesData && !branchesError;
-
-  // Auto-select the first branch once loaded
-  useEffect(() => {
-    const first = branchesData?.branches?.[0];
-    if (!selectedBranch && first) setSelectedBranch(first);
-  }, [branchesData, selectedBranch]);
+  const selectedBranch = pickedBranch ?? branches[0] ?? null;
 
   useEffect(() => {
     if (branchesError) toastError("Failed to load branches.");
@@ -150,15 +148,13 @@ export default function BranchInventory() {
   const meta = inventoryData?.data.pagination ?? null;
   const loadingInventory = isFetching && !inventoryData;
 
-  // Seed the inline stock edit state whenever the page data changes
-  useEffect(() => {
-    if (!inventoryData) return;
-    const stockMap: Record<string, string> = {};
-    inventoryData.data.inventory.forEach((r) => {
-      stockMap[r.product._id] = r.stock !== null ? String(r.stock) : "";
-    });
-    setEditingStock(stockMap);
-  }, [inventoryData]);
+  // Inline stock inputs: server values seeded during render, user edits
+  // layered on top (derived — no effect, no render cascade).
+  const seededStock: Record<string, string> = {};
+  inventoryData?.data.inventory.forEach((r) => {
+    seededStock[r.product._id] = r.stock !== null ? String(r.stock) : "";
+  });
+  const editingStock = { ...seededStock, ...stockEdits };
 
   // Optimistically patch the cached row for this branch/page — no refetch
   // needed for single-row availability/stock edits.
@@ -279,7 +275,7 @@ export default function BranchInventory() {
             value={selectedBranch?._id ?? ""}
             onChange={(e) => {
               const b = branches.find((b) => b._id === e.target.value);
-              if (b) { setSelectedBranch(b); setPage(1); }
+              if (b) { setPickedBranch(b); setPage(1); }
             }}
             disabled={loadingBranches}
           >
@@ -417,7 +413,7 @@ export default function BranchInventory() {
                           placeholder="Use global"
                           value={stockStr}
                           onChange={(e) =>
-                            setEditingStock((s) => ({ ...s, [pid]: e.target.value }))
+                            setStockEdits((s) => ({ ...s, [pid]: e.target.value }))
                           }
                           onBlur={() => saveStock(row)}
                           onKeyDown={(e) => {

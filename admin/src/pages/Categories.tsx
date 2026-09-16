@@ -3,7 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Upload, X, Tags } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import ToastContainer from "@/components/ui/Toast";
@@ -76,7 +76,17 @@ export default function Categories() {
   // rows visible while the next page loads instead of collapsing to skeleton.
   const { data, isFetching, error } = useQuery({
     queryKey: ["categories", { page, limit, search: debouncedSearch }],
-    queryFn: () => fetchCategories({ page, limit, search: debouncedSearch }),
+    queryFn: async () => {
+      // Deleted the last row on the last page → the requested page can end
+      // up past totalPages. Refetch the last valid page instead of
+      // redirecting with setState (which would cascade renders).
+      const res = await fetchCategories({ page, limit, search: debouncedSearch });
+      const max = res.pagination?.totalPages ?? 0;
+      if (max > 0 && page > max) {
+        return fetchCategories({ page: Math.max(1, max), limit, search: debouncedSearch });
+      }
+      return res;
+    },
     placeholderData: (prev) => prev,
   });
 
@@ -87,11 +97,6 @@ export default function Categories() {
   const categories = data?.categories ?? [];
   const meta = data?.pagination ?? null;
   const loading = isFetching && !data;
-
-  // Deleted last row on the last page → step back to a valid page
-  useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
-  }, [meta, page]);
 
   const filtered = categories;
 

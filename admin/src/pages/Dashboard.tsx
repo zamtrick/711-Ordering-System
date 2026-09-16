@@ -11,8 +11,8 @@ import {
   PieChart,
 } from "lucide-react";
 import api from "@/api/axios";
-import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 

@@ -19,7 +19,7 @@ import {
   Check,
 } from "lucide-react-native";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import FavoriteHeartButton from "@/components/FavoriteHeartButton";
 import { router, useLocalSearchParams } from "expo-router";
@@ -104,7 +104,6 @@ const Products = () => {
 
   // Branch filter
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   // "all" means no branchId filter — show full global catalogue
   const ALL_BRANCHES_ID = "all";
   const [selectedBranchId, setSelectedBranchId] = useState<string>(ALL_BRANCHES_ID);
@@ -173,17 +172,12 @@ const Products = () => {
     return () => { cancelled = true; };
   }, [selectedBranchId, retryCount]);
 
-  // Keep selectedBranch object in sync with selectedBranchId
-  useEffect(() => {
-    if (selectedBranchId === ALL_BRANCHES_ID) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync state with selector
-      setSelectedBranch(null);
-    } else {
-      const b = branches.find((b) => b._id === selectedBranchId) ?? null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync state with selector
-      setSelectedBranch(b);
-    }
-  }, [selectedBranchId, branches]);
+  // Derive the selected branch object from the id (no state/effect needed —
+  // avoids a render cascade and the set-state-in-effect lint error).
+  const selectedBranch =
+    selectedBranchId === ALL_BRANCHES_ID
+      ? null
+      : branches.find((b) => b._id === selectedBranchId) ?? null;
 
   // --------------------------------------------------
   // CLIENT-SIDE FILTER (category + search)

@@ -25,7 +25,6 @@ import {
   Pencil,
   Printer,
   Share2,
-  QrCode,
 } from "lucide-react-native";
 import QRCodeSVG from "react-native-qrcode-svg";
 import {
@@ -35,7 +34,7 @@ import {
 } from "@/utils/receipt";
 import { router, useLocalSearchParams } from "expo-router";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import ReviewModal from "@/components/ReviewModal";
 import api from "@/api/axios";

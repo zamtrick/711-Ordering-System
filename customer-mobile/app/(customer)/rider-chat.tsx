@@ -14,7 +14,7 @@ import {
 import { ChevronLeft, Send, MessageCircle, WifiOff, Truck } from "lucide-react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import { useSocket } from "@/context/SocketContext";

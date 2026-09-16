@@ -20,8 +20,8 @@ import {
   ScrollText,
   Settings as SettingsIcon,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import { useState, useEffect, useRef } from "react";
 import { io, type Socket } from "socket.io-client";

@@ -15,9 +15,6 @@ import {
   PackageCheck,
   Banknote,
   CircleCheckBig,
-  MapPin,
-  Clock,
-  RotateCcw,
   Check,
 } from "lucide-react-native";
 

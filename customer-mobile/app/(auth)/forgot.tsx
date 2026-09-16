@@ -15,7 +15,7 @@ import { router } from "expo-router";
 import { Mail, ArrowRight, ChevronLeft } from "lucide-react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
 import api from "@/api/axios";

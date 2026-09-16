@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Star, X } from "lucide-react-native";
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 
 // --------------------------------------------------
 // ReviewModal

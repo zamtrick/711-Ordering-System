@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Modal from "./Modal";
 import Button from "./Button";
 import Input from "./Input";
@@ -28,16 +28,24 @@ export default function ConfirmDialog({
 }: Props) {
   const [value, setValue] = useState("");
 
-  // Fresh dialog every time it opens — no stale typed text.
-  useEffect(() => {
-    if (open) setValue("");
-  }, [open]);
+  // Fresh dialog every time it closes — no stale typed text on reopen.
+  // Done in the close/confirm event handlers (not an effect) so the reset
+  // happens without an extra render pass.
+  const handleClose = () => {
+    setValue("");
+    onClose();
+  };
+
+  const handleConfirm = () => {
+    setValue("");
+    onConfirm(value);
+  };
 
   const required = confirmText.trim().toUpperCase();
   const matched = !required || value.trim().toUpperCase() === required;
 
   return (
-    <Modal open={open} onClose={onClose} title={title} width="max-w-sm">
+    <Modal open={open} onClose={handleClose} title={title} width="max-w-sm">
       <div className="flex flex-col items-center text-center gap-4">
         <div className="w-14 h-14 rounded-full bg-danger-soft flex items-center justify-center">
           <AlertTriangle size={28} className="text-danger dark:text-danger" />
@@ -59,7 +67,7 @@ export default function ConfirmDialog({
           <Button
             variant="secondary"
             className="flex-1"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={loading}
           >
             Cancel
@@ -67,7 +75,7 @@ export default function ConfirmDialog({
           <Button
             variant="danger"
             className="flex-1"
-            onClick={() => onConfirm(value)}
+            onClick={handleConfirm}
             disabled={!matched}
             loading={loading}
           >

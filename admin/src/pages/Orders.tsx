@@ -3,7 +3,7 @@ import { Search, Eye, Printer } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { printReceipt, type ReceiptOrder } from "@/utils/receipt";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
@@ -148,11 +148,11 @@ export default function Orders() {
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [live, setLive] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const [branchRiders, setBranchRiders] = useState<BranchRider[]>([]);
-  const [ridersLoading, setRidersLoading] = useState(false);
-  const [selectedRider, setSelectedRider] = useState("");
+  // null = fetch in flight for the open detail modal (loading flag derives below)
+  const [branchRiders, setBranchRiders] = useState<BranchRider[] | null>(null);
+  // Rider dropdown edits; the order's current rider is the derived default.
+  const [riderIdEdit, setRiderIdEdit] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
 
   // Live rider cap (superadmin setting, default 3) for the load labels.
   const { data: riderCap } = useQuery({
@@ -162,9 +162,11 @@ export default function Orders() {
   });
   const cap = riderCap ?? 3;
 
-  // Latest list params for the socket handler (avoids re-subscribing the
-  // socket on every page/search change while still reading fresh values).
+  // Latest list params + socket ref for the socket handler (avoids
+  // re-subscribing the socket on every change while still reading fresh
+  // values — refs don't need to be dependencies).
   const listParamsRef = useRef({ page, limit, search: debouncedSearch, status: statusFilter });
+  const socketRef = useRef<Socket | null>(null);
   useEffect(() => {
     listParamsRef.current = { page, limit, search: debouncedSearch, status: statusFilter };
   }, [page, limit, debouncedSearch, statusFilter]);
@@ -174,7 +176,17 @@ export default function Orders() {
   // skeleton.
   const { data, isFetching, error } = useQuery({
     queryKey: ["orders", { page, limit, search: debouncedSearch, status: statusFilter }],
-    queryFn: () => fetchOrders({ page, limit, search: debouncedSearch, status: statusFilter }),
+    queryFn: async () => {
+      // Orders moving between status-filtered pages (or being cancelled away)
+      // can leave the requested page past totalPages. Refetch the last valid
+      // page instead of redirecting with setState (which cascades renders).
+      const res = await fetchOrders({ page, limit, search: debouncedSearch, status: statusFilter });
+      const max = res.pagination?.totalPages ?? 0;
+      if (max > 0 && page > max) {
+        return fetchOrders({ page: Math.max(1, max), limit, search: debouncedSearch, status: statusFilter });
+      }
+      return res;
+    },
     placeholderData: (prev) => prev,
   });
 
@@ -185,11 +197,6 @@ export default function Orders() {
   const orders = data?.orders ?? [];
   const meta = data?.pagination ?? null;
   const loading = isFetching && !data;
-
-  // Gone past the last page (e.g. orders cancelled away) → step back
-  useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
-  }, [meta, page]);
 
   // No Cancel action — cancelling is the customer's own right, admins can
   // only move orders forward (Accept / Complete) or refund (superadmin).
@@ -229,16 +236,21 @@ export default function Orders() {
     printReceipt(order as unknown as ReceiptOrder);
   };
 
+  const ridersLoading = viewOrder !== null && branchRiders === null;
+  const selectedRider =
+    riderIdEdit ??
+    (viewOrder && typeof viewOrder.rider === "object" ? viewOrder.rider?._id ?? "" : "");
+
   // Load branch riders (with live load counts) whenever the detail modal
   // opens, so admin can manually assign even when only 1-2 riders exist.
+  // Opening/closing resets state in the click handlers, not here — the
+  // effect only performs the async fetch.
+  const viewOrderId = viewOrder?._id ?? null;
+  const branchId =
+    viewOrder && typeof viewOrder.branch === "object" ? viewOrder.branch?._id : undefined;
   useEffect(() => {
-    if (!viewOrder) {
-      setBranchRiders([]);
-      setSelectedRider("");
-      return;
-    }
+    if (!viewOrderId) return;
     let cancelled = false;
-    setRidersLoading(true);
     (async () => {
       try {
         const all: BranchRider[] = [];
@@ -259,25 +271,19 @@ export default function Orders() {
         if (cancelled) return;
         // Riders endpoint is already branch-scoped for regular admins;
         // superadmins see all, so filter to this order's branch here.
-        const branchId =
-          typeof viewOrder.branch === "object" ? viewOrder.branch?._id : undefined;
         const scoped = branchId
           ? all.filter((r) => r.assignedBranch?._id === branchId || !r.assignedBranch)
           : all;
         setBranchRiders(scoped.filter((r) => r.user?.isActive !== false));
-        const currentId =
-          typeof viewOrder.rider === "object" ? viewOrder.rider?._id ?? "" : "";
-        setSelectedRider(currentId);
       } catch {
         if (!cancelled) setBranchRiders([]);
-      } finally {
-        if (!cancelled) setRidersLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [viewOrder?._id]);
+    // Re-runs when the modal opens for a different order or the branch changes.
+  }, [viewOrderId, branchId]);
 
   const handleAssignRider = async () => {
     if (!viewOrder || !selectedRider) return;
@@ -311,7 +317,7 @@ export default function Orders() {
       const updated: Order = res.data?.data;
       if (updated?._id) {
         setViewOrder((prev) => (prev?._id === updated._id ? { ...prev, ...updated } : prev));
-        setSelectedRider("");
+        setRiderIdEdit(null); // dropdown falls back to the (now empty) order rider
         toastSuccess("Rider unassigned (back to pool)");
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         queryClient.invalidateQueries({ queryKey: ["riders"] });
@@ -365,21 +371,19 @@ export default function Orders() {
       // status-filtered pages. Refetch whatever is cached (active queries).
       queryClient.invalidateQueries({ queryKey: ["orders"] });
 
-      // Keep the open detail modal in sync too
-      setViewOrder((prev) => {
-        if (prev?._id !== updated._id) return prev;
-        const nextRiderId = typeof updated.rider === "string" ? updated.rider : (updated.rider?._id ?? "");
-        const prevRiderId = typeof prev.rider === "string" ? prev.rider : (prev.rider?._id ?? "");
-        if (nextRiderId !== prevRiderId) setSelectedRider(nextRiderId);
-        return { ...prev, ...updated };
-      });
+      // Keep the open detail modal in sync too. The rider dropdown derives
+      // its value from the updated order (riderIdEdit is untouched), so no
+      // setState is needed here.
+      setViewOrder((prev) => (prev?._id !== updated._id ? prev : { ...prev, ...updated }));
     });
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+    // Stable deps: queryClient and the toast callbacks never change identity,
+    // so the socket still connects exactly once.
+  }, [toastSuccess, toastError, queryClient]);
 
   // Filtering happens server-side (search + status); the API returns the current page.
   const filtered = orders;
@@ -553,12 +557,12 @@ export default function Orders() {
                   <div className="flex gap-2 mt-2">
                     <select
                       value={selectedRider}
-                      onChange={(e) => setSelectedRider(e.target.value)}
+                      onChange={(e) => setRiderIdEdit(e.target.value)}
                       disabled={assigning}
                       className={`flex-1 h-10 px-3 rounded-xl border text-sm cursor-pointer ${isDark ? "bg-surface border-line text-white" : "bg-white border-line text-ink"}`}
                     >
                       <option value="">Select rider…</option>
-                      {branchRiders.map((r) => {
+                      {(branchRiders ?? []).map((r) => {
                         const name = `${r.user?.firstname ?? ""} ${r.user?.lastname ?? ""}`.trim() || "Rider";
                         const load = r.activeDeliveries ?? 0;
                         return (

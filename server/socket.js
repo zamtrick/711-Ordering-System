@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import * as cookie from "cookie";
+import { isOriginAllowed } from "./config/cors.js";
 import Admin from "./models/Admin.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
@@ -47,7 +48,10 @@ export const emitOrderUpdated = (order) => {
 export const initSocket = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
-      origin: (origin, cb) => cb(null, true), // inherits same policy as Express
+      // Same allowlist as the Express layer (see config/cors.js). Without
+      // this, any website could open a socket with a stolen/guessed token.
+      // Native mobile apps send no Origin header — those always pass.
+      origin: (origin, cb) => cb(null, isOriginAllowed(origin)),
       credentials: true,
     },
   });

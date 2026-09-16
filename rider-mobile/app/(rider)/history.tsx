@@ -6,7 +6,6 @@ import {
   useColorScheme,
   ScrollView,
   ActivityIndicator,
-  Pressable,
 } from "react-native";
 import {
   ClipboardList,

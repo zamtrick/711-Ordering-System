@@ -25,7 +25,7 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import DeliveryMapPicker, {
   type DeliveryCoords,
@@ -99,8 +99,6 @@ const PAYMENT_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-const paymentLabel = (m: string) => PAYMENT_LABELS[m] ?? m;
-
 // --------------------------------------------------
 // SCREEN
 // --------------------------------------------------
@@ -109,7 +107,7 @@ export default function Checkout() {
   const { theme } = useTheme();
   const { colors } = theme;
 
-  const { items, subtotal, clearCart, removeItem } = useCart();
+  const { items, subtotal, clearCart } = useCart();
 
   // ── data ─────────────────────────────────────────
   const [branches, setBranches] = useState<Branch[]>([]);

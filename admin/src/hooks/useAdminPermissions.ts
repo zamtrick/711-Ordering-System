@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "@/api/axios";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 export type AdminPermissions = {
   canManageProducts: boolean;
@@ -21,14 +21,12 @@ const DEFAULTS: AdminPermissions = {
 export function useAdminPermissions() {
   const { user } = useAuth();
   const [perms, setPerms] = useState<AdminPermissions>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
-    // Superadmin always has full permissions — no need to fetch
-    if (user?.role === "superadmin") {
-      setLoading(false);
-      return;
-    }
+    // Superadmin always has full permissions — no need to fetch.
+    // No setState here: `loading` is derived below instead.
+    if (user?.role === "superadmin") return;
 
     let mounted = true;
     api
@@ -47,12 +45,15 @@ export function useAdminPermissions() {
       })
       .catch(() => {})
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted) setFetching(false);
       });
     return () => {
       mounted = false;
     };
   }, [user?.role]);
+
+  // Superadmins are ready immediately — no fetch in flight for them.
+  const loading = user?.role === "superadmin" ? false : fetching;
 
   // Superadmin always returns true regardless of stored settings
   const can = (key: keyof AdminPermissions) => {

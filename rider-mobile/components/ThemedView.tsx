@@ -1,5 +1,4 @@
-import { ViewStyle } from "react-native";
-import { useColorScheme } from "react-native";
+import { useColorScheme, ViewStyle } from "react-native";
 import { LightTheme, DarkTheme } from "@/constants/Theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 

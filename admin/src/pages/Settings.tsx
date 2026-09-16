@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Truck, ShieldCheck, Bike, Save, Check, ScanLine, Camera, MapPin } from "lucide-react";
 import api from "@/api/axios";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
 
@@ -89,48 +89,42 @@ export default function Settings() {
     queryKey: ["settings", "delivery-fee"],
     queryFn: fetchDeliveryFee,
   });
-  const [feeInput, setFeeInput] = useState("");
+  // Input values = user edits layered over the fetched settings; fields
+  // hydrate automatically when queries resolve (derived — no effects).
+  const [feeEdit, setFeeEdit] = useState<string | null>(null);
+  const feeInput = feeEdit ?? (fee !== undefined ? String(fee) : "");
   const [savingFee, setSavingFee] = useState(false);
   const [feeSaved, setFeeSaved] = useState(false);
-
-  useEffect(() => {
-    if (fee !== undefined) setFeeInput(String(fee));
-  }, [fee]);
 
   // ── Admin permissions ───────────────────────────
   const { data: perms, error: permsError } = useQuery({
     queryKey: ["settings", "admin-permissions"],
     queryFn: fetchPermissions,
   });
-  const [permDraft, setPermDraft] = useState<AdminPermissions | null>(null);
+  const [permEdit, setPermEdit] = useState<AdminPermissions | null>(null);
   const [savingPerms, setSavingPerms] = useState(false);
   const [permsSaved, setPermsSaved] = useState(false);
+  const permDraft = permEdit ?? perms ?? null;
 
   // ── Rider capacity ────────────────────────────
   const { data: capacity, error: capacityError } = useQuery({
     queryKey: ["settings", "rider-capacity"],
     queryFn: fetchRiderCapacity,
   });
-  const [capacityInput, setCapacityInput] = useState("");
+  const [capacityEdit, setCapacityEdit] = useState<string | null>(null);
+  const capacityInput = capacityEdit ?? (capacity !== undefined ? String(capacity) : "");
   const [savingCapacity, setSavingCapacity] = useState(false);
   const [capacitySaved, setCapacitySaved] = useState(false);
-
-  useEffect(() => {
-    if (capacity !== undefined) setCapacityInput(String(capacity));
-  }, [capacity]);
 
   // ── Delivery verification flow ───────────────
   const { data: verificationMode, error: verificationError } = useQuery({
     queryKey: ["settings", "delivery-verification"],
     queryFn: fetchDeliveryVerification,
   });
-  const [verModeDraft, setVerModeDraft] = useState<DeliveryVerificationMode | null>(null);
+  const [verEdit, setVerEdit] = useState<DeliveryVerificationMode | null>(null);
   const [savingVerification, setSavingVerification] = useState(false);
   const [verificationSaved, setVerificationSaved] = useState(false);
-
-  useEffect(() => {
-    if (verificationMode) setVerModeDraft(verificationMode);
-  }, [verificationMode]);
+  const verModeDraft = verEdit ?? verificationMode ?? null;
 
   useEffect(() => {
     if (verificationError) toastError("Failed to load delivery verification mode.");
@@ -141,21 +135,14 @@ export default function Settings() {
     queryKey: ["settings", "delivery-range"],
     queryFn: fetchDeliveryRange,
   });
-  const [rangeInput, setRangeInput] = useState("");
+  const [rangeEdit, setRangeEdit] = useState<string | null>(null);
+  const rangeInput = rangeEdit ?? (rangeKm !== undefined ? String(rangeKm) : "");
   const [savingRange, setSavingRange] = useState(false);
   const [rangeSaved, setRangeSaved] = useState(false);
 
   useEffect(() => {
-    if (rangeKm !== undefined) setRangeInput(String(rangeKm));
-  }, [rangeKm]);
-
-  useEffect(() => {
     if (rangeError) toastError("Failed to load delivery range.");
   }, [rangeError, toastError]);
-
-  useEffect(() => {
-    if (perms) setPermDraft(perms);
-  }, [perms]);
 
   useEffect(() => {
     if (feeError) toastError("Failed to load delivery fee.");
@@ -235,7 +222,7 @@ export default function Settings() {
       const res = await api.put("/settings/delivery-verification", { mode });
       success("Delivery verification mode updated.");
       queryClient.setQueryData(["settings", "delivery-verification"], res.data?.data?.mode);
-      setVerModeDraft(res.data?.data?.mode ?? mode);
+      setVerEdit(res.data?.data?.mode ?? mode);
       setVerificationSaved(true);
       setTimeout(() => setVerificationSaved(false), 1500);
     } catch (err: unknown) {
@@ -305,7 +292,7 @@ export default function Settings() {
                     type="number"
                     min={0}
                     value={feeInput}
-                    onChange={(e) => setFeeInput(e.target.value)}
+                    onChange={(e) => setFeeEdit(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && feeDirty && saveFee()}
                     disabled={savingFee || !isSuperAdmin}
                     className="w-28 h-full px-2 outline-none bg-transparent text-sm font-semibold text-ink disabled:opacity-60"
@@ -354,7 +341,7 @@ export default function Settings() {
                     max={20}
                     step={1}
                     value={capacityInput}
-                    onChange={(e) => setCapacityInput(e.target.value)}
+                    onChange={(e) => setCapacityEdit(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && capacityDirty && saveCapacity()}
                     disabled={savingCapacity || !isSuperAdmin}
                     className="w-28 h-full px-3 outline-none bg-transparent text-sm font-semibold text-ink disabled:opacity-60"
@@ -416,7 +403,7 @@ export default function Settings() {
                       key={value}
                       type="button"
                       disabled={!isSuperAdmin || savingVerification}
-                      onClick={() => setVerModeDraft(value)}
+                      onClick={() => setVerEdit(value)}
                       className={`w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed ${
                         verModeDraft === value
                           ? "border-accent bg-accent/5"
@@ -488,7 +475,7 @@ export default function Settings() {
                     max={100}
                     step={1}
                     value={rangeInput}
-                    onChange={(e) => setRangeInput(e.target.value)}
+                    onChange={(e) => setRangeEdit(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && rangeDirty && saveRange()}
                     disabled={savingRange || !isSuperAdmin}
                     className="w-28 h-full px-3 outline-none bg-transparent text-sm font-semibold text-ink disabled:opacity-60"
@@ -542,7 +529,7 @@ export default function Settings() {
                       <Toggle
                         checked={permDraft[key]}
                         disabled={!isSuperAdmin || savingPerms}
-                        onChange={(v) => setPermDraft({ ...permDraft, [key]: v })}
+                        onChange={(v) => setPermEdit({ ...permDraft, [key]: v })}
                       />
                     </div>
                   ))}

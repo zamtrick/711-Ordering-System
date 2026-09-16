@@ -32,7 +32,7 @@ import {
   Plus,
 } from "lucide-react-native";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import DeliveryMapPicker, {
   type DeliveryCoords,

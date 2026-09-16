@@ -3,8 +3,8 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Upload, X, Megaphone, CalendarClock } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
-import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ui/Toast";
@@ -107,7 +107,7 @@ export default function AppOpenAds() {
   // QUERY
   // --------------------------------------------------
 
-  const { data, isFetching, error } = useQuery({
+  const { data, isFetching, error, dataUpdatedAt } = useQuery({
     queryKey: ["app-open-ads"],
     queryFn: () => api.get<{ data: Ad[] }>("/app-open-ad").then((res) => res.data?.data ?? []),
   });
@@ -118,6 +118,11 @@ export default function AppOpenAds() {
 
   const ads = data ?? [];
   const loading = isFetching && !data;
+  // Pure render: derive "now" from the query's fetch timestamp instead of
+  // calling Date.now() during render (impure — React Compiler skips the
+  // component). Freshness tracks refetches, which is exactly what the
+  // schedule badges need.
+  const now = dataUpdatedAt;
 
   // --------------------------------------------------
   // IMAGE HELPERS
@@ -297,7 +302,6 @@ export default function AppOpenAds() {
       ) : (
         <div className="space-y-3">
           {ads.map((ad) => {
-            const now = Date.now();
             const scheduled =
               (ad.startsAt && new Date(ad.startsAt).getTime() > now) ||
               (ad.endsAt && new Date(ad.endsAt).getTime() < now);

@@ -3,10 +3,10 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Upload, Download, X, PackageSearch, Store } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Pagination from "@/components/ui/Pagination";
@@ -41,14 +41,14 @@ export type FormData = {
 // HELPERS
 // --------------------------------------------------
 
-export const defaultForm = (): FormData => ({
+const defaultForm = (): FormData => ({
   sku: "", barcode: "", name: "", description: "", categoryId: "",
   price: "", stock: "", imageFile: null, imagePreview: "", removeImage: false,
 });
 
 const apiOrigin = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 
-export const toAbsolute = (image?: string) =>
+const toAbsolute = (image?: string) =>
   image && !/^https?:\/\//i.test(image) ? `${apiOrigin}${image}` : (image ?? "");
 
 const revokePreview = (url: string) => {
@@ -259,7 +259,17 @@ export default function Products() {
 
   const { data, isFetching, error } = useQuery({
     queryKey: ["products", { page, limit, search: debouncedSearch }],
-    queryFn: () => fetchProducts({ page, limit, search: debouncedSearch }),
+    queryFn: async () => {
+      // Deleted the last row on the last page → the requested page can end
+      // up past totalPages. Refetch the last valid page instead of
+      // redirecting with setState (which would cascade renders).
+      const res = await fetchProducts({ page, limit, search: debouncedSearch });
+      const max = res.pagination?.totalPages ?? 0;
+      if (max > 0 && page > max) {
+        return fetchProducts({ page: Math.max(1, max), limit, search: debouncedSearch });
+      }
+      return res;
+    },
     placeholderData: (prev) => prev,
   });
 
@@ -277,10 +287,6 @@ export default function Products() {
   const meta = data?.pagination ?? null;
   const categories = categoriesData?.categories ?? [];
   const loading = isFetching && !data;
-
-  useEffect(() => {
-    if (meta && page > meta.totalPages) setPage(Math.max(1, meta.totalPages));
-  }, [meta, page]);
 
   // ------------------------------------------------------------------
   // HELPERS

@@ -1,9 +1,7 @@
 import mongoose from "mongoose";
-import dotenv from "dotenv";
+import "../config/env.js";
 import Category from "../models/Category.js";
 import Product from "../models/Product.js";
-
-dotenv.config();
 
 // --------------------------------------------------
 // SAMPLE CATEGORIES

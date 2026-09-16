@@ -22,7 +22,7 @@ import {
 } from "lucide-react-native";
 import { router } from "expo-router";
 
-import useTheme from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import api from "@/api/axios";
 import { useSocket } from "@/context/SocketContext";
@@ -146,8 +146,10 @@ export default function Chat() {
   // LOAD CONVERSATION whenever selectedBranch changes
   // --------------------------------------------------
 
+  const branchId = selectedBranch?._id;
+
   useEffect(() => {
-    if (!selectedBranch) return;
+    if (!branchId) return;
 
     // Leave any previous conversation room
     if (convIdRef.current && socket) {
@@ -165,7 +167,7 @@ export default function Chat() {
     const load = async () => {
       try {
         const convRes = await api.get("/chat/conversation", {
-          params: { branchId: selectedBranch._id },
+          params: { branchId },
         });
         const convo: Conversation = convRes.data?.data;
         if (!convo?._id) throw new Error("No conversation");
@@ -185,7 +187,7 @@ export default function Chat() {
 
     load();
     return () => { mounted = false; };
-  }, [selectedBranch?._id]);
+  }, [branchId, socket]);
 
   // --------------------------------------------------
   // JOIN CONVERSATION ROOM once socket + convo ready
