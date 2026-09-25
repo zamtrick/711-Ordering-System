@@ -300,7 +300,9 @@ app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
 
     // Update order
     order.deliveryStatus = "delivered";
-    order.status = "completed";    // Create proof of delivery record
+    order.status = "completed";
+
+    // Create proof of delivery record
     order.proofOfDelivery = {
       photoUrl: photoUrl || null,
       scannedAt: new Date(),
