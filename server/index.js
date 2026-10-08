@@ -86,6 +86,11 @@ app.set("trust proxy", 1);
 // compact log in production, full dev log locally
 app.use(morgan(process.env.NODE_ENV === "production" ? "tiny" : "dev"));
 app.use(express.json());
+// Parse Cookie header into req.cookies — without this every request that
+// reads req.cookies.accessToken (auth middleware) fails: token is always
+// undefined, so all authenticated endpoints 401 with "Invalid or expired
+// token" (pages break on full page load, socket auth fails, etc).
+app.use(cookieParser());
 app.use(
   cors((req, callback) => {
     // Shared allowlist (see config/cors.js): LAN/dev origins, localhost, and
@@ -368,6 +373,18 @@ mongoose
       if (legacy) {
         await coll.dropIndex("customer_1_branch_1");
         console.log("Dropped legacy conversations index customer_1_branch_1");
+      }
+      // Same story for order_1: the old unique SPARSE index rejects any second
+      // support thread (order=null is still indexed under sparse in MongoDB).
+      // The model now defines order_1 as partial ($type objectId); drop the
+      // sparse one so Mongoose recreates it — otherwise createIndex fails with
+      // IndexOptionsConflict and the broken index silently stays in place.
+      const legacyOrder = indexes.find(
+        (ix) => ix.name === "order_1" && ix.sparse && !ix.partialFilterExpression,
+      );
+      if (legacyOrder) {
+        await coll.dropIndex("order_1");
+        console.log("Dropped legacy conversations index order_1 (sparse)");
       }
       await Conversation.syncIndexes();
     } catch (err) {

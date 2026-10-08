@@ -92,7 +92,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       try {
         const res = await api.get("/auth/token");
         token = res.data?.token ?? "";
-      } catch (err) {
+      } catch {
         // Not logged in yet — don't connect
         return;
       }

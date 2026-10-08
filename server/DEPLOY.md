@@ -109,12 +109,26 @@ Then log into the admin dashboard pointed at this API and confirm:
 ## Part 3 — Point clients at the API
 
 - **Admin dashboard (Vercel):** set `VITE_API_URL=https://711-api.onrender.com/api` in Vercel's project env vars. The admin reads it in `admin/src/api/axios.ts`; add your Vercel domain to `CORS_ORIGINS` on Render.
-- **Mobile apps:** replace the hardcoded LAN IP with the Render URL:
-  - `customer-mobile/app.json` → `expoExtra.apiUrl`
-  - `customer-mobile/api/axios.ts` → `baseURL`
-  - rider-mobile equivalents (`api/axios.ts`)
-  - Prefer `process.env.EXPO_PUBLIC_API_URL` over hardcoding — set it in `eas.json` or `.env` per profile.
+- **Mobile apps:** already wired up — `baseURL` in `customer-mobile/api/axios.ts`
+  and `rider-mobile/api/axios.ts` resolves in this order:
+  1. `process.env.EXPO_PUBLIC_API_URL` — set on the `production` and `preview`
+     profiles in each app's `eas.json` (currently `https://711-api.onrender.com/api`).
+     The Socket.IO URL and image origin are derived from `baseURL`, so they follow.
+  2. `extra.apiUrl` in `app.json` — the dev default (LAN IP).
+  3. Hardcoded LAN fallback.
+
+  Net effect: `eas build` → production/preview builds talk to Render;
+  `npx expo start` → keeps hitting your local server. To override locally,
+  drop a git-ignored `.env` next to the app's `package.json`:
+  `EXPO_PUBLIC_API_URL=http://<your-lan-ip>:5000/api`.
+  - ⚠️ Metro caches transforms **per file content, not per env value** — if you
+    change `EXPO_PUBLIC_API_URL` locally, restart with a clean cache
+    (`npx expo start -c`, or `expo export -c`) or the old URL stays baked in.
+    EAS builds run on a clean machine, so they are not affected.
   - Native apps send no `Origin` header, so no CORS change is needed for them.
+  - ⚠️ Build against Render only **after** the API is deployed and the two
+    `curl` checks above pass — otherwise the APK installs fine and every
+    request 404s.
 - Keep `/uploads` legacy images working: they resolve against the API origin, so existing relative paths in the DB will serve from `https://711-api.onrender.com/uploads/...`. New uploads go to Cloudinary.
 
 ## Troubleshooting

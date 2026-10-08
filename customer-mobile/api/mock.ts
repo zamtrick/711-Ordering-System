@@ -1,5 +1,5 @@
 // Mock API for testing - replace with real API in production
-import axios from "axios";
+import { create as createAxios } from "axios";
 import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
 
@@ -49,7 +49,7 @@ const mockData = {
 };
 
 const mock = wrapper(
-  axios.create({
+  createAxios({
     baseURL: "http://localhost:3000/api",
     headers: {
       "Content-Type": "application/json",

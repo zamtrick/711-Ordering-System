@@ -8,6 +8,9 @@
     // Not an .aab — a store upload would need "internal" distribution + Play Console.
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://711-api.onrender.com/api"
+      },
       "android": {
         "buildType": "apk"
       }
@@ -18,8 +21,12 @@
       "distribution": "internal"
     },
     // Internal testing builds (same as production but flagged for testers).
+    // Same API URL as production — testers hit the real server.
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://711-api.onrender.com/api"
+      }
     }
   },
   "submit": {

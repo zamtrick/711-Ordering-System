@@ -76,9 +76,14 @@ conversationSchema.index(
   { unique: true, partialFilterExpression: { order: null } },
 );
 conversationSchema.index({ branch: 1, lastMessageAt: -1 });
-// One delivery chat per order (sparse so branch threads with order=null
-// never collide with each other)
-conversationSchema.index({ order: 1 }, { unique: true, sparse: true });
+// One delivery chat per order. Partial (not sparse): support threads store
+// order=null EXPLICITLY and sparse only skips docs missing the field, so
+// every second support thread 500'd with E11000 dup key { order: null }.
+// $type objectId indexes only real order chats; null/missing stay out.
+conversationSchema.index(
+  { order: 1 },
+  { unique: true, partialFilterExpression: { order: { $type: "objectId" } } },
+);
 
 const Conversation = mongoose.model("Conversation", conversationSchema);
 export default Conversation;

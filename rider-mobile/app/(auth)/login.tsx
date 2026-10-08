@@ -20,6 +20,7 @@ import { LightTheme, DarkTheme } from "@/constants/Theme";
 import ThemedView from "@/components/ThemedView";
 import logo from "@/assets/logos/711logo.png";
 import { useAuth } from "@/context/AuthContext";
+import { baseURL } from "@/api/axios";
 
 const Login = () => {
   const colorScheme = useColorScheme();
@@ -57,7 +58,7 @@ const Login = () => {
       const message =
         error?.response?.data?.message ||
         (error?.code === "ERR_NETWORK" || error?.message === "Network Error"
-          ? "Cannot reach the server. Check that the API is running and your phone is on the same Wi-Fi (API: http://192.168.254.181:5000/api)."
+          ? `Cannot reach the server. Check that the API is running and your phone is on the same Wi-Fi (API: ${baseURL}).`
           : error?.message ||
             "Unable to login. Please check your email and password.");
 

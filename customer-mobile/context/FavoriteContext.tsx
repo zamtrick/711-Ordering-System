@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 import { Alert } from "react-native";
@@ -89,13 +90,14 @@ export const FavoriteProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  const favoriteIds = new Set(
-    items.map((i) => i.product?._id).filter(Boolean) as string[],
+  const favoriteIds = useMemo(
+    () => new Set(items.map((i) => i.product?._id).filter(Boolean) as string[]),
+    [items],
   );
 
   const isFavorite = useCallback(
     (productId: string) => favoriteIds.has(productId),
-    [items],
+    [favoriteIds],
   );
 
   const toggleFavorite = async (product: ProductInput) => {

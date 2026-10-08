@@ -69,7 +69,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         if (sound[1] !== null) {
           setSoundEnabledState(sound[1] === "true");
         }
-      } catch (e) {
+      } catch {
         // AsyncStorage failure — fall back to defaults silently
       } finally {
         setIsLoaded(true);

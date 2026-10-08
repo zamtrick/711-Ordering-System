@@ -1,4 +1,5 @@
 import AuditLog from "../../models/AuditLog.js";
+import mongoose from "mongoose";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // HELPER: Log an action (fire-and-forget, never breaks the main request)
@@ -23,7 +24,16 @@ export const getAuditLogs = async (req, res) => {
     const filter = {};
     if (action) filter.action = action;
     if (target) filter.target = target;
-    if (userId) filter.user = userId;
+    if (userId) {
+      // A non-ObjectId userId would make the query throw a CastError and 500.
+      // Bad query params are the caller's mistake — reject with a clean 400.
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid userId — must be a valid ID" });
+      }
+      filter.user = userId;
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
 
