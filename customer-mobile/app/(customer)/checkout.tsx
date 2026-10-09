@@ -22,6 +22,7 @@ import {
   Plus,
   ChevronDown,
   AlertTriangle,
+  Coins,
 } from "lucide-react-native";
 import { router } from "expo-router";
 
@@ -131,8 +132,36 @@ export default function Checkout() {
   // ── submitting ───────────────────────────────────
   const [placing, setPlacing] = useState(false);
 
+  // ── loyalty ──────────────────────────────────────
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [loyaltySettings, setLoyaltySettings] = useState<{
+    enabled: boolean;
+    redeemPoints: number;
+    redeemValue: number;
+    minRedeemPoints: number;
+  } | null>(null);
+  const [usePoints, setUsePoints] = useState(false);
+
   // ── computed ─────────────────────────────────────
   const total = subtotal + (subtotal > 0 ? deliveryFee : 0);
+
+  // Max redemption available for this order: limited by the customer's
+  // balance and by the order total (the discount can't exceed what's owed).
+  const redeemBlocks =
+    loyaltySettings && loyaltySettings.enabled && loyaltySettings.redeemPoints > 0
+      ? Math.min(
+          Math.floor(loyaltyPoints / loyaltySettings.redeemPoints),
+          Math.floor(total / Math.max(1, loyaltySettings.redeemValue)),
+        )
+      : 0;
+  const canRedeem =
+    !!loyaltySettings?.enabled &&
+    redeemBlocks > 0 &&
+    redeemBlocks * loyaltySettings.redeemPoints >= loyaltySettings.minRedeemPoints;
+  const redeemPoints = canRedeem ? redeemBlocks * loyaltySettings!.redeemPoints : 0;
+  const redeemDiscount = canRedeem ? redeemBlocks * loyaltySettings!.redeemValue : 0;
+  const appliedDiscount = usePoints && canRedeem ? redeemDiscount : 0;
+  const grandTotal = Math.max(0, total - appliedDiscount);
 
   // Effective range for the selected branch (branch override > default).
   const branchRangeKm =
@@ -195,6 +224,17 @@ export default function Checkout() {
           api.get("/settings/delivery-fee"),
           api.get("/settings/delivery-range"),
         ]);
+
+        // Loyalty is best-effort — checkout still works if it fails.
+        api
+          .get("/customer/loyalty")
+          .then((res) => {
+            if (!mounted) return;
+            const data = res.data?.data;
+            setLoyaltyPoints(data?.points ?? 0);
+            setLoyaltySettings(data?.settings ?? null);
+          })
+          .catch(() => {});
 
         const branchList: Branch[] = branchRes.data?.data ?? [];
         if (mounted) {
@@ -304,6 +344,18 @@ export default function Checkout() {
       }
 
       if (failures.length === 0) {
+        // Apply loyalty redemption (best-effort — a failed redeem never
+        // blocks the order; the customer just pays full price).
+        if (usePoints && canRedeem && redeemPoints > 0) {
+          try {
+            await api.post(`/orders/${orderId}/redeem`, { points: redeemPoints });
+          } catch (redeemErr: any) {
+            console.log(
+              "[Checkout] Redeem failed:",
+              redeemErr?.response?.data ?? redeemErr?.message,
+            );
+          }
+        }
         clearCart();
         router.replace("/(customer)/orders");
         // Small delay so the screen transitions first
@@ -712,6 +764,49 @@ export default function Checkout() {
           ))}
         </View>
 
+        {/* ── LOYALTY REDEMPTION ───────────────────── */}
+        {loyaltySettings?.enabled && (
+          <>
+            <SectionHeader icon={<Coins size={15} color="#007A53" />} title="Rewards" />
+            <Pressable
+              disabled={!canRedeem}
+              onPress={() => setUsePoints((v) => !v)}
+              style={[
+                styles.rewardsRow,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: usePoints && canRedeem ? "#007A53" : colors.border,
+                  opacity: canRedeem ? 1 : 0.6,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    borderColor: usePoints && canRedeem ? "#007A53" : colors.border,
+                    backgroundColor: usePoints && canRedeem ? "#007A53" : "transparent",
+                  },
+                ]}
+              >
+                {usePoints && canRedeem && <Check size={12} color="#fff" />}
+              </View>
+              <View style={styles.rewardsInfo}>
+                <Text style={[styles.rewardsTitle, { color: colors.headline }]}>
+                  {canRedeem
+                    ? `Redeem ${redeemPoints} points for ₱${redeemDiscount} off`
+                    : `You have ${loyaltyPoints} points`}
+                </Text>
+                <Text style={[styles.rewardsSub, { color: colors.muted }]}>
+                  {canRedeem
+                    ? `Balance will be ${loyaltyPoints - redeemPoints} points`
+                    : `Earn or save at least ${loyaltySettings.minRedeemPoints} points to redeem`}
+                </Text>
+              </View>
+            </Pressable>
+          </>
+        )}
+
         {/* ── TOTALS ───────────────────────────────── */}
         <View
           style={[
@@ -737,6 +832,17 @@ export default function Checkout() {
             </Text>
           </View>
 
+          {appliedDiscount > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: "#007A53" }]}>
+                Points Discount
+              </Text>
+              <Text style={[styles.totalValue, { color: "#007A53" }]}>
+                -₱{appliedDiscount.toFixed(2)}
+              </Text>
+            </View>
+          )}
+
           <View
             style={[styles.totalDivider, { backgroundColor: colors.border }]}
           />
@@ -745,7 +851,7 @@ export default function Checkout() {
             <Text style={[styles.grandLabel, { color: colors.headline }]}>
               Total
             </Text>
-            <Text style={styles.grandValue}>₱{total.toFixed(2)}</Text>
+            <Text style={styles.grandValue}>₱{grandTotal.toFixed(2)}</Text>
           </View>
         </View>
 
@@ -1166,6 +1272,23 @@ const styles = StyleSheet.create({
   },
 
   customToggleText: { fontSize: 13, fontWeight: "600" },
+
+  rewardsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1.2,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+
+  rewardsInfo: { flex: 1 },
+
+  rewardsTitle: { fontSize: 13, fontWeight: "700" },
+
+  rewardsSub: { fontSize: 11, marginTop: 3 },
   rangeWarning: {
     flexDirection: "row",
     alignItems: "flex-start",

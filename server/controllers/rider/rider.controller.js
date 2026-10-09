@@ -430,6 +430,13 @@ export const updateDeliveryStatus = async (req, res) => {
 
     await order.save();
 
+    // Credit loyalty points once the order is delivered (idempotent — the
+    // service ignores orders that already earned points).
+    if (deliveryStatus === "delivered") {
+      const { awardOrderPoints } = await import("../../services/loyalty.service.js");
+      awardOrderPoints(order).catch(() => {});
+    }
+
     // Recompute availability from actual load: still carrying other active
     // orders -> stay "delivering", otherwise back to "available".
     // (Never touches "offline" — refreshRiderAvailability guards that.)

@@ -285,6 +285,15 @@ const CustomerTabs = () => {
           headerShown: false,
         }}
       />
+
+      {/* Hidden screen — loyalty points, reachable from Profile */}
+      <Tabs.Screen
+        name="loyalty"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 };

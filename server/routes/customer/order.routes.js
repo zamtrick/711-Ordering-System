@@ -6,6 +6,7 @@ import {
   getOrderById,
   cancelOrder,
 } from "../../controllers/customer/order.controller.js";
+import { redeemOrderPoints } from "../../controllers/customer/loyalty.controller.js";
 
 const router = express.Router();
 
@@ -30,5 +31,9 @@ router.get("/:id", getOrderById);
 // Cancel customer's own order
 // PATCH /api/customer/orders/:id/cancel
 router.patch("/:id/cancel", cancelOrder);
+
+// Redeem loyalty points against a pending order
+// POST /api/orders/:id/redeem  (body: { points })
+router.post("/:id/redeem", redeemOrderPoints);
 
 export default router;

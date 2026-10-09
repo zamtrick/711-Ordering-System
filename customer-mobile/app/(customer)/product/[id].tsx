@@ -75,6 +75,7 @@ export default function ProductDetail() {
 
   const [product, setProduct] = useState<Product | null>(null);
   const [related, setRelated] = useState<Product[]>([]);
+  const [fbt, setFbt] = useState<Product[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -88,6 +89,12 @@ export default function ProductDetail() {
     try {
       const res = await api.get(`/customer/products/${id}`);
       setProduct(res.data?.data ?? null);
+
+      // Co-purchase recommendations — best-effort, never blocks the page.
+      api
+        .get(`/customer/products/${id}/bought-together`, { params: { limit: 6 } })
+        .then((fbtRes) => setFbt(fbtRes.data?.data ?? []))
+        .catch(() => {});
 
       // Related products: same category, exclude self
       const categoryId =
@@ -333,6 +340,63 @@ export default function ProductDetail() {
             ))
           )}
 
+          {/* ── Frequently bought together ──────────────────────── */}
+          {fbt.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.headline }]}>Frequently bought together</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.relatedRow}>
+                {fbt.map((p) => {
+                  const outOfStock = (p.stock ?? 0) <= 0;
+                  return (
+                    <View
+                      key={p._id}
+                      style={[styles.relatedCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          playTap();
+                          router.push(`/(customer)/product/${p._id}` as never);
+                        }}
+                      >
+                        {p.image ? (
+                          <Image source={{ uri: p.image }} style={styles.relatedImage} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.relatedImage, styles.imagePlaceholder]}>
+                            <PackageSearch size={22} color={colors.muted} />
+                          </View>
+                        )}
+                        <Text style={[styles.relatedName, { color: colors.headline }]} numberOfLines={1}>
+                          {p.name}
+                        </Text>
+                        <Text style={[styles.relatedPrice, { color: colors.primary }]}>₱{p.price}</Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={outOfStock}
+                        onPress={() => {
+                          playTap();
+                          addItem({
+                            id: p._id,
+                            name: p.name,
+                            category:
+                              p.categoryId && typeof p.categoryId === "object"
+                                ? p.categoryId.name
+                                : "General",
+                            price: p.price,
+                            image: p.image,
+                          });
+                        }}
+                        style={[styles.fbtAddBtn, outOfStock && styles.ctaDisabled]}
+                      >
+                        <Plus size={14} color="#FFFFFF" />
+                        <Text style={styles.fbtAddText}>{outOfStock ? "Sold out" : "Add"}</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+
           {/* ── Related ─────────────────────────────────────────── */}
           {related.length > 0 && (
             <>
@@ -459,6 +523,17 @@ const styles = StyleSheet.create({
   relatedImage: { width: 104, height: 80, borderRadius: 8 },
   relatedName: { fontSize: 12, fontWeight: "600" as const },
   relatedPrice: { fontSize: 13, fontWeight: "700" as const },
+  fbtAddBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 4,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: "#007A53",
+    marginTop: 4,
+  },
+  fbtAddText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" as const },
 
   ctaBar: {
     flexDirection: "row" as const,

@@ -269,6 +269,10 @@ router.post(
 
       await order.save();
 
+      // Credit loyalty points once the order is delivered (idempotent).
+      const { awardOrderPoints } = await import("../../services/loyalty.service.js");
+      awardOrderPoints(order).catch(() => {});
+
       // Rider goes back to available
       rider.availabilityStatus = "available";
       await rider.save();

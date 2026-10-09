@@ -248,6 +248,19 @@ export const updateOrderStatus = async (req, res) => {
       // audit failures must not break the request
     }
 
+    // Loyalty: award points when the order completes, claw them back on a
+    // refund. Both helpers are idempotent, so racing the rider paths is safe.
+    if (status === "completed") {
+      const { awardOrderPoints } = await import("../../services/loyalty.service.js");
+      awardOrderPoints(order, { createdBy: req.user?.userId }).catch(() => {});
+    } else if (status === "refunded") {
+      const { reverseOrderPoints, refundRedeemedPoints } = await import(
+        "../../services/loyalty.service.js"
+      );
+      reverseOrderPoints(order).catch(() => {});
+      refundRedeemedPoints(order).catch(() => {});
+    }
+
     const updated = await Order.findById(order._id)
       .populate("user", "firstname lastname email")
       .populate("branch")

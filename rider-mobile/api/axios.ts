@@ -1,4 +1,4 @@
-import axios from "axios";
+import { create } from "axios";
 import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
 import Constants from "expo-constants";
@@ -16,7 +16,7 @@ export const baseURL: string =
 const jar = new CookieJar();
 
 const api = wrapper(
-  axios.create({
+  create({
     baseURL,
     headers: {
       "Content-Type": "application/json",

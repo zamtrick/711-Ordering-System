@@ -28,6 +28,33 @@ const DELIVERY_VERIFICATION_KEY = "deliveryVerificationMode";
 const DELIVERY_VERIFICATION_MODES = ["qr_and_photo", "photo_only"];
 export const DEFAULT_DELIVERY_VERIFICATION_MODE = "qr_and_photo";
 
+// Loyalty programme config. Stored as a single JSON blob so the rules can be
+// tuned from the admin UI without a code change. earnPerPeso = points awarded
+// per peso spent; redeemPoints points convert to redeemValue pesos.
+const LOYALTY_KEY = "loyalty";
+export const DEFAULT_LOYALTY_SETTINGS = {
+  enabled: true,
+  earnPerPeso: 0.1, // 1 point per ₱10 spent
+  redeemPoints: 100, // points needed per redemption block
+  redeemValue: 5, // peso value of one redemption block
+  minRedeemPoints: 100, // smallest redemption the customer can make
+};
+
+/**
+ * Shared helper — resolves the effective loyalty settings, merged over the
+ * built-in defaults so a partially-written blob still works.
+ */
+export const getLoyaltySettings = async () => {
+  try {
+    const setting = await Setting.findOne({ key: LOYALTY_KEY });
+    if (!setting) return { ...DEFAULT_LOYALTY_SETTINGS };
+    const parsed = JSON.parse(setting.value);
+    return { ...DEFAULT_LOYALTY_SETTINGS, ...(parsed ?? {}) };
+  } catch {
+    return { ...DEFAULT_LOYALTY_SETTINGS };
+  }
+};
+
 // Platform-wide default delivery range in km. Branches can override it with
 // their own deliveryRange (admin Branches page); branches that never set one
 // (or have the sentinel 0 meaning "no override") fall back to this value.
@@ -448,6 +475,82 @@ export const updateRiderCapacityHandler = async (req, res) => {
     });
   } catch (err) {
     console.error("Update rider capacity error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// --------------------------------------------------
+// GET LOYALTY SETTINGS (public — customer app reads the earn/redeem rules)
+// GET /api/settings/loyalty
+// --------------------------------------------------
+
+export const getLoyaltySettingsHandler = async (req, res) => {
+  try {
+    const settings = await getLoyaltySettings();
+    return res.status(200).json({ success: true, data: settings });
+  } catch (err) {
+    console.error("Get loyalty settings error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// --------------------------------------------------
+// UPDATE LOYALTY SETTINGS (superadmin-only)
+// PUT /api/settings/loyalty
+// Body: { enabled?, earnPerPeso?, redeemPoints?, redeemValue?, minRedeemPoints? }
+// --------------------------------------------------
+
+export const updateLoyaltySettingsHandler = async (req, res) => {
+  try {
+    const current = await getLoyaltySettings();
+    const body = req.body ?? {};
+
+    const next = { ...current };
+
+    if (typeof body.enabled === "boolean") next.enabled = body.enabled;
+
+    const numericFields = ["earnPerPeso", "redeemPoints", "redeemValue", "minRedeemPoints"];
+    for (const field of numericFields) {
+      if (body[field] === undefined) continue;
+      const value = Number(body[field]);
+      if (!Number.isFinite(value) || value < 0) {
+        return res.status(400).json({
+          success: false,
+          message: `${field} must be a number greater than or equal to 0`,
+        });
+      }
+      next[field] = value;
+    }
+
+    // Redemption must be meaningful — can't convert points into 0 pesos.
+    if (next.redeemPoints <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "redeemPoints must be greater than 0",
+      });
+    }
+
+    const setting = await Setting.findOneAndUpdate(
+      { key: LOYALTY_KEY },
+      { value: JSON.stringify(next), updatedBy: req.user?.userId ?? null },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+
+    logAction(
+      req.user?.userId,
+      "update_loyalty_settings",
+      "setting",
+      setting._id,
+      next,
+    ).catch(() => {});
+
+    return res.status(200).json({
+      success: true,
+      message: "Loyalty settings updated",
+      data: next,
+    });
+  } catch (err) {
+    console.error("Update loyalty settings error:", err.message);
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };

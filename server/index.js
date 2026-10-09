@@ -56,6 +56,8 @@ import manageCustomerReviews from "./routes/customer/review.routes.js";
 import manageAdminReviews from "./routes/admin/review.routes.js";
 import manageBranchInventory from "./routes/admin/branchInventory.routes.js";
 import manageAdminOrders from "./routes/admin/order.routes.js";
+import manageAdminLoyalty from "./routes/admin/loyalty.routes.js";
+import manageCustomerLoyalty from "./routes/customer/loyalty.routes.js";
 import Conversation from "./models/Conversation.js";
 
 const app = express();
@@ -181,6 +183,7 @@ app.use(
 );
 app.use("/api/admin/profile", auth, authorize("admin"), manageAdminProfile);
 app.use("/api/admin/orders", auth, authorize("admin", "superadmin"), manageAdminOrders);
+app.use("/api/admin/loyalty", auth, authorize("admin", "superadmin"), manageAdminLoyalty);
 
 //manage by customer
 app.use("/api/customer/profile", auth, manageProfileCustomer);
@@ -189,6 +192,7 @@ app.use("/api/customer/notifications", auth, authorize("customer"), manageCustom
 app.use("/api/customer/products", auth, manageCustomerProducts);
 app.use("/api/customer/promos", auth, manageCustomerPromos);
 app.use("/api/customer/favorites", auth, manageCustomerFavorites);
+app.use("/api/customer/loyalty", auth, authorize("customer"), manageCustomerLoyalty);
 app.use("/api/customer/reviews", auth, manageCustomerReviews);
 app.use("/api/admin/reviews", auth, authorize("admin", "superadmin"), manageAdminReviews);
 app.use("/api/customer/branches", auth, manageCustomerBranches);
@@ -319,6 +323,10 @@ app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
     };
 
     await order.save();
+
+    // Credit loyalty points for the delivered order (idempotent).
+    const { awardOrderPoints } = await import("./services/loyalty.service.js");
+    awardOrderPoints(order).catch(() => {});
 
     // Update payment status if COD
     const Payment = (await import("./models/Payment.js")).default;

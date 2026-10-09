@@ -437,13 +437,16 @@ export default function OrderDetailScreen() {
       const pid =
         typeof item.product === "object" ? item.product?._id : undefined;
       if (!pid) continue;
-      addItem({
-        id: pid,
-        name: item.product?.name ?? "Product",
-        category: "Reorder",
-        price: item.unitPrice ?? item.product?.price ?? 0,
-        image: item.product?.image,
-      });
+      addItem(
+        {
+          id: pid,
+          name: item.product?.name ?? "Product",
+          category: "Reorder",
+          price: item.unitPrice ?? item.product?.price ?? 0,
+          image: item.product?.image,
+        },
+        item.quantity,
+      );
     }
     router.push("/(customer)/cart");
   };

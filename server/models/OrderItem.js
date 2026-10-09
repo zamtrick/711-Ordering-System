@@ -39,6 +39,11 @@ const orderItemSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Support the "frequently bought together" co-purchase aggregation
+// (scan by product → group by order → pull sibling items).
+orderItemSchema.index({ product: 1 });
+orderItemSchema.index({ order: 1 });
+
 const OrderItem = mongoose.model("OrderItem", orderItemSchema);
 
 export default OrderItem;

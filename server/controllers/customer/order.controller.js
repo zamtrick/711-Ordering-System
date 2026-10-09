@@ -658,6 +658,10 @@ export const cancelOrder = async (req, res) => {
       await Payment.findByIdAndUpdate(order.payment, { status: "cancelled" });
     }
 
+    // Give back any loyalty points the customer redeemed on this order.
+    const { refundRedeemedPoints } = await import("../../services/loyalty.service.js");
+    refundRedeemedPoints(order).catch(() => {});
+
     // Recount the freed rider (back to "available" if nothing else active).
     if (releasedRiderId) {
       const freedRider = await Rider.findById(releasedRiderId);

@@ -10,6 +10,8 @@ import {
   updateDeliveryVerificationHandler,
   getDeliveryRangeHandler,
   updateDeliveryRangeHandler,
+  getLoyaltySettingsHandler,
+  updateLoyaltySettingsHandler,
 } from "../controllers/settings.controller.js";
 import auth from "../middlewares/auth.middleware.js";
 import { authorize } from "../middlewares/role.middleware.js";
@@ -84,6 +86,19 @@ router.put(
   auth,
   authorize("superadmin"),
   updateRiderCapacityHandler,
+);
+
+// Public: customer app reads the loyalty earn/redeem rules
+// GET /api/settings/loyalty
+router.get("/loyalty", getLoyaltySettingsHandler);
+
+// Superadmin-only: platform-wide loyalty rules
+// PUT /api/settings/loyalty
+router.put(
+  "/loyalty",
+  auth,
+  authorize("superadmin"),
+  updateLoyaltySettingsHandler,
 );
 
 export default router;

@@ -19,6 +19,7 @@ import {
   MonitorPlay,
   ScrollText,
   Settings as SettingsIcon,
+  Coins,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -69,6 +70,7 @@ const superadminNav: NavSection[] = [
     heading: "Operations",
     items: [
       { to: "/orders", label: "Orders",  icon: ShoppingBag, badge: "orders" },
+      { to: "/loyalty", label: "Loyalty", icon: Coins },
       { to: "/riders", label: "Riders",  icon: Truck },
       { to: "/chat",   label: "Chat",    icon: MessageCircle, badge: "chat" },
     ],
@@ -102,6 +104,7 @@ const adminNav: NavSection[] = [
     heading: "Operations",
     items: [
       { to: "/orders", label: "Orders", icon: ShoppingBag, badge: "orders" },
+      { to: "/loyalty", label: "Loyalty", icon: Coins },
       { to: "/chat",   label: "Chat",   icon: MessageCircle, badge: "chat" },
     ],
   },

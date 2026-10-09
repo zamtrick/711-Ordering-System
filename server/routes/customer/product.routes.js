@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import Product from "../../models/Product.js";
 import BranchProduct from "../../models/BranchProduct.js";
+import OrderItem from "../../models/OrderItem.js";
 
 const router = express.Router();
 
@@ -77,6 +78,82 @@ router.get("/", async (req, res) => {
     });
   } catch (err) {
     console.error("Get customer products error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+});
+
+// GET /api/customer/products/:id/bought-together
+// Products most frequently ordered in the same order as :id (co-purchase
+// frequency, ranked by total quantity across those orders). Powers the
+// "Frequently bought together" shelf on the product screen.
+router.get("/:id/bought-together", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid product ID" });
+    }
+
+    const limitParam = Number(req.query.limit);
+    const limit =
+      Number.isFinite(limitParam) && limitParam >= 1
+        ? Math.min(Math.floor(limitParam), 12)
+        : 6;
+
+    const pid = new mongoose.Types.ObjectId(id);
+
+    // 1. Find every order that contains this product.
+    // 2. Pull all sibling items from those same orders.
+    // 3. Rank the other products by total quantity.
+    const ranked = await OrderItem.aggregate([
+      { $match: { product: pid } },
+      { $group: { _id: "$order" } },
+      {
+        $lookup: {
+          from: "orderitems",
+          localField: "_id",
+          foreignField: "order",
+          as: "siblings",
+        },
+      },
+      { $unwind: "$siblings" },
+      { $match: { "siblings.product": { $ne: pid } } },
+      {
+        $group: {
+          _id: "$siblings.product",
+          count: { $sum: "$siblings.quantity" },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: limit },
+    ]);
+
+    if (ranked.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const countMap = new Map(
+      ranked.map((r) => [r._id.toString(), r.count]),
+    );
+
+    const products = await Product.find({
+      _id: { $in: ranked.map((r) => r._id) },
+      isActive: true,
+    }).populate("categoryId", "name image");
+
+    // Preserve the frequency ranking and expose the count to the client.
+    const data = products
+      .map((p) => ({
+        ...p.toObject(),
+        boughtTogetherCount: countMap.get(p._id.toString()) ?? 0,
+      }))
+      .sort((a, b) => b.boughtTogetherCount - a.boughtTogetherCount);
+
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error("Bought together error:", err.message);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",

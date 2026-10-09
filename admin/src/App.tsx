@@ -22,6 +22,7 @@ const Customers = lazy(() => import("@/pages/Customers"));
 const BranchInventory = lazy(() => import("@/pages/BranchInventory"));
 const Chat = lazy(() => import("@/pages/Chat"));
 const Orders = lazy(() => import("@/pages/Orders"));
+const Loyalty = lazy(() => import("@/pages/Loyalty"));
 const Admins = lazy(() => import("@/pages/Admins"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Promos = lazy(() => import("@/pages/Promos"));
@@ -67,6 +68,7 @@ function AppRoutes() {
             <Route path="/riders" element={<Riders />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/loyalty" element={<Loyalty />} />
             <Route path="/chat" element={<Chat />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

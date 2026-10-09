@@ -21,6 +21,7 @@ import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { router, useFocusEffect } from "expo-router";
 import { useSocket } from "@/context/SocketContext";
+import { useCart } from "@/context/CartContext";
 import api from "@/api/axios";
 
 // --------------------------------------------------
@@ -45,7 +46,9 @@ type Order = {
   orderItems: {
     _id: string;
     quantity: number;
-    product?: { name: string; image?: string };
+    unitPrice?: number;
+    subTotal?: number;
+    product?: { _id?: string; name?: string; price?: number; image?: string };
   }[];
   deliveryFee?: number;
 };
@@ -166,6 +169,7 @@ const Orders = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const { socket } = useSocket();
+  const { addItem, clearCart } = useCart();
 
   // Guards so flat list doesn't double-fetch while a request is in flight
   const fetchingRef = useRef(false);
@@ -318,6 +322,36 @@ const Orders = () => {
   };
 
   // --------------------------------------------------
+  // REORDER — rebuild the past order in the cart
+  // --------------------------------------------------
+
+  const handleReorder = useCallback(
+    (order: Order) => {
+      const items = order.orderItems ?? [];
+      const valid = items.filter((it) => it.product?._id);
+      if (valid.length === 0) {
+        Alert.alert("Reorder", "These items are no longer available.");
+        return;
+      }
+      clearCart();
+      for (const it of valid) {
+        addItem(
+          {
+            id: it.product!._id!,
+            name: it.product?.name ?? "Product",
+            category: "Reorder",
+            price: it.unitPrice ?? it.product?.price ?? 0,
+            image: it.product?.image,
+          },
+          it.quantity,
+        );
+      }
+      router.push("/(customer)/cart");
+    },
+    [addItem, clearCart],
+  );
+
+  // --------------------------------------------------
   // RENDER ORDER CARD
   // --------------------------------------------------
 
@@ -448,10 +482,7 @@ const Orders = () => {
                 style={[styles.actionButton, { borderColor: "#007A53" }]}
                 onPress={(e) => {
                   e.stopPropagation?.();
-                  router.push({
-                    pathname: "/(customer)/orders/[id]",
-                    params: { id: item._id },
-                  });
+                  handleReorder(item);
                 }}
               >
                 <RotateCcw size={16} color="#007A53" />
@@ -485,7 +516,7 @@ const Orders = () => {
         </Pressable>
       );
     },
-    [colors, cancellingId],
+    [colors, cancellingId, handleReorder],
   );
 
   // --------------------------------------------------

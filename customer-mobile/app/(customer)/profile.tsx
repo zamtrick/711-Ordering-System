@@ -30,6 +30,7 @@ import {
   Check,
   Trash,
   Plus,
+  Gift,
 } from "lucide-react-native";
 
 import { useTheme } from "@/hooks/useTheme";
@@ -84,6 +85,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [loyalty, setLoyalty] = useState<{ points: number; tier: string } | null>(null);
 
   // Edit profile modal
   const [editVisible, setEditVisible] = useState(false);
@@ -147,6 +149,21 @@ const Profile = () => {
       }
     }
     loadProfile();
+    return () => { mounted = false; };
+  }, []);
+
+  // Loyalty balance — best-effort, shown as a card under the profile header.
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get("/customer/loyalty")
+      .then((res) => {
+        const data = res.data?.data;
+        if (mounted && data) {
+          setLoyalty({ points: data.points ?? 0, tier: data.tier?.name ?? "Bronze" });
+        }
+      })
+      .catch(() => {});
     return () => { mounted = false; };
   }, []);
 
@@ -397,6 +414,25 @@ const Profile = () => {
             </View>
           </View>
         </View>
+
+        {/* REWARDS CARD */}
+        <Pressable
+          onPress={() => router.push("/(customer)/loyalty")}
+          style={styles.rewardsCard}
+        >
+          <View style={styles.rewardsIcon}>
+            <Gift size={22} color="#fff" />
+          </View>
+          <View style={styles.rewardsContent}>
+            <Text style={styles.rewardsPoints}>
+              {loyalty?.points ?? 0} points
+            </Text>
+            <Text style={styles.rewardsTier}>
+              {loyalty?.tier ?? "Bronze"} member · Tap to view rewards
+            </Text>
+          </View>
+          <ChevronRight size={20} color="#D7F0E6" />
+        </Pressable>
 
         {/* PERSONAL INFORMATION */}
         <Text style={[styles.sectionTitle, { color: colors.headline }]}>
@@ -979,6 +1015,30 @@ const styles = StyleSheet.create({
   },
 
   memberText: { color: "#007A53", fontSize: 10, fontWeight: "700" },
+
+  rewardsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#007A53",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 28,
+  },
+
+  rewardsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  rewardsContent: { flex: 1, marginLeft: 13 },
+
+  rewardsPoints: { color: "#fff", fontSize: 18, fontWeight: "800" },
+
+  rewardsTier: { color: "#D7F0E6", fontSize: 12, marginTop: 3 },
 
   sectionTitle: { fontSize: 17, fontWeight: "800", marginBottom: 12 },
 

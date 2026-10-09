@@ -76,6 +76,28 @@ const orderSchema = new mongoose.Schema(
       default: "",
     },
 
+    // Loyalty points earned when this order was completed. Also acts as the
+    // idempotency marker so a delivered order is only ever awarded once.
+    loyaltyPointsEarned: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // Loyalty points the customer applied to this order and the peso value
+    // they knocked off totalAmount.
+    loyaltyPointsRedeemed: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    loyaltyDiscount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     // Proof of delivery — captured when rider scans QR and completes delivery
     proofOfDelivery: {
       type: {
