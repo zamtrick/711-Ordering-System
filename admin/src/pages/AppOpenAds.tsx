@@ -7,7 +7,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 // --------------------------------------------------
@@ -89,7 +88,7 @@ export default function AppOpenAds() {
   const { isDark } = useTheme();
   const { user } = useAuth();
   const { perms: permissions } = useAdminPermissions();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
   const isSuperAdmin = user?.role === "superadmin";
@@ -622,8 +621,6 @@ export default function AppOpenAds() {
         onClose={() => setDeleteAd(null)}
         loading={deleting}
       />
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

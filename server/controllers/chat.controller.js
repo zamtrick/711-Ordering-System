@@ -36,8 +36,11 @@ const findAccessibleConversation = async (req, res, conversationId) => {
 
   // Branch admins: only conversations belonging to their branch.
   // Legacy conversations without a branch field are allowed through.
+  // NOTE: convo.branch is populated above, so compare its _id — a populated
+  // document's toString() is the whole doc, not the ObjectId hex string.
   if (isBranchScoped(req)) {
-    if (convo.branch && convo.branch.toString() !== req.adminBranchId?.toString()) {
+    const convoBranchId = (convo.branch?._id ?? convo.branch)?.toString();
+    if (convoBranchId && convoBranchId !== req.adminBranchId?.toString()) {
       res.status(403).json({
         success: false,
         message: "You can only chat with customers of your branch.",
@@ -144,8 +147,11 @@ export const getMessages = async (req, res) => {
       .sort({ createdAt: 1 })
       .populate("sender", "firstname lastname");
 
-    // Mark all messages as read for the requesting side
-    const otherRole = req.user.role === "rider" ? "customer" : req.user.role === "customer" ? "rider" : "customer";
+    // Mark all messages as read for the requesting side.
+    // Order chats are customer<->rider; support threads are customer<->admin.
+    // (Same rule as socket.js join_conversation.)
+    const otherRole =
+      req.user.role === "rider" ? "customer" : convo.rider ? "rider" : "admin";
     await Message.updateMany(
       { conversation: conversationId, senderRole: otherRole, read: false },
       { $set: { read: true } },

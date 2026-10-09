@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Package,
   Users,
@@ -10,6 +10,16 @@ import {
   AlertTriangle,
   PieChart,
 } from "lucide-react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import api from "@/api/axios";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -63,6 +73,17 @@ const formatCurrency = (amount: number) =>
   }).format(amount);
 
 const formatNumber = (n: number) => new Intl.NumberFormat("en-PH").format(n);
+
+const formatCompactCurrency = (amount: number) =>
+  "₱" +
+  new Intl.NumberFormat("en-PH", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
+
+// X-axis label: weekday for the 7-day view, month/day for longer ranges.
+const trendLabel = (isoDate: string, days: number) =>
+  new Date(isoDate).toLocaleDateString("en-PH", days > 7 ? { month: "short", day: "numeric" } : { weekday: "short" });
 
 const statusColor = (status: string): "green" | "blue" | "gray" | "red" | "orange" => {
   switch (status) {
@@ -133,32 +154,30 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { isDark } = useTheme();
 
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState(false);
+  // Trend-chart window: sent to the API as ?days=7|14|30.
+  const [days, setDays] = useState(7);
 
-  const fetchDashboard = async () => {
-    setLoading(true);
-    setFetchError(false);
-    try {
-      // Single scoped endpoint — branch admins get their branch's numbers,
-      // superadmins get platform-wide ones. Replaces the old approach of
-      // fetching products/riders/customers/orders lists and counting lengths.
-      const res = await api.get("/admin/analytics/dashboard");
-      setData(res.data?.data ?? null);
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 401 || status === 403) return; // axios interceptor handles auth
-      setFetchError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Single scoped endpoint — branch admins get their branch's numbers,
+  // superadmins get platform-wide ones. TanStack Query handles caching,
+  // retries and loading/error state like every other page. 401/403 resolve
+  // to null instead of throwing: the interceptor already handles 401, and a
+  // 403 (role not permitted) shouldn't flash an error banner.
+  const { data = null, isLoading, isError, refetch } = useQuery<DashboardData | null>({
+    queryKey: ["dashboard-analytics", days],
+    queryFn: async () => {
+      try {
+        const res = await api.get("/admin/analytics/dashboard", { params: { days } });
+        return res.data?.data ?? null;
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403) return null;
+        throw err;
+      }
+    },
+    // Keep showing the previous range while the next one loads — no skeleton
+    // flash when switching 7D/14D/30D.
+    placeholderData: keepPreviousData,
+  });
 
   const scoped = Boolean(data?.branch);
   const scopeLabel = scoped ? `${data?.branch?.name} (${data?.branch?.branchCode})` : "All branches";
@@ -237,16 +256,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {fetchError && (
+      {isError && (
         <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-2xl bg-danger-soft border border-danger/30">
           <p className="text-sm text-danger flex-1">Failed to load dashboard data.</p>
-          <Button variant="danger" size="sm" onClick={fetchDashboard}>Retry</Button>
+          <Button variant="danger" size="sm" onClick={() => refetch()}>Retry</Button>
         </div>
       )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {loading
+        {isLoading
           ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className={`rounded-2xl border p-5 flex items-center gap-4 animate-pulse ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
                 <div className={`w-12 h-12 rounded-xl shrink-0 ${isDark ? "bg-sunken" : "bg-sunken"}`} />
@@ -259,21 +278,53 @@ export default function Dashboard() {
           : cards.map((c) => <StatCard key={c.label} {...c} />)}
       </div>
 
-      {/* Charts row */}
+      {/* Trend charts + range selector */}
+      <div className="flex items-center justify-end mb-3">
+        <div className="inline-flex rounded-xl border border-line bg-surface p-1 gap-1">
+          {[7, 14, 30].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDays(d)}
+              aria-pressed={days === d}
+              className={`h-7 px-3 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                days === d
+                  ? "bg-accent text-white"
+                  : "text-muted hover:text-ink dark:hover:text-white"
+              }`}
+            >
+              {d}D
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        {loading ? <><SkeletonCard /><SkeletonCard /></> : (
+        {isLoading ? <><SkeletonCard /><SkeletonCard /></> : (
           <>
             {data && (
-              <Card title="Orders (Last 7 Days)" icon={<ShoppingBag size={16} className="text-info" />}>
+              <Card title={`Orders (Last ${days} Days)`} icon={<ShoppingBag size={16} className="text-info" />}>
                 <div className="p-6 pt-4">
-                  <TrendBars data={data.orders.overTime.map((d) => ({ label: new Date(d._id).toLocaleDateString("en-PH", { weekday: "short" }), value: d.orders }))} color="#4F46E5" />
+                  <TrendChart
+                    data={data.orders.overTime.map((d) => ({ label: trendLabel(d._id, days), value: d.orders }))}
+                    color="#4F46E5"
+                    isDark={isDark}
+                    seriesLabel="Orders"
+                    valueFormatter={(v) => formatNumber(v)}
+                  />
                 </div>
               </Card>
             )}
             {data && (
-              <Card title="Revenue (Last 7 Days)" icon={<DollarSign size={16} className="text-accent" />}>
+              <Card title={`Revenue (Last ${days} Days)`} icon={<DollarSign size={16} className="text-accent" />}>
                 <div className="p-6 pt-4">
-                  <TrendBars data={data.orders.overTime.map((d) => ({ label: new Date(d._id).toLocaleDateString("en-PH", { weekday: "short" }), value: d.revenue }))} color={isDark ? "#078080" : "#007A53"} />
+                  <TrendChart
+                    data={data.orders.overTime.map((d) => ({ label: trendLabel(d._id, days), value: d.revenue }))}
+                    color={isDark ? "#078080" : "#007A53"}
+                    isDark={isDark}
+                    seriesLabel="Revenue"
+                    valueFormatter={(v) => formatCompactCurrency(v)}
+                  />
                 </div>
               </Card>
             )}
@@ -283,7 +334,7 @@ export default function Dashboard() {
 
       {/* Status + category row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
-        {loading ? <><SkeletonCard /><SkeletonCard /><SkeletonCard /></> : (
+        {isLoading ? <><SkeletonCard /><SkeletonCard /><SkeletonCard /></> : (
           <>
             {data && (
               <Card title="Order Status" icon={<PieChart size={16} className="text-info" />}>
@@ -331,7 +382,7 @@ export default function Dashboard() {
       </div>
 
       {/* Recent orders */}
-      {loading ? (
+      {isLoading ? (
         <SkeletonCard rows={5} />
       ) : data && (
         <Card title="Recent Orders" icon={<ShoppingBag size={16} className="text-info" />}>
@@ -364,19 +415,55 @@ export default function Dashboard() {
 }
 
 // Simple bar chart — shared rendering for orders/revenue trends
-function TrendBars({ data, color }: { data: { label: string; value: number }[]; color: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
+function TrendChart({
+  data,
+  color,
+  isDark,
+  seriesLabel,
+  valueFormatter,
+}: {
+  data: { label: string; value: number }[];
+  color: string;
+  isDark: boolean;
+  seriesLabel: string;
+  valueFormatter: (v: number) => string;
+}) {
+  const axisColor = isDark ? "#9AA4B0" : "#5C6470";
+  const gridColor = isDark ? "#2B3036" : "#ECEEF1";
   return (
-    <div className="flex items-end gap-1" style={{ height: 100 }}>
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <div
-            className="w-full rounded-t transition-all duration-500"
-            style={{ height: `${Math.max((d.value / max) * 84, d.value > 0 ? 3 : 0)}px`, backgroundColor: color, opacity: 0.8 + (i / data.length) * 0.2 }}
-          />
-          <span className="text-[9px] text-muted">{d.label}</span>
-        </div>
-      ))}
-    </div>
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: 10, fill: axisColor }}
+          axisLine={false}
+          tickLine={false}
+          interval="preserveStartEnd"
+          minTickGap={12}
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: axisColor }}
+          axisLine={false}
+          tickLine={false}
+          width={48}
+          tickFormatter={(v) => valueFormatter(Number(v))}
+        />
+        <Tooltip
+          cursor={{ fill: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" }}
+          contentStyle={{
+            backgroundColor: isDark ? "#1C2024" : "#FFFFFF",
+            border: `1px solid ${isDark ? "#2B3036" : "#E4E6EA"}`,
+            borderRadius: 12,
+            fontSize: 12,
+            color: isDark ? "#EEF1F4" : "#1A1D21",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+          }}
+          labelStyle={{ color: axisColor, marginBottom: 4 }}
+          formatter={(value) => [valueFormatter(Number(value)), seriesLabel]}
+        />
+        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} maxBarSize={32} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }

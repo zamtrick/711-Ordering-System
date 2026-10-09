@@ -6,6 +6,7 @@ import Product from "../../models/Product.js";
 import Payment from "../../models/Payment.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyOrderStatusChanged } from "../../services/email.service.js";
+import { pushOrderUpdate } from "../../services/push.service.js";
 import { emitOrderUpdated } from "../../socket.js";
 import {
   branchQuery,
@@ -264,6 +265,9 @@ export const updateOrderStatus = async (req, res) => {
     // Push live to the customer + other admins
     emitOrderUpdated(updated);
 
+    /* Push notification to the customer's devices (non-blocking) */
+    pushOrderUpdate(updated);
+
     // Notify the customer (non-blocking, log-only unless SMTP is set)
     if (updated?.user?.email) {
       notifyOrderStatusChanged({
@@ -424,6 +428,15 @@ export const assignOrderRider = async (req, res) => {
       });
 
     emitOrderUpdated(updated);
+
+    // Only the assignment itself is worth a push — unassigning back to the
+    // pool would just confuse the customer (non-blocking).
+    if (riderId) {
+      pushOrderUpdate(updated, {
+        title: `Order #${order._id.toString().slice(-6).toUpperCase()} — rider assigned`,
+        body: "A rider has been assigned to your order and will pick it up shortly.",
+      });
+    }
 
     return res.status(200).json({
       success: true,

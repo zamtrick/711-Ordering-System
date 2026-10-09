@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#007A53" />
+    <title>Offline — 711 Admin</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f6f7f9;
+        color: #1a1d21;
+        padding: 1rem;
+      }
+      .card {
+        max-width: 24rem;
+        text-align: center;
+        background: #fff;
+        border: 1px solid #e4e6ea;
+        border-radius: 1rem;
+        padding: 2.5rem 1.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      }
+      .dot {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        background: #007a53;
+        position: relative;
+      }
+      .dot::after {
+        content: "";
+        position: absolute;
+        inset: 1.1rem;
+        border: 3px solid #fff;
+        border-radius: 50%;
+        border-bottom-color: transparent;
+      }
+      h1 { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.5rem; }
+      p { font-size: 0.875rem; color: #5c6470; margin-bottom: 1.5rem; }
+      button {
+        width: 100%;
+        height: 2.75rem;
+        border: 0;
+        border-radius: 0.75rem;
+        background: #007a53;
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:hover { opacity: 0.9; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #14171a; color: #eef1f4; }
+        .card { background: #1c2024; border-color: #2b3036; }
+        p { color: #9aa4b0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="dot"></div>
+      <h1>You're offline</h1>
+      <p>
+        No internet connection. Reconnect to load the 711 Admin console.
+      </p>
+      <button onclick="window.location.reload()">Try again</button>
+    </div>
+  </body>
+</html>

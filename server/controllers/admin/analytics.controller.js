@@ -67,7 +67,13 @@ export const getAdminDashboard = async (req, res) => {
     startOfWeek.setDate(now.getDate() - now.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Trend-chart window: ?days=7|14|30 (clamped, default 7).
+    const requestedDays = Number.parseInt(req.query.days, 10);
+    const rangeDays =
+      Number.isFinite(requestedDays) && requestedDays >= 7 && requestedDays <= 90
+        ? requestedDays
+        : 7;
+    const rangeStart = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000);
 
     const [
       totalProducts,
@@ -158,7 +164,7 @@ export const getAdminDashboard = async (req, res) => {
         .limit(5)
         .select("status totalAmount createdAt"),
       Order.aggregate([
-        { $match: { ...orderFilter, createdAt: { $gte: sevenDaysAgo } } },
+        { $match: { ...orderFilter, createdAt: { $gte: rangeStart } } },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },

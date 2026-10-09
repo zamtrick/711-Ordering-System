@@ -6,7 +6,6 @@ import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
-import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Pagination from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -69,7 +68,7 @@ function SkeletonRow() {
 
 export default function Riders() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const { can } = useAdminPermissions();
   const readOnly = !can("canManageRiders");
   const queryClient = useQueryClient();
@@ -281,8 +280,6 @@ export default function Riders() {
           label="riders"
         />
       )}
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

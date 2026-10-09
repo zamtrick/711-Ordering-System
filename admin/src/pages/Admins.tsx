@@ -5,7 +5,6 @@ import { Plus, Pencil, Trash2, Search, Shield } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Pagination from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -90,7 +89,7 @@ function SkeletonRow() {
 
 export default function Admins() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -418,8 +417,6 @@ export default function Admins() {
         message={`Are you sure you want to delete admin "${deleteAdmin?.user?.firstname ?? ""} ${deleteAdmin?.user?.lastname ?? ""}"? This also deletes their account and cannot be undone.`}
         loading={deleting}
       />
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

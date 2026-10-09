@@ -32,6 +32,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    // Fired by the axios 401 interceptor when the JWT cookie expires mid-session.
+    const onExpired = () => setUser(null);
+    window.addEventListener("auth:expired", onExpired);
+    return () => window.removeEventListener("auth:expired", onExpired);
+  }, []);
+
   const login = async (email: string, password: string) => {
     try {
       const res = await api.post("/auth/login", { email, password });

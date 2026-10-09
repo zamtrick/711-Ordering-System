@@ -24,7 +24,10 @@ const api = wrapper(
     },
     jar,
     withCredentials: true,
-    timeout: 15000,
+    // Generous: Render's free plan cold-starts take 30–60s before the
+    // first response arrives — a 15s timeout made every cold start look
+    // like a network failure.
+    timeout: 60000,
   }),
 );
 

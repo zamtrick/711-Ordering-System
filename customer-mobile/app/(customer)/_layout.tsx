@@ -14,6 +14,11 @@ import api from "@/api/axios";
 import CartTabIcon from "@/components/CartTabIcon";
 import AppOpenAdModal from "@/components/AppOpenAdModal";
 import { useSocket, SocketProvider } from "@/context/SocketContext";
+import { useSettings } from "@/context/SettingsContext";
+import {
+  enablePushNotifications,
+  initPushNotificationTaps,
+} from "@/utils/notifications";
 
 const CustomerLayout = () => {
   const { theme } = useTheme();
@@ -77,6 +82,19 @@ const CustomerTabs = () => {
   const { theme } = useTheme();
 
   const { socket } = useSocket();
+  const { notificationsEnabled } = useSettings();
+
+  // Push notifications — register this device for order/chat pushes when the
+  // Settings toggle is on, and route taps into the right screen. Runs once
+  // per mount (permission prompt happens at most once per install anyway).
+  useEffect(() => {
+    if (notificationsEnabled) {
+      enablePushNotifications();
+    }
+    const subscriptions = initPushNotificationTaps();
+    return () => subscriptions.forEach((sub) => sub.remove());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [unreadChat, setUnreadChat] = useState(0);
   // Per-conversation unread counts — the badge is their sum.

@@ -7,7 +7,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { printReceipt, type ReceiptOrder } from "@/utils/receipt";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
-import ToastContainer from "@/components/ui/Toast";
 import Pagination from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
@@ -136,7 +135,7 @@ function SkeletonRow() {
 
 export default function Orders() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, success: toastSuccess, error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const { can } = useAdminPermissions();
   const readOnly = !can("canManageRiders");
   const queryClient = useQueryClient();
@@ -678,8 +677,6 @@ export default function Orders() {
           label="orders"
         />
       )}
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

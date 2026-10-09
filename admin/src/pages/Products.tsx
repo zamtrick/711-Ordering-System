@@ -7,7 +7,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import { useAdminPermissions } from "@/hooks/useAdminPermissions";
 import { useAuth } from "@/hooks/useAuth";
-import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Pagination from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -233,7 +232,7 @@ function ProductForm({ f, setF, onSubmit, onCancel, title, submitting, categorie
 
 export default function Products() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const { can } = useAdminPermissions();
   const { user } = useAuth();
   const isSuperadmin = user?.role === "superadmin";
@@ -589,8 +588,6 @@ export default function Products() {
         message={`Are you sure you want to delete "${deleteProduct?.name}"? This action cannot be undone.`}
         loading={deleting}
       />
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

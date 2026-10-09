@@ -14,13 +14,19 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  // One-shot session-expired notice set by the axios 401 interceptor.
+  // Read during first render (pure), then the flag is cleared in an effect.
+  const [error, setError] = useState(() => sessionStorage.getItem("auth_notice") ?? "");
 
   useEffect(() => {
     if (!loading && user !== null) {
       navigate("/dashboard", { replace: true });
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    sessionStorage.removeItem("auth_notice");
+  }, []);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -18,9 +18,22 @@
 
 const RUNTIME_CACHE = "711-admin-runtime-v1";
 
-self.addEventListener("install", () => {
-  // Activate immediately after install; the next reload runs the new SW.
-  self.skipWaiting();
+self.addEventListener("install", (event) => {
+  // Warm the offline fallback page. The new worker does NOT skipWaiting():
+  // it waits until the app tells it to (see the message handler below), so
+  // an update never activates mid-session without the user's consent.
+  event.waitUntil(
+    caches
+      .open(RUNTIME_CACHE)
+      .then((cache) => cache.add("/offline.html"))
+      .catch(() => {}),
+  );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {
@@ -30,6 +43,47 @@ self.addEventListener("activate", (event) => {
       await Promise.all(
         names.filter((name) => name !== RUNTIME_CACHE).map((name) => caches.delete(name)),
       );
+
+      // Trim stale build output. Every deploy renames its hashed chunks under
+      // /assets/, so cache-first would otherwise accumulate every past build
+      // forever. Refresh the shell first, warm its assets, then drop anything
+      // else under /assets/. If the refresh fails (offline) we skip the trim
+      // entirely so the cached offline shell never references deleted chunks.
+      const cache = await caches.open(RUNTIME_CACHE);
+      try {
+        const fresh = await fetch("/index.html");
+        if (fresh.ok) {
+          await cache.put("/index.html", fresh.clone());
+          const html = await fresh.text();
+          const assetUrls = [...new Set(
+            (html.match(/(?:src|href)="(\/assets\/[^"]+)"/g) || [])
+              .map((m) => m.replace(/^[^"]+"/, "").replace(/"$/, "")),
+          )];
+          await Promise.all(
+            assetUrls.map(async (url) => {
+              try {
+                const res = await fetch(url);
+                if (res.ok) await cache.put(url, res);
+              } catch {
+                /* keep going — a missing chunk must not block the trim */
+              }
+            }),
+          );
+          const keep = new Set(assetUrls);
+          const keys = await cache.keys();
+          await Promise.all(
+            keys
+              .filter((req) => {
+                const path = new URL(req.url).pathname;
+                return path.startsWith("/assets/") && !keep.has(path);
+              })
+              .map((req) => cache.delete(req)),
+          );
+        }
+      } catch {
+        /* offline — keep everything */
+      }
+
       await self.clients.claim();
     })(),
   );
@@ -61,7 +115,11 @@ self.addEventListener("fetch", (event) => {
         } catch {
           const cache = await caches.open(RUNTIME_CACHE);
           const cached = (await cache.match("/index.html")) || (await cache.match(request));
-          return cached || Response.error();
+          if (cached) return cached;
+          // Never-seen-this-app-before + offline: show the static fallback
+          // instead of the browser's bare error page.
+          const offline = await cache.match("/offline.html");
+          return offline || Response.error();
         }
       })(),
     );

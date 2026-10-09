@@ -11,6 +11,7 @@ import Rider from "../../models/Rider.js";
 import { refreshRiderAvailability } from "../../utils/riderLoad.js";
 import { getCurrentDeliveryFee, getEffectiveDeliveryRange, haversineKm } from "../settings.controller.js";
 import { notifyOrderPlaced, notifyOrderStatusChanged } from "../../services/email.service.js";
+import { pushOrderUpdate } from "../../services/push.service.js";
 import { emitOrderUpdated } from "../../socket.js";
 import { canAccessBranchDoc } from "../../middlewares/branchScope.middleware.js";
 
@@ -311,6 +312,9 @@ export const createOrder = async (req, res) => {
 
     // Push to admins live (admin_room) + back to the customer
     emitOrderUpdated(createdOrder);
+
+    /* Push notification to the customer's devices (non-blocking) */
+    pushOrderUpdate(createdOrder);
 
     return res.status(201).json({
       success: true,
@@ -694,6 +698,9 @@ export const cancelOrder = async (req, res) => {
     }
 
     emitOrderUpdated(cancelledOrder);
+
+    /* Push notification to the customer's devices (non-blocking) */
+    pushOrderUpdate(cancelledOrder);
 
     return res.status(200).json({
       success: true,

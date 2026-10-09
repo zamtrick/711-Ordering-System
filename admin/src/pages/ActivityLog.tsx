@@ -4,7 +4,6 @@ import { Activity, LogIn, LogOut, Settings, Shield } from "lucide-react";
 import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import Select from "@/components/ui/Select";
 import Badge from "@/components/ui/Badge";
 import Pagination from "@/components/ui/Pagination";
@@ -111,7 +110,7 @@ function SkeletonRow() {
 
 export default function ActivityLog() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, error: toastError } = useToast();
+  const { error: toastError } = useToast();
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [action, setAction] = useState("");
@@ -245,8 +244,6 @@ export default function ActivityLog() {
           label="events"
         />
       )}
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

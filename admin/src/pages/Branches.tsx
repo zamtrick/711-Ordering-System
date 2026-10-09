@@ -15,7 +15,6 @@ import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -351,7 +350,7 @@ function BranchForm({
 export default function Branches() {
   const { isDark } = useTheme();
   const { user } = useAuth();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
   const isSuperadmin = user?.role === "superadmin";
 
@@ -910,8 +909,6 @@ export default function Branches() {
         loading={deleting}
         confirmText="DELETE"
       />
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

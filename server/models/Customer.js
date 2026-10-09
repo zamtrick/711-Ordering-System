@@ -50,6 +50,36 @@ const customerSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+
+    // Expo push tokens for this customer's devices (one entry per device).
+    // Registered by the customer app after the OS permission prompt and used
+    // by services/push.service.js to send order/chat notifications.
+    pushTokens: [
+      {
+        token: {
+          type: String,
+          trim: true,
+          required: true,
+        },
+        platform: {
+          type: String,
+          enum: ["ios", "android", "web"],
+          default: "android",
+        },
+        deviceName: {
+          type: String,
+          trim: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+        lastUsedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true },
 );

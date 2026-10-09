@@ -5,6 +5,7 @@ import { isOriginAllowed } from "./config/cors.js";
 import Admin from "./models/Admin.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
+import { pushNewMessageToCustomer } from "./services/push.service.js";
 
 // --------------------------------------------------
 // Rooms
@@ -43,6 +44,24 @@ export const emitOrderUpdated = (order) => {
   } catch {
     // never break the request path on socket errors
   }
+};
+
+// True when the customer already has this conversation open — the socket is
+// delivering the message live, so a push notification would only be noise.
+const isCustomerViewingConversation = (conversationId, customerId) => {
+  try {
+    const room = ioInstance?.sockets?.adapter?.rooms?.get(
+      `conv:${conversationId}`,
+    );
+    if (!room) return false;
+    for (const sid of room) {
+      const socket = ioInstance.sockets.sockets.get(sid);
+      if (socket?.user?.userId === customerId) return true;
+    }
+  } catch {
+    // adapter lookup failed — fall through and send the push anyway
+  }
+  return false;
 };
 
 export const initSocket = (httpServer) => {
@@ -290,6 +309,25 @@ export const initSocket = (httpServer) => {
           );
           if (isOrderChat && convoRiderId) {
             io.to(`rider:${convoRiderId}`).emit("conversation_updated", updatedConvo);
+          }
+        }
+
+        // Push notification to the customer when an admin/rider replies —
+        // skipped when they're already reading this thread (non-blocking).
+        if (senderRole !== "customer") {
+          const customerId = convo.customer.toString();
+          if (!isCustomerViewingConversation(conversationId, customerId)) {
+            const sender = populated.sender;
+            const senderName = sender
+              ? `${sender.firstname ?? ""} ${sender.lastname ?? ""}`.trim()
+              : "";
+            pushNewMessageToCustomer({
+              userId: customerId,
+              orderId: convo.order?.toString() ?? null,
+              senderName:
+                senderName || (senderRole === "rider" ? "Your rider" : "7-Eleven staff"),
+              text: text.trim(),
+            });
           }
         }
 

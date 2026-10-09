@@ -5,7 +5,6 @@ import { Shield, Mail, Lock, Save } from "lucide-react";
 import api from "@/api/axios";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Badge from "@/components/ui/Badge";
@@ -43,7 +42,7 @@ const formatDate = (iso: string) =>
 
 export default function Profile() {
   const { user } = useAuth();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
   const isSuperadmin = user?.role === "superadmin";
   const profileBase = isSuperadmin ? "/superadmin/profile" : "/admin/profile";
@@ -308,8 +307,6 @@ export default function Profile() {
           </div>
         </div>
       </div>
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

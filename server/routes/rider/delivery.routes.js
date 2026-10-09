@@ -8,6 +8,7 @@ import Order from "../../models/Order.js";
 import Rider from "../../models/Rider.js";
 import AuditLog from "../../models/AuditLog.js";
 import { emitOrderUpdated } from "../../socket.js";
+import { pushOrderUpdate } from "../../services/push.service.js";
 
 const router = express.Router();
 
@@ -296,6 +297,9 @@ router.post(
         .populate("proofOfDelivery.riderId", "user");
 
       emitOrderUpdated(updated);
+
+      /* Push notification to the customer's devices (non-blocking) */
+      pushOrderUpdate(updated);
 
       return res.status(200).json({
         success: true,

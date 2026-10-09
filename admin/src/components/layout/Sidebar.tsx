@@ -122,7 +122,13 @@ const adminNavExtras: { to: string; label: string; icon: React.ElementType; perm
 
 const socketURL = (api.defaults.baseURL ?? "").replace(/\/api\/?$/, "");
 
-export default function Sidebar() {
+export default function Sidebar({
+  open = false,
+  onNavigate,
+}: {
+  open?: boolean;
+  onNavigate?: () => void;
+}) {
   const { user, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const { perms } = useAdminPermissions();
@@ -214,7 +220,15 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-60 h-screen flex flex-col shrink-0 bg-surface border-r border-line">
+    // Desktop (md+): always visible, in-flow. Mobile: hidden until the
+    // hamburger opens it as a fixed slide-over above the backdrop.
+    <aside
+      className={`
+        ${open ? "flex" : "hidden"} md:flex
+        fixed md:static inset-y-0 left-0 z-50
+        w-60 h-screen flex-col shrink-0 bg-surface border-r border-line
+      `}
+    >
       {/* ── Brand ─────────────────────────────── */}
       <div className="px-5 pt-6 pb-5 border-b border-line">
         <div className="flex items-center gap-3">
@@ -249,6 +263,7 @@ export default function Sidebar() {
                   <NavLink
                     key={to}
                     to={to}
+                    onClick={onNavigate}
                     className={() => `
                       group flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
                       transition-colors relative

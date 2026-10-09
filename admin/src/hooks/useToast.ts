@@ -1,29 +1,9 @@
-import { useState, useCallback } from "react";
-import type { ToastData } from "@/components/ui/Toast";
+import { useContext } from "react";
+import { ToastContext } from "@/context/toast-context";
 
+/** Global toast API — every page shares the one ToastProvider host. */
 export function useToast() {
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-
-  const addToast = useCallback(
-    (type: "success" | "error", message: string) => {
-      const id = Date.now();
-      setToasts((prev) => [...prev, { id, type, message }]);
-    },
-    [],
-  );
-
-  const removeToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const success = useCallback(
-    (msg: string) => addToast("success", msg),
-    [addToast],
-  );
-  const error = useCallback(
-    (msg: string) => addToast("error", msg),
-    [addToast],
-  );
-
-  return { toasts, removeToast, success, error };
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error("useToast must be used within a ToastProvider");
+  return ctx;
 }

@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   Switch,
+  Alert,
 } from "react-native";
 import {
   Sun,
@@ -22,6 +23,10 @@ import { router } from "expo-router";
 import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
 import { useSettings, type ThemePreference } from "@/context/SettingsContext";
+import {
+  enablePushNotifications,
+  disablePushNotifications,
+} from "@/utils/notifications";
 
 // --------------------------------------------------
 // THEME OPTIONS
@@ -66,6 +71,27 @@ const SettingsScreen = () => {
   // Resolve theme for this screen's own UI
   const { theme, scheme: resolvedScheme } = useTheme();
   const { colors } = theme;
+
+  // The toggle is the real push switch: turning it on requests OS permission
+  // and registers this device's Expo push token with the server; turning it
+  // off unregisters the token so pushes stop immediately.
+  const handleNotificationsToggle = (value: boolean) => {
+    if (value) {
+      setNotificationsEnabled(true);
+      enablePushNotifications().then((result) => {
+        if (result === "denied") {
+          setNotificationsEnabled(false);
+          Alert.alert(
+            "Notifications are off",
+            "Allow notifications for 711 Ordering in your device settings to receive order updates and promos.",
+          );
+        }
+      });
+    } else {
+      setNotificationsEnabled(false);
+      disablePushNotifications();
+    }
+  };
 
   return (
     <ThemedView style={styles.screen}>
@@ -195,7 +221,7 @@ const SettingsScreen = () => {
             title="Push Notifications"
             subtitle="Order updates, promotions, and alerts"
             value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
+            onValueChange={handleNotificationsToggle}
             colors={colors}
           />
 

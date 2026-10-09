@@ -42,6 +42,7 @@ import manageAdminProfile from "./routes/admin/profile.routes.js";
 import manageOrderItems from "./routes/customer/orderItem.routes.js";
 import manageOrders from "./routes/customer/order.routes.js";
 import manageProfileCustomer from "./routes/profile.routes.js";
+import manageCustomerNotifications from "./routes/customer/notification.routes.js";
 import manageCustomerProducts from "./routes/customer/product.routes.js";
 import manageCustomerBranches from "./routes/customer/branch.routes.js";
 import manageSettings from "./routes/settings.routes.js";
@@ -183,6 +184,8 @@ app.use("/api/admin/orders", auth, authorize("admin", "superadmin"), manageAdmin
 
 //manage by customer
 app.use("/api/customer/profile", auth, manageProfileCustomer);
+// Push notification token registration (expo-notifications on the app)
+app.use("/api/customer/notifications", auth, authorize("customer"), manageCustomerNotifications);
 app.use("/api/customer/products", auth, manageCustomerProducts);
 app.use("/api/customer/promos", auth, manageCustomerPromos);
 app.use("/api/customer/favorites", auth, manageCustomerFavorites);

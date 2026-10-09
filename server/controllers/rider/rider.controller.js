@@ -4,6 +4,7 @@ import Order from "../../models/Order.js";
 import Payment from "../../models/Payment.js";
 import AuditLog from "../../models/AuditLog.js";
 import { notifyDeliveryAssigned, notifyDeliveryCompleted } from "../../services/email.service.js";
+import { pushOrderUpdate } from "../../services/push.service.js";
 import { emitOrderUpdated } from "../../socket.js";
 import {
   MAX_ACTIVE_DELIVERIES_PER_RIDER,
@@ -350,6 +351,12 @@ export const acceptDelivery = async (req, res) => {
 
     emitOrderUpdated(updated);
 
+    /* Push notification to the customer's devices (non-blocking) */
+    pushOrderUpdate(updated, {
+      title: `Order #${order._id.toString().slice(-6).toUpperCase()} — rider assigned`,
+      body: "Your rider has accepted the delivery and will pick it up soon.",
+    });
+
     return res.status(200).json({
       success: true,
       message: "Delivery accepted",
@@ -479,6 +486,10 @@ export const updateDeliveryStatus = async (req, res) => {
     }
 
     emitOrderUpdated(updated);
+
+    /* Push notification to the customer's devices (non-blocking) —
+       picked_up / in_transit / delivered messages are derived from the order. */
+    pushOrderUpdate(updated);
 
     return res.status(200).json({
       success: true,

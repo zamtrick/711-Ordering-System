@@ -4,7 +4,6 @@ import { Search, Store, PackageSearch, ToggleLeft, ToggleRight, ChevronDown } fr
 import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import Pagination from "@/components/ui/Pagination";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
@@ -79,7 +78,7 @@ function SkeletonRow() {
 
 export default function BranchInventory() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
   // Auto-select the first branch by default; user picks override it.
@@ -481,8 +480,6 @@ export default function BranchInventory() {
           label="products"
         />
       )}
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

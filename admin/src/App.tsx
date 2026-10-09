@@ -4,7 +4,10 @@ import type { JSX } from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ToastProvider } from "@/context/ToastContext";
 import AppLayout from "@/components/layout/AppLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import UpdateBanner from "@/components/UpdateBanner";
 
 // Route-level code splitting: each page ships as its own chunk and is
 // fetched on first visit, keeping the initial bundle small. All pages
@@ -25,6 +28,7 @@ const Promos = lazy(() => import("@/pages/Promos"));
 const AppOpenAds = lazy(() => import("@/pages/AppOpenAds"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const ActivityLog = lazy(() => import("@/pages/ActivityLog"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
 function PageLoader() {
   return (
@@ -44,41 +48,46 @@ function ProtectedRoute({ children, superadminOnly = false }: { children: JSX.El
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/admins" element={<ProtectedRoute superadminOnly><Admins /></ProtectedRoute>} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/promos" element={<ProtectedRoute superadminOnly><Promos /></ProtectedRoute>} />
-          <Route path="/app-open-ads" element={<AppOpenAds />} />
-          <Route path="/activity-log" element={<ProtectedRoute superadminOnly><ActivityLog /></ProtectedRoute>} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/branches" element={<Branches />} />
-          <Route path="/branch-inventory" element={<BranchInventory />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/riders" element={<Riders />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/chat" element={<Chat />} />
-        </Route>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/admins" element={<ProtectedRoute superadminOnly><Admins /></ProtectedRoute>} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/promos" element={<ProtectedRoute superadminOnly><Promos /></ProtectedRoute>} />
+            <Route path="/app-open-ads" element={<AppOpenAds />} />
+            <Route path="/activity-log" element={<ProtectedRoute superadminOnly><ActivityLog /></ProtectedRoute>} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/branches" element={<Branches />} />
+            <Route path="/branch-inventory" element={<BranchInventory />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/riders" element={<Riders />} />
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/chat" element={<Chat />} />
+          </Route>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRoutes />
+            <UpdateBanner />
+          </BrowserRouter>
+        </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

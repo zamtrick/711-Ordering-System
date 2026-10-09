@@ -4,7 +4,6 @@ import { Truck, ShieldCheck, Bike, Save, Check, ScanLine, Camera, MapPin } from 
 import api from "@/api/axios";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 
 // --------------------------------------------------
 // TYPES
@@ -81,7 +80,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 export default function Settings() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "superadmin";
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
   // ── Delivery fee ────────────────────────────────
@@ -554,8 +553,6 @@ export default function Settings() {
           </div>
         </div>
       </div>
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }

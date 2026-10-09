@@ -5,7 +5,6 @@ import { Plus, Pencil, Trash2, Search, Upload, X, Megaphone } from "lucide-react
 import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 // --------------------------------------------------
@@ -76,7 +75,7 @@ function SkeletonRow() {
 
 export default function Promos() {
   const { isDark } = useTheme();
-  const { toasts, removeToast, success, error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -441,8 +440,6 @@ export default function Promos() {
         message={`Are you sure you want to delete "${deletePromo?.title}"? This action cannot be undone.`}
         loading={deleting}
       />
-
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-    </div>
+</div>
   );
 }
