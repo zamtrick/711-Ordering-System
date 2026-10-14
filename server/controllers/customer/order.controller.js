@@ -662,6 +662,10 @@ export const cancelOrder = async (req, res) => {
     const { refundRedeemedPoints } = await import("../../services/loyalty.service.js");
     refundRedeemedPoints(order).catch(() => {});
 
+    // Release any promo code usage slot this order was holding.
+    const { refundPromoCodeUsage } = await import("../../services/promoCode.service.js");
+    refundPromoCodeUsage(order).catch(() => {});
+
     // Recount the freed rider (back to "available" if nothing else active).
     if (releasedRiderId) {
       const freedRider = await Rider.findById(releasedRiderId);

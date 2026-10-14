@@ -20,6 +20,7 @@ import {
   ScrollText,
   Settings as SettingsIcon,
   Coins,
+  TicketPercent,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -56,6 +57,7 @@ const superadminNav: NavSection[] = [
       { to: "/products",   label: "Products",   icon: Package },
       { to: "/categories", label: "Categories", icon: Tags },
       { to: "/promos",     label: "Promos",     icon: Megaphone },
+      { to: "/promo-codes", label: "Promo Codes", icon: TicketPercent },
       { to: "/app-open-ads", label: "App Open Ad", icon: MonitorPlay },
     ],
   },

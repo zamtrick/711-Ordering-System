@@ -77,6 +77,8 @@ type OrderDetail = {
   rider?: RiderInfo | string | null;
   totalAmount: number;
   deliveryFee?: number;
+  promoCode?: string;
+  promoDiscount?: number;
   deliveryAddress?: string;
   createdAt: string;
   updatedAt?: string;
@@ -811,6 +813,16 @@ export default function OrderDetailScreen() {
               ₱{(order.deliveryFee ?? 0).toFixed(2)}
             </Text>
           </View>
+          {(order.promoDiscount ?? 0) > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: "#007A53" }]}>
+                Promo{order.promoCode ? ` (${order.promoCode})` : " Discount"}
+              </Text>
+              <Text style={[styles.totalValue, { color: "#007A53" }]}>
+                -₱{(order.promoDiscount ?? 0).toFixed(2)}
+              </Text>
+            </View>
+          )}
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.totalRow}>
             <Text style={[styles.grandLabel, { color: colors.headline }]}>Total</Text>

@@ -11,7 +11,7 @@ import Constants from "expo-constants";
 export const baseURL: string =
   process.env.EXPO_PUBLIC_API_URL ??
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
-  "http://192.168.254.181:5000/api";
+  "http://192.168.254.191:5000/api";
 
 const jar = new CookieJar();
 

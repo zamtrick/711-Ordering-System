@@ -31,3 +31,13 @@ export const otpVerifyLimiter = rateLimit({
   legacyHeaders: false,
   handler: handler("Too many attempts. Please try again later."),
 });
+
+// Promo code lookup is a guessable surface — cap trial attempts per IP so
+// codes can't be brute-forced from the checkout preview endpoint.
+export const promoCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: handler("Too many promo code attempts. Please try again later."),
+});

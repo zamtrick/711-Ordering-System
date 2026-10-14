@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Image,
+  TextInput,
 } from "react-native";
 import {
   ChevronLeft,
@@ -23,6 +24,8 @@ import {
   ChevronDown,
   AlertTriangle,
   Coins,
+  X,
+  TicketPercent,
 } from "lucide-react-native";
 import { router } from "expo-router";
 
@@ -142,6 +145,16 @@ export default function Checkout() {
   } | null>(null);
   const [usePoints, setUsePoints] = useState(false);
 
+  // ── promo code ───────────────────────────────────
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
+  const [checkingPromo, setCheckingPromo] = useState(false);
+  const [promoError, setPromoError] = useState("");
+  // Subtotal at the moment the code was applied — used to avoid a redundant
+  // re-validation call immediately after applying (and to re-run one when the
+  // cart total actually changes).
+  const promoSubtotalRef = useRef<number | null>(null);
+
   // ── computed ─────────────────────────────────────
   const total = subtotal + (subtotal > 0 ? deliveryFee : 0);
 
@@ -161,7 +174,12 @@ export default function Checkout() {
   const redeemPoints = canRedeem ? redeemBlocks * loyaltySettings!.redeemPoints : 0;
   const redeemDiscount = canRedeem ? redeemBlocks * loyaltySettings!.redeemValue : 0;
   const appliedDiscount = usePoints && canRedeem ? redeemDiscount : 0;
-  const grandTotal = Math.max(0, total - appliedDiscount);
+  // Promo codes discount the items only, and can't take the total below zero
+  // (promo + loyalty together must not exceed what's owed).
+  const promoDiscount = appliedPromo
+    ? Math.min(appliedPromo.discount, Math.max(0, total - appliedDiscount))
+    : 0;
+  const grandTotal = Math.max(0, total - appliedDiscount - promoDiscount);
 
   // Effective range for the selected branch (branch override > default).
   const branchRangeKm =
@@ -209,6 +227,65 @@ export default function Checkout() {
     },
     []
   );
+
+  // --------------------------------------------------
+  // PROMO CODE
+  // --------------------------------------------------
+
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setCheckingPromo(true);
+    setPromoError("");
+    try {
+      const res = await api.post("/customer/promo-codes/validate", { code, subtotal });
+      const data = res.data?.data;
+      if (data) {
+        setAppliedPromo({ code: data.code, discount: data.discount });
+        promoSubtotalRef.current = subtotal;
+        setPromoInput("");
+      }
+    } catch (err: any) {
+      setAppliedPromo(null);
+      promoSubtotalRef.current = null;
+      setPromoError(err?.response?.data?.message ?? "Could not apply that code.");
+    } finally {
+      setCheckingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput("");
+    setPromoError("");
+    promoSubtotalRef.current = null;
+  };
+
+  // Re-check the applied code if the cart total changes (quantities edited,
+  // items removed) so the shown discount stays accurate. The server recomputes
+  // the authoritative discount again when the order is placed.
+  useEffect(() => {
+    if (!appliedPromo) return;
+    if (promoSubtotalRef.current === subtotal) return;
+    const code = appliedPromo.code;
+    promoSubtotalRef.current = subtotal;
+    let cancelled = false;
+    api
+      .post("/customer/promo-codes/validate", { code, subtotal })
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data?.data;
+        if (data) setAppliedPromo({ code: data.code, discount: data.discount });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAppliedPromo(null);
+        promoSubtotalRef.current = null;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [subtotal, appliedPromo]);
 
   // --------------------------------------------------
   // LOAD DATA
@@ -356,11 +433,32 @@ export default function Checkout() {
             );
           }
         }
+
+        // Apply promo code (best-effort, same as loyalty). If it fails the
+        // order still goes through at full price — warn the customer.
+        let promoFailed = false;
+        if (appliedPromo) {
+          try {
+            await api.post(`/orders/${orderId}/promo`, { code: appliedPromo.code });
+          } catch (promoErr: any) {
+            promoFailed = true;
+            console.log(
+              "[Checkout] Promo apply failed:",
+              promoErr?.response?.data ?? promoErr?.message,
+            );
+          }
+        }
+
         clearCart();
         router.replace("/(customer)/orders");
         // Small delay so the screen transitions first
         setTimeout(() => {
-          Alert.alert("Order Placed!", "Your order has been placed successfully.");
+          Alert.alert(
+            "Order Placed!",
+            promoFailed
+              ? "Your order has been placed, but the promo code could not be applied. You'll be charged the full amount."
+              : "Your order has been placed successfully.",
+          );
         }, 400);
       } else {
         try {
@@ -807,6 +905,65 @@ export default function Checkout() {
           </>
         )}
 
+        {/* ── PROMO CODE ───────────────────────────── */}
+        <SectionHeader icon={<TicketPercent size={15} color="#007A53" />} title="Promo Code" />
+
+        {appliedPromo ? (
+          <View style={[styles.promoApplied, { backgroundColor: "#E8F5EF", borderColor: "#007A53" }]}>
+            <View style={styles.promoAppliedLeft}>
+              <Check size={15} color="#007A53" />
+              <Text style={[styles.promoAppliedCode, { color: "#007A53" }]}>
+                {appliedPromo.code}
+              </Text>
+              <Text style={[styles.promoAppliedValue, { color: "#007A53" }]}>
+                -₱{promoDiscount.toFixed(2)}
+              </Text>
+            </View>
+            <Pressable onPress={handleRemovePromo} hitSlop={10}>
+              <X size={16} color="#007A53" />
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <View style={styles.promoInputRow}>
+              <TextInput
+                value={promoInput}
+                onChangeText={(t) => {
+                  setPromoInput(t.toUpperCase().replace(/\s/g, ""));
+                  if (promoError) setPromoError("");
+                }}
+                placeholder="Enter promo code"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={[
+                  styles.promoInput,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    color: colors.headline,
+                  },
+                ]}
+              />
+              <Pressable
+                onPress={handleApplyPromo}
+                disabled={checkingPromo || !promoInput.trim()}
+                style={[
+                  styles.promoApplyBtn,
+                  { opacity: checkingPromo || !promoInput.trim() ? 0.5 : 1 },
+                ]}
+              >
+                {checkingPromo ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.promoApplyText}>Apply</Text>
+                )}
+              </Pressable>
+            </View>
+            {promoError ? <Text style={styles.promoError}>{promoError}</Text> : null}
+          </>
+        )}
+
         {/* ── TOTALS ───────────────────────────────── */}
         <View
           style={[
@@ -839,6 +996,17 @@ export default function Checkout() {
               </Text>
               <Text style={[styles.totalValue, { color: "#007A53" }]}>
                 -₱{appliedDiscount.toFixed(2)}
+              </Text>
+            </View>
+          )}
+
+          {promoDiscount > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: "#007A53" }]}>
+                Promo Discount
+              </Text>
+              <Text style={[styles.totalValue, { color: "#007A53" }]}>
+                -₱{promoDiscount.toFixed(2)}
               </Text>
             </View>
           )}
@@ -1289,6 +1457,60 @@ const styles = StyleSheet.create({
   rewardsTitle: { fontSize: 13, fontWeight: "700" },
 
   rewardsSub: { fontSize: 11, marginTop: 3 },
+
+  // Promo code
+  promoInputRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 8,
+  },
+
+  promoInput: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 1,
+  },
+
+  promoApplyBtn: {
+    height: 50,
+    paddingHorizontal: 22,
+    borderRadius: 14,
+    backgroundColor: "#007A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  promoApplyText: { color: "#fff", fontSize: 14, fontWeight: "800" },
+
+  promoError: {
+    color: "#DA291C",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+
+  promoApplied: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1.2,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 16,
+  },
+
+  promoAppliedLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+  promoAppliedCode: { fontSize: 13, fontWeight: "800", letterSpacing: 1 },
+
+  promoAppliedValue: { fontSize: 13, fontWeight: "800" },
+
   rangeWarning: {
     flexDirection: "row",
     alignItems: "flex-start",

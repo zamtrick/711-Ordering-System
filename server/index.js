@@ -49,8 +49,10 @@ import manageSettings from "./routes/settings.routes.js";
 import manageRiderRoutes from "./routes/rider/rider.routes.js";
 import riderDeliveryRoutes from "./routes/rider/delivery.routes.js";
 import managePromos from "./routes/superadmin/promo.routes.js";
+import managePromoCodes from "./routes/superadmin/promoCode.routes.js";
 import manageAppOpenAd from "./routes/appOpenAd.routes.js";
 import manageCustomerPromos from "./routes/customer/promo.routes.js";
+import manageCustomerPromoCodes from "./routes/customer/promoCode.routes.js";
 import manageCustomerFavorites from "./routes/customer/favorite.routes.js";
 import manageCustomerReviews from "./routes/customer/review.routes.js";
 import manageAdminReviews from "./routes/admin/review.routes.js";
@@ -164,6 +166,7 @@ app.use("/api/superadmin/audit", auth, authorize("superadmin"), manageAudit);
 app.use("/api/superadmin/profile", auth, authorize("superadmin"), manageProfile);
 app.use("/api/superadmin/analytics", auth, authorize("superadmin"), manageAnalytics);
 app.use("/api/superadmin/promos", auth, authorize("superadmin"), managePromos);
+app.use("/api/superadmin/promo-codes", auth, authorize("superadmin"), managePromoCodes);
 
 // App open ad — public /active for the customer app, managed by
 // superadmins (and permitted branch admins) under /api/app-open-ad
@@ -191,6 +194,7 @@ app.use("/api/customer/profile", auth, manageProfileCustomer);
 app.use("/api/customer/notifications", auth, authorize("customer"), manageCustomerNotifications);
 app.use("/api/customer/products", auth, manageCustomerProducts);
 app.use("/api/customer/promos", auth, manageCustomerPromos);
+app.use("/api/customer/promo-codes", auth, authorize("customer"), manageCustomerPromoCodes);
 app.use("/api/customer/favorites", auth, manageCustomerFavorites);
 app.use("/api/customer/loyalty", auth, authorize("customer"), manageCustomerLoyalty);
 app.use("/api/customer/reviews", auth, manageCustomerReviews);

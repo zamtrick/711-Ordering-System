@@ -32,7 +32,7 @@ fi
 
 echo ""
 echo "4. Checking API connectivity..."
-curl -s -o /dev/null -w "%{http_code}" http://192.168.254.181:5000/api/customer/products 2>/dev/null
+curl -s -o /dev/null -w "%{http_code}" http://192.168.254.191:5000/api/customer/products 2>/dev/null
 if [ $? -eq 0 ]; then
   echo " (Server is responding)"
 else

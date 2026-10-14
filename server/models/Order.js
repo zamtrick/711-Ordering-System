@@ -98,6 +98,30 @@ const orderSchema = new mongoose.Schema(
       min: 0,
     },
 
+    // Promo/voucher code applied to this order and the peso value it knocked
+    // off the items subtotal (delivery fee is never discounted). Snapshotted
+    // so later edits to the PromoCode don't alter old orders.
+    promoCode: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    promoDiscount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    // Set when a cancelled/refunded order's promo code slot is released back
+    // to the PromoCode.usedCount pool. Acts as the idempotency marker so the
+    // multiple cancel paths (customer, admin, rider) can each run the release
+    // safely without double-counting.
+    promoSlotsReturned: {
+      type: Boolean,
+      default: false,
+    },
+
     // Proof of delivery — captured when rider scans QR and completes delivery
     proofOfDelivery: {
       type: {

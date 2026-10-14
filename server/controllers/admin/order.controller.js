@@ -253,12 +253,17 @@ export const updateOrderStatus = async (req, res) => {
     if (status === "completed") {
       const { awardOrderPoints } = await import("../../services/loyalty.service.js");
       awardOrderPoints(order, { createdBy: req.user?.userId }).catch(() => {});
-    } else if (status === "refunded") {
+    } else if (status === "cancelled" || status === "refunded") {
       const { reverseOrderPoints, refundRedeemedPoints } = await import(
         "../../services/loyalty.service.js"
       );
       reverseOrderPoints(order).catch(() => {});
       refundRedeemedPoints(order).catch(() => {});
+      // Release any promo code usage slot this order was holding.
+      const { refundPromoCodeUsage } = await import(
+        "../../services/promoCode.service.js"
+      );
+      refundPromoCodeUsage(order).catch(() => {});
     }
 
     const updated = await Order.findById(order._id)

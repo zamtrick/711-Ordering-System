@@ -26,6 +26,7 @@ const Loyalty = lazy(() => import("@/pages/Loyalty"));
 const Admins = lazy(() => import("@/pages/Admins"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Promos = lazy(() => import("@/pages/Promos"));
+const PromoCodes = lazy(() => import("@/pages/PromoCodes"));
 const AppOpenAds = lazy(() => import("@/pages/AppOpenAds"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const ActivityLog = lazy(() => import("@/pages/ActivityLog"));
@@ -58,6 +59,7 @@ function AppRoutes() {
             <Route path="/admins" element={<ProtectedRoute superadminOnly><Admins /></ProtectedRoute>} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/promos" element={<ProtectedRoute superadminOnly><Promos /></ProtectedRoute>} />
+            <Route path="/promo-codes" element={<ProtectedRoute superadminOnly><PromoCodes /></ProtectedRoute>} />
             <Route path="/app-open-ads" element={<AppOpenAds />} />
             <Route path="/activity-log" element={<ProtectedRoute superadminOnly><ActivityLog /></ProtectedRoute>} />
             <Route path="/profile" element={<Profile />} />

@@ -62,7 +62,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": "http://192.168.254.181:5000/api", // dev default — production/preview builds override via EXPO_PUBLIC_API_URL in eas.json
+      "apiUrl": "http://192.168.254.191:5000/api", // dev default — production/preview builds override via EXPO_PUBLIC_API_URL in eas.json
       "router": {},
       "eas": {
         "projectId": "bf889e93-8e51-4071-9f04-f20a590672de"
