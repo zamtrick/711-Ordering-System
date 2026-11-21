@@ -21,7 +21,14 @@ import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// In production (Render, Railway, etc.) environment variables are injected
+// by the platform — we don't want dotenv to override them with an empty or
+// stale .env file that may exist in the build directory.
+// In development, override: true ensures the local .env always wins over
+// any stale shell exports.
+const isProduction = process.env.NODE_ENV === "production";
+
 dotenv.config({
   path: path.resolve(__dirname, "..", ".env"),
-  override: true,
+  override: !isProduction,
 });
