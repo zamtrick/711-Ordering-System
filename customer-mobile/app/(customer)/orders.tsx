@@ -195,7 +195,6 @@ const Orders = () => {
         setPage(1);
         endReachedRef.current = !(response.data?.pagination?.hasMore ?? false);
       } catch (err: any) {
-        console.log("[Orders] FETCH ERROR:", err?.response?.status, err?.response?.data ?? err?.message);
         if (err?.response?.status === 401) {
           router.replace("/(auth)/login");
         }
@@ -248,7 +247,6 @@ const Orders = () => {
       setPage(nextPage);
       endReachedRef.current = !(response.data?.pagination?.hasMore ?? false);
     } catch (err: any) {
-      console.log("[Orders] LOAD MORE ERROR:", err?.response?.status, err?.message);
       // Don't lock the user out — allow retry on next scroll
       endReachedRef.current = false;
     } finally {

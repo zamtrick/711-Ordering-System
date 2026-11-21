@@ -176,11 +176,10 @@ function exportToCSV(branches: Branch[]) {
 }
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 6 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -640,9 +639,9 @@ export default function Branches() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
+              <tr className={`border-b bg-sunken border-line`}>
                 {["Branch", "Location", "Status", "Delivery Range", "Map Coordinates", "Actions"].map((h) => (
-                  <th key={h} className={`px-4 py-3 text-left font-semibold whitespace-nowrap ${isDark ? "text-muted" : "text-muted"}`}>{h}</th>
+                  <th key={h} className={`px-4 py-3 text-left font-semibold whitespace-nowrap text-muted`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -653,7 +652,7 @@ export default function Branches() {
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-muted">No branches found.</td></tr>
               ) : (
                 branches.map((b) => (
-                  <tr key={b._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
+                  <tr key={b._id} className={`border-b border-line hover:bg-sunken`}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-ink">{b.name}</p>
                       <p className="text-xs text-muted">{b.branchCode}</p>

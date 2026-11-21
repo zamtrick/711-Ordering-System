@@ -4,6 +4,27 @@ import rateLimit from "express-rate-limit";
 const handler = (message) => (req, res) =>
   res.status(429).json({ success: false, message });
 
+// Broad backstop for every API route. Kept generous because the admin polls
+// several queries and both mobile apps poll the socket; tune via env if a
+// branch ever hits it legitimately.
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.API_RATE_LIMIT_MAX) || 600,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: handler("Too many requests. Please slow down and try again."),
+});
+
+// Checkout is expensive (order + items + payment writes) and a common abuse
+// target. Cap order creation per IP without throttling normal browsing.
+export const orderCreateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: handler("Too many orders created. Please try again later."),
+});
+
 // Strict — credential guessing / code guessing surface.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

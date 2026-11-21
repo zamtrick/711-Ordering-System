@@ -48,13 +48,10 @@ const Login = () => {
       setLoading(true);
 
       const response = await login(cleanEmail, password);
-      console.log("Login response:", response);
       // Navigation happens in the effect below once `user` state
       // has propagated — navigating here immediately can mount
       // (rider) before context updates and bounce back to login.
     } catch (error: any) {
-      console.log("Login error:", error);
-
       const message =
         error?.response?.data?.message ||
         (error?.code === "ERR_NETWORK" || error?.message === "Network Error"

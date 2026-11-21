@@ -14,6 +14,7 @@ import morgan from "morgan";
 import mongoose from "mongoose";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -26,6 +27,7 @@ import authRoutes from "./routes/auth.routes.js";
 import auth from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
 import { resolveAdminBranch, resolveStaffBranch } from "./middlewares/branchScope.middleware.js";
+import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
 
 import manageBranches from "./routes/superadmin/branch.routes.js";
 import manageAdmins from "./routes/superadmin/admin.routes.js";
@@ -87,10 +89,20 @@ const dbConnectTimeout = setTimeout(() => {
 // --------------------------------------------------
 app.set("trust proxy", 1);
 
+// Security headers. CSP is disabled because this server only returns JSON;
+// CORP must be cross-origin so the admin and mobile apps can load /uploads/*
+// assets served from this API on a different origin.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+
 //middlewares
 // compact log in production, full dev log locally
 app.use(morgan(process.env.NODE_ENV === "production" ? "tiny" : "dev"));
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 // Parse Cookie header into req.cookies — without this every request that
 // reads req.cookies.accessToken (auth middleware) fails: token is always
 // undefined, so all authenticated endpoints 401 with "Invalid or expired
@@ -153,6 +165,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Broad rate limit for every API route (auth/OTP/promo add stricter limits).
+app.use("/api", apiLimiter);
+
 //manage by superadmin
 app.use("/api/auth", authRoutes);
 app.use("/api/superadmin/admins", auth, authorize("superadmin"), manageAdmins);
@@ -203,8 +218,17 @@ app.use("/api/customer/branches", auth, manageCustomerBranches);
 // resolveStaffBranch passes customers through untouched; for staff it sets
 // req.adminBranchId (admins → their branch, superadmins → null) so the order
 // controllers can scope branch-bound admins to their branch's orders.
-app.use("/api/orders", auth, authorize("customer", "admin"), resolveStaffBranch, manageOrderItems);
-app.use("/api/orders", auth, authorize("customer", "admin"), resolveStaffBranch, manageOrders);
+// Both routers share the same mount; Express falls through to the next
+// router when a path isn't handled, so one chain avoids running auth/branch
+// resolution twice per request.
+app.use(
+  "/api/orders",
+  auth,
+  authorize("customer", "admin"),
+  resolveStaffBranch,
+  manageOrderItems,
+  manageOrders,
+);
 
 // App settings (delivery fee etc.)
 app.use("/api/settings", manageSettings);
@@ -273,11 +297,13 @@ app.use("/api/customer/orders/qr", auth, async (req, res, next) => {
   }
 });
 
-// Customer can also mark their own order as delivered (for testing)
-// NOTE: This bypasses the rider QR scan requirement - use with caution
-app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
+// Customer can also mark their own order as delivered (for testing).
+// NOTE: bypasses the rider QR requirement. Dev-only AND explicitly opt-in via
+// ENABLE_TEST_ROUTES=true, so the route is not even registered in production.
+if (process.env.NODE_ENV !== "production" && process.env.ENABLE_TEST_ROUTES === "true") {
+  app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
   try {
-    // Testing backdoor — never available in production
+    // Defense in depth — never available in production
     if (process.env.NODE_ENV === "production") {
       return res.status(403).json({ success: false, message: "Disabled in production" });
     }
@@ -368,6 +394,31 @@ app.post("/api/customer/orders/:id/mark-delivered", auth, async (req, res) => {
     console.error("Mark delivered error:", err.message);
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
+  });
+}
+
+// Health check for hosting platforms (Render etc.)
+app.get("/health", (req, res) => {
+  res.status(200).json({ success: true, status: "ok", uptime: process.uptime() });
+});
+app.get("/", (req, res) => {
+  res.status(200).json({ success: true, message: "711 Online Ordering API" });
+});
+
+// Unknown API routes must answer JSON, not Express's HTML default.
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: "Not found" });
+});
+
+// Central error handler: log server-side, never leak stack traces to clients.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error("Unhandled error:", err.message);
+  const status = err.status || err.statusCode || 500;
+  return res.status(status).json({
+    success: false,
+    message: status >= 500 ? "Internal Server Error" : err.message || "Request failed",
+  });
 });
 
 

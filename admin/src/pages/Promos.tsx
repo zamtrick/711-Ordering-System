@@ -3,7 +3,6 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Upload, X, Megaphone } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -74,7 +73,6 @@ function SkeletonRow() {
 // --------------------------------------------------
 
 export default function Promos() {
-  const { isDark } = useTheme();
   const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
@@ -380,7 +378,7 @@ export default function Promos() {
                 {/* Image picker */}
                 <div className="col-span-2">
                   <label className="text-xs font-semibold mb-1 block text-muted">Banner Image (optional)</label>
-                  <div className={`flex items-center gap-3 p-3 rounded-xl border border-dashed ${isDark ? "border-line" : "border-line"}`}>
+                  <div className={`flex items-center gap-3 p-3 rounded-xl border border-dashed border-line`}>
                     {form.imagePreview ? (
                       <img src={form.imagePreview} alt="Preview" className="w-24 h-14 rounded-lg object-cover border border-line" />
                     ) : (

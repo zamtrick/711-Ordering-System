@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 
 import { useTheme } from "@/hooks/useTheme";
 import ThemedView from "@/components/ThemedView";
+import { ProductCardSkeleton } from "@/components/Skeleton";
 import { useFavorites } from "@/context/FavoriteContext";
 import { useCart } from "@/context/CartContext";
 import { playTap } from "@/utils/sound";
@@ -71,11 +72,12 @@ const Favorites = () => {
   // ── loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color="#007A53" />
-        <Text style={[styles.loadingText, { color: colors.muted }]}>
-          Loading favorites...
-        </Text>
+      <ThemedView>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
+            {[1, 2, 3, 4].map((i) => <ProductCardSkeleton key={i} />)}
+          </View>
+        </ScrollView>
       </ThemedView>
     );
   }

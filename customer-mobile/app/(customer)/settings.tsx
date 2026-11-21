@@ -21,6 +21,7 @@ import {
 import { router } from "expo-router";
 
 import { useTheme } from "@/hooks/useTheme";
+import type { ThemeColors } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
 import { useSettings, type ThemePreference } from "@/context/SettingsContext";
 import {
@@ -292,7 +293,7 @@ const ToggleRow = ({
   subtitle: string;
   value: boolean;
   onValueChange: (v: boolean) => void;
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <View style={styles.toggleRow}>
     <View
@@ -328,7 +329,7 @@ const AboutRow = ({
 }: {
   label: string;
   value: string;
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <View style={styles.aboutRow}>
     <Text style={[styles.aboutLabel, { color: colors.muted }]}>{label}</Text>

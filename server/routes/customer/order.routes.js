@@ -11,6 +11,7 @@ import {
   applyPromoCode,
   removePromoCode,
 } from "../../controllers/customer/promoCode.controller.js";
+import { orderCreateLimiter } from "../../middlewares/rateLimit.middleware.js";
 
 const router = express.Router();
 
@@ -21,8 +22,8 @@ const router = express.Router();
 */
 
 // Create a new order
-// POST /api/customer/orders
-router.post("/", createOrder);
+// POST /api/orders
+router.post("/", orderCreateLimiter, createOrder);
 
 // Get all orders belonging to the logged-in customer
 // GET /api/customer/orders

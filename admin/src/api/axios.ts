@@ -8,6 +8,7 @@ const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api";
 const api = axios.create({
   baseURL,
   withCredentials: true,
+  timeout: 30000,
 });
 
 // Global session handling: a 401 from any non-auth endpoint means the JWT

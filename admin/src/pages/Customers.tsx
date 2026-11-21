@@ -26,11 +26,10 @@ type Customer = {
 };
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 5 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -91,21 +90,21 @@ export default function Customers() {
 
       <div className="mb-4 max-w-sm">
         <div className={`flex items-center h-10 px-3 rounded-xl border gap-2 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
-          <Search size={16} className={isDark ? "text-muted" : "text-muted"} />
+          <Search size={16} className={"text-muted"} />
           <input placeholder="Search customers..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} />
         </div>
       </div>
 
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
         <table className="w-full text-sm">
-          <thead><tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
-            {["Name", "Email", "Phone", "Status", "Actions"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>{h}</th>)}
+          <thead><tr className={`border-b bg-sunken border-line`}>
+            {["Name", "Email", "Phone", "Status", "Actions"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold text-muted`}>{h}</th>)}
           </tr></thead>
           <tbody>
             {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}</>
             : customers.length === 0 ? <tr><td colSpan={5} className="px-4 py-12 text-center text-muted">No customers found.</td></tr>
             : customers.map((c) => (
-              <tr key={c._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
+              <tr key={c._id} className={`border-b border-line hover:bg-sunken`}>
                 <td className="px-4 py-3 font-medium text-ink">{c.user?.firstname} {c.user?.lastname}</td>
                 <td className="px-4 py-3 text-muted">{c.user?.email}</td>
                 <td className="px-4 py-3 text-muted">{c.phone || "—"}</td>

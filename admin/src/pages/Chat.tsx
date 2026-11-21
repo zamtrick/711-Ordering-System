@@ -4,6 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import api from "@/api/axios";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/useToast";
 
 // --------------------------------------------------
 // TYPES
@@ -76,6 +77,7 @@ const initials = (c: Conversation["customer"] | null | undefined) =>
 export default function Chat() {
   const { isDark } = useTheme();
   const { user } = useAuth();
+  const { error: toastError } = useToast();
   const isSuperAdmin = user?.role === "superadmin";
 
   // ── socket ───────────────────────────────────────
@@ -228,7 +230,7 @@ export default function Chat() {
       (ack: { success: boolean; data?: Message; message?: string }) => {
         setSending(false);
         if (!ack?.success) {
-          alert(ack?.message ?? "Failed to send message.");
+          toastError(ack?.message ?? "Failed to send message.");
           setText(trimmed);
         }
       },
@@ -274,14 +276,14 @@ export default function Chat() {
   // --------------------------------------------------
 
   const surface = isDark ? "bg-surface" : "bg-white";
-  const border = isDark ? "border-line" : "border-line";
+  const border = "border-line";
   const headline = isDark ? "text-white" : "text-ink";
-  const muted = isDark ? "text-muted" : "text-muted";
+  const muted = "text-muted";
   const inputBg = isDark
     ? "bg-surface border-line text-white"
     : "bg-sunken border-line text-ink";
-  const hoverRow = isDark ? "hover:bg-sunken" : "hover:bg-sunken";
-  const activeRow = isDark ? "bg-accent-soft" : "bg-accent-soft";
+  const hoverRow = "hover:bg-sunken";
+  const activeRow = "bg-accent-soft";
 
   // --------------------------------------------------
   // PAGE
@@ -313,7 +315,7 @@ export default function Chat() {
               className={`ml-auto flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${
                 connected
                   ? isDark ? "bg-accent-soft text-accent-ink" : "bg-accent-soft text-accent"
-                  : isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"
+                  : "bg-sunken text-muted"
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-accent-ink" : "bg-faint"}`} />
@@ -366,10 +368,10 @@ export default function Chat() {
             <div className="p-3 space-y-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 animate-pulse">
-                  <div className={`w-10 h-10 rounded-full ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                  <div className={`w-10 h-10 rounded-full bg-sunken`} />
                   <div className="flex-1 space-y-1.5">
-                    <div className={`h-3 rounded w-1/2 ${isDark ? "bg-sunken" : "bg-sunken"}`} />
-                    <div className={`h-2.5 rounded w-3/4 ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                    <div className={`h-3 rounded w-1/2 bg-sunken`} />
+                    <div className={`h-2.5 rounded w-3/4 bg-sunken`} />
                   </div>
                 </div>
               ))}
@@ -475,7 +477,7 @@ export default function Chat() {
 
               {!connected && (
                 <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full shrink-0 ${
-                  isDark ? "bg-warning-soft text-warning" : "bg-warning-soft text-warning"
+                  "bg-warning-soft text-warning"
                 }`}>
                   <WifiOff size={13} />
                   Reconnecting…
@@ -490,7 +492,7 @@ export default function Chat() {
                 <div className="space-y-3">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className={`flex ${i % 2 ? "justify-end" : "justify-start"} animate-pulse`}>
-                      <div className={`h-10 rounded-2xl ${i % 2 ? "w-52" : "w-64"} ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                      <div className={`h-10 rounded-2xl ${i % 2 ? "w-52" : "w-64"} bg-sunken`} />
                     </div>
                   ))}
                 </div>
@@ -530,7 +532,7 @@ export default function Chat() {
                           >
                             <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                             <p className={`text-[10px] mt-1 text-right ${
-                              isAdmin ? "text-white/60" : isDark ? "text-muted" : "text-muted"
+                              isAdmin ? "text-white/60" : "text-muted"
                             }`}>
                               {formatTime(msg.createdAt)}
                               {isAdmin && <span className="ml-1">{msg.read ? " ✓✓" : " ✓"}</span>}
@@ -539,7 +541,7 @@ export default function Chat() {
 
                           {isAdmin && (
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                              isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"
+                              "bg-sunken text-muted"
                             }`}>
                               {user ? `${user.firstname?.[0] ?? ""}${user.lastname?.[0] ?? ""}`.toUpperCase() || "A" : "A"}
                             </div>
@@ -556,7 +558,7 @@ export default function Chat() {
             {/* Input bar — branch admin only. Superadmin is read-only. */}
             {isSuperAdmin ? (
               <div className={`px-4 py-3 border-t ${border} flex items-center justify-center gap-2`}>
-                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${isDark ? "bg-sunken text-muted" : "bg-sunken text-muted"}`}>
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-sunken text-muted`}>
                   <MessageCircle size={12} />
                   View only — only the branch admin can reply
                 </span>
@@ -595,7 +597,7 @@ export default function Chat() {
           </>
         ) : (
           <div className={`flex-1 flex flex-col items-center justify-center gap-3 ${muted}`}>
-            <div className={`w-20 h-20 rounded-3xl ${isDark ? "bg-sunken" : "bg-sunken"} flex items-center justify-center`}>
+            <div className={`w-20 h-20 rounded-3xl bg-sunken flex items-center justify-center`}>
               <MessageCircle size={38} className="text-accent" />
             </div>
             <p className={`text-base font-bold ${headline}`}>Select a conversation</p>

@@ -40,13 +40,13 @@ export default function Pagination({
     `inline-flex items-center justify-center gap-1 h-9 px-3 rounded-xl border text-sm font-medium transition-colors
     ${
       enabled
-        ? `cursor-pointer ${isDark ? "border-line text-ink hover:bg-sunken" : "border-line text-ink hover:bg-sunken"}`
+        ? `cursor-pointer border-line text-ink hover:bg-sunken`
         : `cursor-not-allowed opacity-40 ${isDark ? "border-line text-muted" : "border-line text-faint"}`
     }`;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
-      <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+      <p className={`text-xs text-muted`}>
         Showing <span className="font-semibold">{from}</span>–
         <span className="font-semibold">{to}</span> of{" "}
         <span className="font-semibold">{total}</span> {label}

@@ -123,11 +123,10 @@ const deliveryColor = (s: string) => {
 };
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 8 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -419,7 +418,7 @@ export default function Orders() {
       <div className="flex gap-3 mb-4">
         <div className="max-w-sm flex-1">
           <div className={`flex items-center h-10 px-3 rounded-xl border gap-2 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
-            <Search size={16} className={isDark ? "text-muted" : "text-muted"} />
+            <Search size={16} className={"text-muted"} />
             <input placeholder="Search by name or ID..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} />
           </div>
         </div>
@@ -435,14 +434,14 @@ export default function Orders() {
 
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
         <table className="w-full text-sm">
-          <thead><tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
-            {["Order ID", "Customer", "Branch", "Amount", "Status", "Delivery", "Date", "Details"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>{h}</th>)}
+          <thead><tr className={`border-b bg-sunken border-line`}>
+            {["Order ID", "Customer", "Branch", "Amount", "Status", "Delivery", "Date", "Details"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold text-muted`}>{h}</th>)}
           </tr></thead>
           <tbody>
             {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}</>
             : filtered.length === 0 ? <tr><td colSpan={8} className="px-4 py-12 text-center text-muted">No orders found.</td></tr>
             : filtered.map((o) => (
-              <tr key={o._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
+              <tr key={o._id} className={`border-b border-line hover:bg-sunken`}>
                 <td className="px-4 py-3 font-mono text-xs text-muted">{o._id.slice(-8)}</td>
                 <td className="px-4 py-3 font-medium text-ink">{o.user ? `${o.user.firstname} ${o.user.lastname}` : "—"}</td>
                 <td className="px-4 py-3 text-muted">{o.branch?.name ?? "—"}</td>
@@ -487,21 +486,21 @@ export default function Orders() {
                     Print Receipt
                   </button>
                 )}
-                <button onClick={() => setViewOrder(null)} className={`text-sm cursor-pointer ${isDark ? "text-muted" : "text-muted"}`}>Close</button>
+                <button onClick={() => setViewOrder(null)} className={`text-sm cursor-pointer text-muted`}>Close</button>
               </div>
             </div>
             <div className="space-y-3">
-              <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>Customer</p>
+              <div className={`p-3 rounded-xl bg-sunken`}>
+                <p className={`text-xs text-muted`}>Customer</p>
                 <p className={`text-sm font-medium ${isDark ? "text-white" : "text-ink"}`}>{viewOrder.user?.firstname} {viewOrder.user?.lastname}</p>
-                <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>{viewOrder.user?.email}</p>
+                <p className={`text-xs text-muted`}>{viewOrder.user?.email}</p>
               </div>
-              <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>Branch</p>
+              <div className={`p-3 rounded-xl bg-sunken`}>
+                <p className={`text-xs text-muted`}>Branch</p>
                 <p className={`text-sm font-medium ${isDark ? "text-white" : "text-ink"}`}>{viewOrder.branch?.name} ({viewOrder.branch?.branchCode})</p>
               </div>
-              <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>Status</p>
+              <div className={`p-3 rounded-xl bg-sunken`}>
+                <p className={`text-xs text-muted`}>Status</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(viewOrder.status)}`}>{viewOrder.status}</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${deliveryColor(viewOrder.deliveryStatus ?? "unassigned")}`}>
@@ -539,8 +538,8 @@ export default function Orders() {
               {/* Delivery rider — manual assign for small branches (1-2 riders).
                   Reassign allowed while unassigned/assigned; locked once the
                   rider picks up / is in transit / delivered. */}
-              <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>Delivery rider</p>
+              <div className={`p-3 rounded-xl bg-sunken`}>
+                <p className={`text-xs text-muted`}>Delivery rider</p>
                 <p className={`text-sm font-medium mt-1 ${isDark ? "text-white" : "text-ink"}`}>
                   {typeof viewOrder.rider === "object" && viewOrder.rider
                     ? `${viewOrder.rider.user?.firstname ?? ""} ${viewOrder.rider.user?.lastname ?? ""}`.trim() || "Assigned"
@@ -591,8 +590,8 @@ export default function Orders() {
                 )}
               </div>
               {viewOrder.payment && (
-                <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                  <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>Payment</p>
+                <div className={`p-3 rounded-xl bg-sunken`}>
+                  <p className={`text-xs text-muted`}>Payment</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`text-sm font-medium ${isDark ? "text-white" : "text-ink"}`}>
                       {PAYMENT_METHOD_LABELS[viewOrder.payment.paymentMethod] ?? viewOrder.payment.paymentMethod}
@@ -604,8 +603,8 @@ export default function Orders() {
                 </div>
               )}
               {viewOrder.orderItems?.length > 0 && (
-                <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                  <p className={`text-xs mb-2 ${isDark ? "text-muted" : "text-muted"}`}>Items</p>
+                <div className={`p-3 rounded-xl bg-sunken`}>
+                  <p className={`text-xs mb-2 text-muted`}>Items</p>
                   {viewOrder.orderItems.map((item, i) => (
                     <div key={i} className="flex justify-between text-sm py-1">
                       <span className={isDark ? "text-white" : "text-ink"}>{item.product?.name} × {item.quantity}</span>
@@ -614,22 +613,22 @@ export default function Orders() {
                   ))}
                 </div>
               )}
-              <div className={`p-3 rounded-xl flex justify-between ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+              <div className={`p-3 rounded-xl flex justify-between bg-sunken`}>
                 <span className={`font-bold ${isDark ? "text-white" : "text-ink"}`}>Total</span>
                 <span className="font-bold text-accent-ink">₱{viewOrder.totalAmount}</span>
               </div>
 
               {/* Proof of Delivery */}
               {viewOrder.proofOfDelivery?.photoUrl && (
-                <div className={`p-3 rounded-xl ${isDark ? "bg-sunken" : "bg-sunken"}`}>
-                  <p className={`text-xs font-semibold mb-2 ${isDark ? "text-muted" : "text-muted"}`}>Proof of Delivery</p>
+                <div className={`p-3 rounded-xl bg-sunken`}>
+                  <p className={`text-xs font-semibold mb-2 text-muted`}>Proof of Delivery</p>
                   <img
                     src={viewOrder.proofOfDelivery.photoUrl}
                     alt="Proof of delivery"
                     className="w-full h-48 object-cover rounded-lg mb-2"
                   />
                   {viewOrder.proofOfDelivery?.scannedAt && (
-                    <p className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+                    <p className={`text-xs text-muted`}>
                       Delivered at: {new Date(viewOrder.proofOfDelivery.scannedAt).toLocaleString()}
                     </p>
                   )}

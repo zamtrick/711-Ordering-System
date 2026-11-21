@@ -158,7 +158,6 @@ const Products = () => {
         );
       } catch (err: any) {
         if (cancelled) return;
-        console.log("Fetch products error:", err);
         setError("Could not load products. Please try again.");
         if (err?.response?.status === 401) {
           router.replace("/(auth)/login");

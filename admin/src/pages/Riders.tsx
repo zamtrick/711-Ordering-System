@@ -56,11 +56,10 @@ const fetchBranchOptions = () =>
   api.get<BranchesResponse>("/admin/branches").then((res) => res.data);
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 7 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -186,21 +185,21 @@ export default function Riders() {
 
       <div className="mb-4 max-w-sm">
         <div className={`flex items-center h-10 px-3 rounded-xl border gap-2 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
-          <Search size={16} className={isDark ? "text-muted" : "text-muted"} />
+          <Search size={16} className={"text-muted"} />
           <input placeholder="Search riders..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} />
         </div>
       </div>
 
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
         <table className="w-full text-sm">
-          <thead><tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
-            {["Name", "Phone", "Vehicle", "Plate", "Status", "Load", "Actions"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>{h}</th>)}
+          <thead><tr className={`border-b bg-sunken border-line`}>
+            {["Name", "Phone", "Vehicle", "Plate", "Status", "Load", "Actions"].map((h) => <th key={h} className={`px-4 py-3 text-left font-semibold text-muted`}>{h}</th>)}
           </tr></thead>
           <tbody>
             {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}</>
             : riders.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-muted">No riders found.</td></tr>
             : riders.map((r) => (
-              <tr key={r._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
+              <tr key={r._id} className={`border-b border-line hover:bg-sunken`}>
                 <td className="px-4 py-3 font-medium text-ink">{r.user?.firstname} {r.user?.lastname}</td>
                 <td className="px-4 py-3 text-muted">{r.phone}</td>
                 <td className="px-4 py-3 text-muted">{r.vehicleType}</td>
@@ -235,13 +234,13 @@ export default function Riders() {
                   { label: "Plate Number *", key: "vehiclePlateNumber", type: "text" },
                 ].map((f) => (
                   <div key={f.key} className={f.span ? "col-span-2" : ""}>
-                    <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>{f.label}</label>
+                    <label className={`text-xs font-semibold mb-1 block text-muted`}>{f.label}</label>
                     <input type={f.type} className={inputClass} value={(form as Record<string, string>)[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} disabled={submitting} />
                   </div>
                 ))}
-                <div className="col-span-2"><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Address *</label><input className={inputClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} disabled={submitting} /></div>
+                <div className="col-span-2"><label className={`text-xs font-semibold mb-1 block text-muted`}>Address *</label><input className={inputClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} disabled={submitting} /></div>
                 <div className="col-span-2">
-                  <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Assigned Branch {editRider ? "" : "*"}</label>
+                  <label className={`text-xs font-semibold mb-1 block text-muted`}>Assigned Branch {editRider ? "" : "*"}</label>
                   <select className={inputClass} value={form.assignedBranch} onChange={(e) => setForm({ ...form, assignedBranch: e.target.value })} disabled={submitting}>
                     <option value="">Select branch</option>
                     {branches.map((b) => (

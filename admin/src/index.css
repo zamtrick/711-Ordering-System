@@ -12,61 +12,153 @@
 
 /* --------------------------------------------------
    DESIGN TOKENS
-   Single source of truth for the whole admin. Utilities
-   like bg-surface / text-ink / border-line resolve to
-   these variables, and the .dark block below re-points
-   them — so one class covers both themes and stray
-   hard-coded colors can't drift anymore.
+   Single source of truth for the whole admin.
    -------------------------------------------------- */
 @theme {
-  --color-canvas: #F6F6F7;      /* app background */
+  --color-canvas: #F8F9FA;      /* app background */
   --color-surface: #FFFFFF;     /* cards, sidebar, modals */
-  --color-sunken: #F4F4F5;      /* table headers, hovers, wells */
-  --color-line: #E4E4E7;        /* hairline borders */
-  --color-ink: #18181B;         /* headings / primary text */
-  --color-muted: #52525B;       /* body / secondary text */
-  --color-faint: #76767E;       /* labels, placeholders, icons */
-  --color-accent: #007A53;      /* brand green */
-  --color-accent-soft: #E7F4EE;
-  --color-accent-ink: #007A53;
+  --color-sunken: #F1F3F5;      /* table headers, hovers, wells */
+  --color-line: #E5E7EB;        /* hairline borders */
+  --color-ink: #1F2937;         /* headings / primary text */
+  --color-muted: #4B5563;       /* body / secondary text */
+  --color-faint: #6B7280;       /* labels, placeholders, icons */
+  --color-accent: #059669;      /* brand green */
+  --color-accent-soft: #ECFDF5;
+  --color-accent-ink: #047857;
   --color-danger: #DC2626;
-  --color-danger-soft: #FDECEC;
-  --color-warning: #C2410C;
-  --color-warning-soft: #FFF1E7;
+  --color-danger-soft: #FEF2F2;
+  --color-warning: #D97706;
+  --color-warning-soft: #FFFBEB;
   --color-info: #4F46E5;
-  --color-info-soft: #EEF0FE;
+  --color-info-soft: #EEF2FF;
 }
 
 .dark {
   color-scheme: dark;
 
-  --color-canvas: #0F0F11;
-  --color-surface: #17171A;
-  --color-sunken: #1F1F23;
-  --color-line: #29292E;
-  --color-ink: #F4F4F5;
-  --color-muted: #A6A6AF;
-  --color-faint: #6E6E76;
+  --color-canvas: #0B0B0F;
+  --color-surface: #141418;
+  --color-sunken: #1C1C21;
+  --color-line: #2A2A30;
+  --color-ink: #F9FAFB;
+  --color-muted: #D1D5DB;
+  --color-faint: #9CA3AF;
   --color-accent: #10B981;
-  --color-accent-soft: #0B2B21;
-  --color-accent-ink: #4ADE80;
+  --color-accent-soft: #052E16;
+  --color-accent-ink: #34D399;
   --color-danger: #F87171;
-  --color-danger-soft: #2E1517;
-  --color-warning: #FB923C;
-  --color-warning-soft: #2C1F12;
+  --color-danger-soft: #450A0A;
+  --color-warning: #FBBF24;
+  --color-warning-soft: #451A03;
   --color-info: #A5B4FC;
-  --color-info-soft: #1B1C33;
+  --color-info-soft: #312E81;
 }
 
 :root {
   color-scheme: light;
 }
 
-body {
-  background-color: var(--color-canvas);
-  color: var(--color-ink);
+/* --------------------------------------------------
+   BASE STYLES
+   -------------------------------------------------- */
+@layer base {
+  * {
+    @apply border-line;
+  }
+
+  html {
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
+      "Helvetica Neue", sans-serif;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: radial-gradient(1400px 900px at 50% -20%,
+        color-mix(in srgb, var(--color-accent) 6%, transparent),
+        transparent),
+      radial-gradient(1000px 700px at 80% 120%,
+        color-mix(in srgb, var(--color-info) 4%, transparent),
+        transparent),
+      var(--color-canvas);
+    color: var(--color-ink);
+    line-height: 1.6;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+    color: var(--color-ink);
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-faint) 40%, transparent);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-faint) 65%, transparent);
+    background-clip: content-box;
+  }
+
+  /* Focus states */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent/40 ring-offset-2 ring-offset-canvas;
+  }
 }
 
-* {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+/* --------------------------------------------------
+   COMPONENT UTILITIES
+   -------------------------------------------------- */
+@layer utilities {
+  .card {
+    @apply bg-surface border border-line rounded-xl shadow-sm shadow-black/[0.02] dark:shadow-black/40;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:shadow-black/[0.03] hover:-translate-y-[1px] dark:hover:shadow-black/50;
+  }
+
+  .glass {
+    @apply bg-surface/80 backdrop-blur-xl border border-line/80;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm shadow-accent/20 transition-all duration-200 hover:bg-accent/90 hover:shadow-md hover:shadow-accent/25 focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-all duration-200 hover:bg-sunken hover:text-ink;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint transition-all duration-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/10;
+  }
+}
+
+/* Smooth transitions for interactive elements */
+button,
+a,
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, box-shadow, transform,
+    opacity;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

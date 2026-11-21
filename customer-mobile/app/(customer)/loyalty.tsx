@@ -63,7 +63,6 @@ const Loyalty = () => {
       setSummary(summaryRes.data?.data ?? null);
       setTransactions(historyRes.data?.data ?? []);
     } catch (err: any) {
-      console.log("Loyalty load error:", err);
       if (err?.response?.status === 401) router.replace("/(auth)/login");
     } finally {
       setLoading(false);

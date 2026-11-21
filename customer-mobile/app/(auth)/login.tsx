@@ -55,10 +55,8 @@ const Login = () => {
         password,
       });
 
-      console.log("Login response:", response.data);
       router.replace("/(customer)");
     } catch (error: any) {
-      console.log("Login error:", error);
 
       // Unverified accounts get a session-less 403 — send them to OTP.
       if (error?.response?.status === 403 && error?.response?.data?.email) {

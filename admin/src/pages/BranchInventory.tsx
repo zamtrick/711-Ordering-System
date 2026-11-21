@@ -62,11 +62,10 @@ const toAbsolute = (img?: string) =>
   img && !/^https?:\/\//i.test(img) ? `${apiOrigin}${img}` : (img ?? "");
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 6 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -318,12 +317,12 @@ export default function BranchInventory() {
         <table className="w-full text-sm">
           <thead>
             <tr className={`border-b
-              ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
+              bg-sunken border-line`}>
               {["Product", "Category", "Global Stock", "Branch Stock", "Available", ""].map((h) => (
                 <th
                   key={h}
                   className={`px-4 py-3 text-left font-semibold
-                    ${isDark ? "text-muted" : "text-muted"}`}
+                    text-muted`}
                 >
                   {h}
                 </th>
@@ -365,7 +364,7 @@ export default function BranchInventory() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center
-                          ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+                          bg-sunken`}>
                           {row.product.image ? (
                             <img
                               src={toAbsolute(row.product.image)}
@@ -397,7 +396,7 @@ export default function BranchInventory() {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
                         ${row.product.stock > 0
                           ? isDark ? "bg-accent-soft text-accent-ink" : "bg-accent-soft text-accent"
-                          : isDark ? "bg-danger-soft text-danger" : "bg-danger-soft text-danger"
+                          : "bg-danger-soft text-danger"
                         }`}>
                         {row.product.stock}
                       </span>

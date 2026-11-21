@@ -131,7 +131,6 @@ const Home = () => {
       setPromos(promoRes.data?.data ?? []);
       setActivePromo(0);
     } catch (err: any) {
-      console.log("Fetch home data error:", err);
       setError("Could not load the store. Please try again.");
 
       if (err?.response?.status === 401) {

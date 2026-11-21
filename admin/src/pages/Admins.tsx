@@ -3,7 +3,6 @@ import type { FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Search, Shield } from "lucide-react";
 import api from "@/api/axios";
-import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/hooks/useToast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Pagination from "@/components/ui/Pagination";
@@ -88,7 +87,6 @@ function SkeletonRow() {
 // --------------------------------------------------
 
 export default function Admins() {
-  const { isDark } = useTheme();
   const { success, error: toastError } = useToast();
   const queryClient = useQueryClient();
 
@@ -347,7 +345,7 @@ export default function Admins() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => !submitting && closeForm()} />
-          <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl z-10 p-6 ${isDark ? "bg-surface" : "bg-surface"}`}>
+          <div className={`relative w-full max-w-lg rounded-2xl shadow-2xl z-10 p-6 bg-surface`}>
             <h3 className="text-lg font-bold text-ink mb-4">{editAdmin ? "Edit Admin" : "Add Admin"}</h3>
             <form onSubmit={editAdmin ? handleEdit : handleCreate}>
               <div className="grid grid-cols-2 gap-3">

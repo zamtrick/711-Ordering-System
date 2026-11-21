@@ -335,7 +335,6 @@ export default function Checkout() {
           setDefaultRangeKm(range);
         }
       } catch (err: any) {
-        console.log("Checkout load error:", err);
         if (err?.response?.status === 401) router.replace("/(auth)/login");
       } finally {
         if (mounted) setLoading(false);
@@ -387,7 +386,6 @@ export default function Checkout() {
       setPlacing(true);
 
       // 1. Create order
-      console.log("[Checkout] POSTing /orders with branch:", selectedBranch._id);
       const orderRes = await api.post("/orders", {
         branch: selectedBranch._id,
         deliveryAddress: resolvedDeliveryAddress,
@@ -395,7 +393,6 @@ export default function Checkout() {
         deliveryLat: activeCoords?.latitude,
         deliveryLng: activeCoords?.longitude,
       });
-      console.log("[Checkout] Create order response:", JSON.stringify(orderRes.data));
 
       const orderId: string = orderRes.data?.data?._id;
       if (!orderId) throw new Error("Failed to create order — no _id in response");
@@ -405,14 +402,11 @@ export default function Checkout() {
 
       for (const item of items) {
         try {
-          console.log(`[Checkout] Adding item ${item.name} (qty ${item.quantity}) to order ${orderId}`);
           const itemRes = await api.post(`/orders/${orderId}/items`, {
             productId: item.id,
             quantity: item.quantity,
           });
-          console.log(`[Checkout] Item response:`, JSON.stringify(itemRes.data));
         } catch (itemErr: any) {
-          console.log(`[Checkout] ITEM FAILED (${item.name}):`, itemErr?.response?.data ?? itemErr?.message);
           failures.push({
             name: item.name,
             message: itemErr?.response?.data?.message,
@@ -427,10 +421,6 @@ export default function Checkout() {
           try {
             await api.post(`/orders/${orderId}/redeem`, { points: redeemPoints });
           } catch (redeemErr: any) {
-            console.log(
-              "[Checkout] Redeem failed:",
-              redeemErr?.response?.data ?? redeemErr?.message,
-            );
           }
         }
 
@@ -442,10 +432,6 @@ export default function Checkout() {
             await api.post(`/orders/${orderId}/promo`, { code: appliedPromo.code });
           } catch (promoErr: any) {
             promoFailed = true;
-            console.log(
-              "[Checkout] Promo apply failed:",
-              promoErr?.response?.data ?? promoErr?.message,
-            );
           }
         }
 
@@ -472,7 +458,6 @@ export default function Checkout() {
         return;
       }
     } catch (err: any) {
-      console.log("Place order error:", err);
       // Browse-not-buy backstop: unverified emails can't order. Route to
       // OTP, then resume checkout via returnTo.
       if (

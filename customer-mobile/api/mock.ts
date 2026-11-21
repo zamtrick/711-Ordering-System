@@ -61,7 +61,6 @@ const mock = wrapper(
 
 // Mock all API calls
 mock.interceptors.request.use((config) => {
-  console.log("Mock API request:", config.method, config.url);
   return config;
 });
 
@@ -113,7 +112,6 @@ mock.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.log("Mock API error:", error);
     return Promise.reject(error);
   },
 );

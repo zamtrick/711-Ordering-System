@@ -81,7 +81,6 @@ const Home = () => {
       }
       if (deliveriesRes.data?.deliveries) setDeliveries(deliveriesRes.data.deliveries);
     } catch (err: any) {
-      console.log("Fetch data error:", err);
       if (err?.response?.status === 401) {
         router.replace("/(auth)/login");
       }

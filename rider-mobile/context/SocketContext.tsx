@@ -102,7 +102,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setConnected(false);
       };
       const onConnectError = async (err: Error) => {
-        console.log("Socket connect_error:", err.message);
         // Token may have rotated — refresh once and reconnect
         // instead of permanently disabling reconnection.
         if (

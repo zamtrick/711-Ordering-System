@@ -31,11 +31,10 @@ const fetchCategories = ({ page, limit, search }: { page: number; limit: number;
     .then((res) => res.data);
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 4 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -193,27 +192,27 @@ export default function Categories() {
 
       <div className="mb-4 max-w-sm">
         <div className={`flex items-center h-10 px-3 rounded-xl border gap-2 ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
-          <Search size={16} className={isDark ? "text-muted" : "text-muted"} />
+          <Search size={16} className={"text-muted"} />
           <input placeholder="Search categories..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className={`flex-1 h-full outline-none bg-transparent text-sm ${isDark ? "text-white placeholder:text-faint" : "text-ink placeholder:text-faint"}`} />
         </div>
       </div>
 
       <div className={`rounded-2xl border overflow-hidden ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>          <table className="w-full text-sm">
-            <thead><tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
-              <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Image</th>
-              <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Name</th>
-            <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Description</th>
-            <th className={`px-4 py-3 text-left font-semibold ${isDark ? "text-muted" : "text-muted"}`}>Actions</th>
+            <thead><tr className={`border-b bg-sunken border-line`}>
+              <th className={`px-4 py-3 text-left font-semibold text-muted`}>Image</th>
+              <th className={`px-4 py-3 text-left font-semibold text-muted`}>Name</th>
+            <th className={`px-4 py-3 text-left font-semibold text-muted`}>Description</th>
+            <th className={`px-4 py-3 text-left font-semibold text-muted`}>Actions</th>
           </tr></thead>
           <tbody>              {loading ? <>{Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}</>
             : filtered.length === 0 ? <tr><td colSpan={4} className="px-4 py-12 text-center text-muted">No categories found.</td></tr>
             : filtered.map((c) => (
-              <tr key={c._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
+              <tr key={c._id} className={`border-b border-line hover:bg-sunken`}>
                 <td className="px-4 py-3">
                   {toAbsolute(c.image) ? (
                     <img src={toAbsolute(c.image)} alt={c.name} className="w-10 h-10 rounded-lg object-cover" />
                   ) : (
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-sunken`}>
                       <Tags size={16} className="text-faint" />
                     </div>
                   )}
@@ -237,13 +236,13 @@ export default function Categories() {
             <h3 className={`text-lg font-bold mb-4 ${isDark ? "text-white" : "text-ink"}`}>{editCat ? "Edit Category" : "Add Category"}</h3>
             <form onSubmit={editCat ? handleEdit : handleCreate}>
               <div className="space-y-3">
-                <div><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Name *</label><input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} /></div>
-                <div><label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Description</label><textarea className={inputClass + " h-20 resize-none"} value={description} onChange={(e) => setDescription(e.target.value)} disabled={submitting} /></div>
+                <div><label className={`text-xs font-semibold mb-1 block text-muted`}>Name *</label><input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} /></div>
+                <div><label className={`text-xs font-semibold mb-1 block text-muted`}>Description</label><textarea className={inputClass + " h-20 resize-none"} value={description} onChange={(e) => setDescription(e.target.value)} disabled={submitting} /></div>
 
                 {/* Optional image picker */}
                 <div>
-                  <label className={`text-xs font-semibold mb-1 block ${isDark ? "text-muted" : "text-muted"}`}>Category Image (optional)</label>
-                  <div className={`flex items-center gap-3 p-3 rounded-xl border border-dashed ${isDark ? "border-line" : "border-line"}`}>
+                  <label className={`text-xs font-semibold mb-1 block text-muted`}>Category Image (optional)</label>
+                  <div className={`flex items-center gap-3 p-3 rounded-xl border border-dashed border-line`}>
                     {/* Preview / placeholder */}
                     {imagePreview ? (
                       <img
@@ -258,7 +257,7 @@ export default function Categories() {
                         className="w-16 h-16 rounded-lg object-cover border border-line"
                       />
                     ) : (
-                      <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+                      <div className={`w-16 h-16 rounded-lg flex items-center justify-center bg-sunken`}>
                         <Tags size={22} className="text-faint" />
                       </div>
                     )}
@@ -281,7 +280,7 @@ export default function Categories() {
                           type="button"
                           onClick={clearPickedImage}
                           disabled={submitting}
-                          className={`inline-flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold transition-colors cursor-pointer ${isDark ? "text-danger hover:bg-danger-soft" : "text-danger hover:bg-danger-soft"}`}
+                          className={`inline-flex items-center justify-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold transition-colors cursor-pointer text-danger hover:bg-danger-soft`}
                         >
                           <X size={13} />
                           {removeImage ? "Image will be removed" : "Remove image"}

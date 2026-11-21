@@ -27,9 +27,10 @@ import {
   Check,
   Truck,
   CreditCard,
+  Lock,
 } from "lucide-react-native";
 
-import { LightTheme, DarkTheme } from "@/constants/Theme";
+import { LightTheme, DarkTheme, type ThemeColors } from "@/constants/Theme";
 import ThemedView from "@/components/ThemedView";
 import { router } from "expo-router";
 import api from "@/api/axios";
@@ -71,6 +72,31 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Password change
+  const [pwVisible, setPwVisible] = useState(false);
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!pwForm.current) { Alert.alert("Validation", "Current password is required."); return; }
+    if (pwForm.next.length < 8) { Alert.alert("Validation", "New password must be at least 8 characters."); return; }
+    if (pwForm.next !== pwForm.confirm) { Alert.alert("Validation", "Passwords do not match."); return; }
+    try {
+      setPwSaving(true);
+      await api.patch("/auth/change-password", {
+        currentPassword: pwForm.current,
+        newPassword: pwForm.next,
+      });
+      Alert.alert("Success", "Password changed successfully.");
+      setPwVisible(false);
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (err: any) {
+      Alert.alert("Error", err?.response?.data?.message ?? "Failed to change password.");
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       const response = await api.get("/rider/profile/me");
@@ -78,7 +104,6 @@ const Profile = () => {
         setProfile(response.data.data);
       }
     } catch (error: any) {
-      console.log("Get profile error:", error);
       if (error?.response?.status === 401) {
         router.replace("/(auth)/login");
       }
@@ -484,7 +509,7 @@ const EditField = ({
   onChangeText: (v: string) => void;
   placeholder: string;
   keyboardType?: "default" | "phone-pad" | "numeric";
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <View style={styles.editFieldWrapper}>
     <Text style={[styles.editFieldLabel, { color: colors.muted }]}>{label}</Text>
@@ -515,7 +540,7 @@ const InfoRow = ({
   icon: React.ReactNode;
   label: string;
   value: string;
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <View style={styles.infoRow}>
     <View style={[styles.infoIcon, { backgroundColor: colors.background }]}>
@@ -542,7 +567,7 @@ const MenuItem = ({
   icon: React.ReactNode;
   title: string;
   subtitle: string;
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <Pressable style={styles.menuItem}>
     <View style={[styles.menuIcon, { backgroundColor: colors.background }]}>

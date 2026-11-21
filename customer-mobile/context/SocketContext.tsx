@@ -53,7 +53,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       const onConnect = () => setConnected(true);
       const onDisconnect = () => setConnected(false);
       const onConnectError = async (err: Error) => {
-        console.log("Socket connect_error:", err.message);
         if (err.message === "Invalid or expired token" && !retriedRef.current) {
           retriedRef.current = true;
           try {
@@ -140,7 +139,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       const onConnect = () => setConnected(true);
       const onDisconnect = () => setConnected(false);
       const onConnectError = async (err: Error) => {
-        console.log("Socket connect_error:", err.message);
         if (err.message === "Invalid or expired token" && !retriedRef.current) {
           retriedRef.current = true;
           try {

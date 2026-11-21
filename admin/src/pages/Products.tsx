@@ -69,12 +69,11 @@ const fetchCategories = () =>
 // --------------------------------------------------
 
 function SkeletonRow({ cols = 8 }: { cols?: number }) {
-  const { isDark } = useTheme();
   return (
     <tr className="animate-pulse border-b border-line">
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+          <div className={`h-4 rounded bg-sunken`} />
         </td>
       ))}
     </tr>
@@ -114,7 +113,7 @@ function ImagePicker({ f, setF, submitting }: ImagePickerProps) {
         {f.imagePreview ? (
           <img src={f.imagePreview} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-line" />
         ) : (
-          <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${isDark ? "bg-sunken" : "bg-sunken"}`}>
+          <div className={`w-16 h-16 rounded-lg flex items-center justify-center bg-sunken`}>
             <PackageSearch size={22} className="text-faint" />
           </div>
         )}

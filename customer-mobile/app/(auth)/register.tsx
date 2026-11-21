@@ -78,7 +78,6 @@ const Register = () => {
         password,
       });
 
-      console.log("Register response:", response.data);
 
       // Accounts start unverified — the server already emailed the OTP.
       router.replace({
@@ -86,7 +85,6 @@ const Register = () => {
         params: { email: cleanEmail, purpose: "verify" },
       });
     } catch (error: any) {
-      console.log("Register error:", error);
 
       const message =
         error?.response?.data?.message ||

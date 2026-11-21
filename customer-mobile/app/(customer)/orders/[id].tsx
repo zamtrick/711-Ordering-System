@@ -243,7 +243,6 @@ export default function OrderDetailScreen() {
       const res = await api.get(`/orders/${id}`);
       setOrder(res.data?.data ?? null);
     } catch (err: any) {
-      console.log("[OrderDetail] fetch error:", err?.response?.data ?? err?.message);
       if (err?.response?.status === 401) router.replace("/(auth)/login");
       else if (err?.response?.status === 404) setOrder(null);
     } finally {
@@ -334,7 +333,6 @@ export default function OrderDetailScreen() {
         
         setQrCode(data.qrValue);
       } catch (err: any) {
-        console.log("QR fetch error:", err?.response?.data ?? err?.message);
         setQrError(err?.response?.data?.message ?? "Could not load QR code");
         setQrCode(null);
       } finally {

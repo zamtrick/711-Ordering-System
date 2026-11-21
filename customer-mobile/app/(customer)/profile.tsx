@@ -7,10 +7,6 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
 } from "react-native";
 
@@ -26,20 +22,28 @@ import {
   HelpCircle,
   LogOut,
   Pencil,
-  X,
-  Check,
   Trash,
   Plus,
   Gift,
+  Lock,
 } from "lucide-react-native";
 
 import { useTheme } from "@/hooks/useTheme";
+import type { ThemeColors } from "@/constants/theme";
 import ThemedView from "@/components/ThemedView";
-import DeliveryMapPicker, {
-  type DeliveryCoords,
-} from "@/components/DeliveryMapPicker";
+import { ProfileSkeleton } from "@/components/Skeleton";
+import { type DeliveryCoords } from "@/components/DeliveryMapPicker";
+import EditProfileModal, {
+  type EditForm,
+} from "@/components/modals/EditProfileModal";
+import AddAddressModal from "@/components/modals/AddAddressModal";
+import EditAddressModal from "@/components/modals/EditAddressModal";
+import ChangePasswordModal, {
+  type PwForm,
+} from "@/components/modals/ChangePasswordModal";
 import { router } from "expo-router";
 import api from "@/api/axios";
+import { getErrorMessage, isUnauthorized } from "@/utils/error";
 
 // --------------------------------------------------
 // TYPES
@@ -62,14 +66,6 @@ type ProfileData = {
   };
   phone: string;
   addresses: AddressItem[];
-  age: string;
-};
-
-type EditForm = {
-  firstname: string;
-  lastname: string;
-  phone: string;
-  address: string;
   age: string;
 };
 
@@ -97,11 +93,36 @@ const Profile = () => {
     age: "",
   });
 
-  // Add address modal
-  const [addAddressVisible, setAddAddressVisible] = useState(false);
+  // Password change modal
+  const [pwVisible, setPwVisible] = useState(false);
+  const [pwForm, setPwForm] = useState<PwForm>({ current: "", next: "", confirm: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!pwForm.current) { Alert.alert("Validation", "Current password is required."); return; }
+    if (pwForm.next.length < 8) { Alert.alert("Validation", "New password must be at least 8 characters."); return; }
+    if (pwForm.next !== pwForm.confirm) { Alert.alert("Validation", "Passwords do not match."); return; }
+    try {
+      setPwSaving(true);
+      await api.patch("/auth/change-password", {
+        currentPassword: pwForm.current,
+        newPassword: pwForm.next,
+      });
+      Alert.alert("Success", "Password changed successfully.");
+      setPwVisible(false);
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (err) {
+      Alert.alert("Error", getErrorMessage(err, "Failed to change password."));
+    } finally {
+      setPwSaving(false);
+    }
+  };
   const [newAddressLabel, setNewAddressLabel] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newAddressCoords, setNewAddressCoords] = useState<DeliveryCoords | null>(null);
+
+  // Add address modal
+  const [addAddressVisible, setAddAddressVisible] = useState(false);
 
   // Edit address modal
   const [editAddressVisible, setEditAddressVisible] = useState(false);
@@ -139,9 +160,8 @@ const Profile = () => {
         if (profileData && mounted) {
           setProfile(profileData);
         }
-      } catch (err: any) {
-        console.log("Get profile error:", err);
-        if (err?.response?.status === 401) {
+      } catch (err) {
+        if (isUnauthorized(err)) {
           router.replace("/(auth)/login");
         }
       } finally {
@@ -204,12 +224,9 @@ const Profile = () => {
       });
       if (response.data?.data) setProfile(response.data.data);
       setEditVisible(false);
-    } catch (error: any) {
-      console.log("Update profile error:", error);
-      const message =
-        error?.response?.data?.message ?? "Failed to update profile.";
-      Alert.alert("Error", message);
-      if (error?.response?.status === 401) router.replace("/(auth)/login");
+    } catch (error) {
+      Alert.alert("Error", getErrorMessage(error, "Failed to update profile."));
+      if (isUnauthorized(error)) router.replace("/(auth)/login");
     } finally {
       setSaving(false);
     }
@@ -244,11 +261,8 @@ const Profile = () => {
       setNewAddressLabel("");
       setNewAddress("");
       setNewAddressCoords(null);
-    } catch (error: any) {
-      console.log("Add address error:", error);
-      const message =
-        error?.response?.data?.message ?? "Failed to add address.";
-      Alert.alert("Error", message);
+    } catch (error) {
+      Alert.alert("Error", getErrorMessage(error, "Failed to add address."));
     } finally {
       setSaving(false);
     }
@@ -290,11 +304,8 @@ const Profile = () => {
       setNewAddress("");
       setEditAddressItemId(null);
       setEditAddressCoords(null);
-    } catch (error: any) {
-      console.log("Update address error:", error);
-      const message =
-        error?.response?.data?.message ?? "Failed to update address.";
-      Alert.alert("Error", message);
+    } catch (error) {
+      Alert.alert("Error", getErrorMessage(error, "Failed to update address."));
     } finally {
       setSaving(false);
     }
@@ -317,11 +328,8 @@ const Profile = () => {
               `/customer/profile/me/addresses/${addressId}`,
             );
             if (response.data?.data) setProfile(response.data.data);
-          } catch (error: any) {
-            console.log("Remove address error:", error);
-            const message =
-              error?.response?.data?.message ?? "Failed to remove address.";
-            Alert.alert("Error", message);
+          } catch (error) {
+            Alert.alert("Error", getErrorMessage(error, "Failed to remove address."));
           } finally {
             setSaving(false);
           }
@@ -352,11 +360,8 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007A53" />
-        <Text style={[styles.loadingText, { color: colors.muted }]}>
-          Loading profile...
-        </Text>
+      <ThemedView>
+        <ProfileSkeleton />
       </ThemedView>
     );
   }
@@ -607,6 +612,14 @@ const Profile = () => {
           />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <MenuItem
+            icon={<Lock size={20} color="#4F46E5" />}
+            title="Change Password"
+            subtitle="Update your account password"
+            onPress={() => { setPwForm({ current: "", next: "", confirm: "" }); setPwVisible(true); }}
+            colors={colors}
+          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <MenuItem
             icon={<MapPin size={20} color="#FF6720" />}
             title="Store Locator"
             subtitle="Find branches that deliver to you"
@@ -650,240 +663,49 @@ const Profile = () => {
         </Text>
       </ScrollView>
 
-      {/* ================================================
-          EDIT PROFILE MODAL
-      ================================================ */}
-      <Modal
+      <EditProfileModal
         visible={editVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setEditVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.headline }]}>
-                Edit Profile
-              </Text>
-              <Pressable
-                onPress={() => setEditVisible(false)}
-                style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}
-              >
-                <X size={18} color={colors.muted} />
-              </Pressable>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <EditField
-                label="First Name"
-                value={editForm.firstname}
-                onChangeText={(v) => setEditForm((f) => ({ ...f, firstname: v }))}
-                placeholder="Enter first name"
-                colors={colors}
-              />
-              <EditField
-                label="Last Name"
-                value={editForm.lastname}
-                onChangeText={(v) => setEditForm((f) => ({ ...f, lastname: v }))}
-                placeholder="Enter last name"
-                colors={colors}
-              />
-              <EditField
-                label="Phone"
-                value={editForm.phone}
-                onChangeText={(v) => setEditForm((f) => ({ ...f, phone: v }))}
-                placeholder="e.g. +63 917 123 4567"
-                keyboardType="phone-pad"
-                colors={colors}
-              />
-              <EditField
-                label="Age"
-                value={editForm.age}
-                onChangeText={(v) => setEditForm((f) => ({ ...f, age: v }))}
-                placeholder="Enter your age"
-                keyboardType="numeric"
-                colors={colors}
-              />
-              <Pressable
-                onPress={handleSave}
-                disabled={saving}
-                style={[styles.saveButton, { opacity: saving ? 0.7 : 1 }]}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Check size={18} color="#fff" />
-                )}
-                <Text style={styles.saveButtonText}>
-                  {saving ? "Saving..." : "Save Changes"}
-                </Text>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ================================================
-          ADD ADDRESS MODAL
-      ================================================ */}
-      <Modal
+        onClose={() => setEditVisible(false)}
+        form={editForm}
+        setForm={setEditForm}
+        saving={saving}
+        onSave={handleSave}
+        colors={colors}
+      />
+      <AddAddressModal
         visible={addAddressVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setAddAddressVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.headline }]}>
-                Add Address
-              </Text>
-              <Pressable
-                onPress={() => setAddAddressVisible(false)}
-                style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}
-              >
-                <X size={18} color={colors.muted} />
-              </Pressable>
-            </View>
-            <EditField
-              label="Label (e.g. Home, Work)"
-              value={newAddressLabel}
-              onChangeText={setNewAddressLabel}
-              placeholder="e.g. Home"
-              colors={colors}
-            />
-            {/* Map picker — same as checkout: tap the map or drag the pin,
-                the address field auto-fills via reverse geocoding. */}
-            <DeliveryMapPicker
-              value={newAddress}
-              onChange={handleMapAddress}
-              colors={colors}
-            />
-            <Pressable
-              onPress={addAddress}
-              disabled={saving}
-              style={[styles.saveButton, { opacity: saving ? 0.7 : 1 }]}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Plus size={18} color="#fff" />
-              )}
-              <Text style={styles.saveButtonText}>
-                {saving ? "Saving..." : "Add Address"}
-              </Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* ================================================
-          EDIT ADDRESS MODAL
-      ================================================ */}
-      <Modal
+        onClose={() => setAddAddressVisible(false)}
+        label={newAddressLabel}
+        setLabel={setNewAddressLabel}
+        address={newAddress}
+        onMapChange={handleMapAddress}
+        saving={saving}
+        onAdd={addAddress}
+        colors={colors}
+      />
+      <EditAddressModal
         visible={editAddressVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setEditAddressVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.headline }]}>
-                Edit Address
-              </Text>
-              <Pressable
-                onPress={() => setEditAddressVisible(false)}
-                style={[styles.modalCloseBtn, { backgroundColor: colors.background }]}
-              >
-                <X size={18} color={colors.muted} />
-              </Pressable>
-            </View>
-            <EditField
-              label="Label (e.g. Home, Work)"
-              value={newAddressLabel}
-              onChangeText={setNewAddressLabel}
-              placeholder="e.g. Home"
-              colors={colors}
-            />
-            {/* Map picker — same as checkout and the add modal. The pin
-                starts wherever GPS lands; adjusting it updates the address
-                text and saves the exact coordinates with the address. */}
-            <DeliveryMapPicker
-              value={newAddress}
-              onChange={handleEditMapAddress}
-              colors={colors}
-            />
-            <Pressable
-              onPress={updateAddressItem}
-              disabled={saving}
-              style={[styles.saveButton, { opacity: saving ? 0.7 : 1 }]}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Check size={18} color="#fff" />
-              )}
-              <Text style={styles.saveButtonText}>
-                {saving ? "Saving..." : "Save Changes"}
-              </Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        onClose={() => setEditAddressVisible(false)}
+        label={newAddressLabel}
+        setLabel={setNewAddressLabel}
+        address={newAddress}
+        onMapChange={handleEditMapAddress}
+        saving={saving}
+        onUpdate={updateAddressItem}
+        colors={colors}
+      />
+      <ChangePasswordModal
+        visible={pwVisible}
+        onClose={() => setPwVisible(false)}
+        form={pwForm}
+        setForm={setPwForm}
+        saving={pwSaving}
+        onChange={handleChangePassword}
+        colors={colors}
+      />
     </ThemedView>
   );
 };
-
-// --------------------------------------------------
-// EDIT FIELD
-// --------------------------------------------------
-
-const EditField = ({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType = "default",
-  colors,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder: string;
-  keyboardType?: "default" | "phone-pad" | "numeric";
-  colors: any;
-}) => (
-  <View style={styles.editFieldWrapper}>
-    <Text style={[styles.editFieldLabel, { color: colors.muted }]}>{label}</Text>
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.muted}
-      keyboardType={keyboardType}
-      style={[
-        styles.editFieldInput,
-        {
-          color: colors.headline,
-          backgroundColor: colors.background,
-          borderColor: colors.border,
-        },
-      ]}
-    />
-  </View>
-);
 
 // --------------------------------------------------
 // INFO ROW
@@ -898,7 +720,7 @@ const InfoRow = ({
   icon: React.ReactNode;
   label: string;
   value: string;
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <View style={styles.infoRow}>
     <View style={[styles.infoIcon, { backgroundColor: colors.background }]}>
@@ -931,7 +753,7 @@ const MenuItem = ({
   title: string;
   subtitle: string;
   onPress?: () => void;
-  colors: any;
+  colors: ThemeColors;
 }) => (
   <Pressable style={styles.menuItem} onPress={onPress}>
     <View style={[styles.menuIcon, { backgroundColor: colors.background }]}>
@@ -951,14 +773,6 @@ const MenuItem = ({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  loadingText: { marginTop: 12, fontSize: 14 },
 
   content: { padding: 20, paddingBottom: 40 },
 
@@ -1186,64 +1000,6 @@ const styles = StyleSheet.create({
   logoutText: { color: "#DA291C", fontSize: 14, fontWeight: "700" },
 
   version: { textAlign: "center", fontSize: 11, marginTop: 18 },
-
-  // Modals
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-
-  modalSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 40,
-    maxHeight: "90%",
-  },
-
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 22,
-  },
-
-  modalTitle: { fontSize: 20, fontWeight: "800" },
-
-  modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  editFieldWrapper: { marginBottom: 16 },
-
-  editFieldLabel: { fontSize: 12, fontWeight: "600", marginBottom: 6 },
-
-  editFieldInput: {
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    fontSize: 14,
-  },
-
-  saveButton: {
-    height: 52,
-    borderRadius: 15,
-    backgroundColor: "#007A53",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 8,
-  },
-
-  saveButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
 
 export default Profile;

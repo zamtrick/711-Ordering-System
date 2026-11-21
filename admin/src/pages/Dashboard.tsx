@@ -131,7 +131,7 @@ function Card({ title, icon, children }: { title: string; icon: React.ReactNode;
 // Placeholder shown while dashboard data loads — mirrors the Card shell + a few pulse rows
 function SkeletonCard({ rows = 4 }: { rows?: number }) {
   const { isDark } = useTheme();
-  const block = isDark ? "bg-sunken" : "bg-sunken";
+  const block = "bg-sunken";
   return (
     <div className={`rounded-2xl border overflow-hidden animate-pulse ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
       <div className="px-6 py-4 border-b border-line">
@@ -268,10 +268,10 @@ export default function Dashboard() {
         {isLoading
           ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className={`rounded-2xl border p-5 flex items-center gap-4 animate-pulse ${isDark ? "bg-surface border-line" : "bg-white border-line"}`}>
-                <div className={`w-12 h-12 rounded-xl shrink-0 ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                <div className={`w-12 h-12 rounded-xl shrink-0 bg-sunken`} />
                 <div className="flex flex-col gap-2">
-                  <div className={`h-7 w-16 rounded-lg ${isDark ? "bg-sunken" : "bg-sunken"}`} />
-                  <div className={`h-3 w-24 rounded-lg ${isDark ? "bg-sunken" : "bg-sunken"}`} />
+                  <div className={`h-7 w-16 rounded-lg bg-sunken`} />
+                  <div className={`h-3 w-24 rounded-lg bg-sunken`} />
                 </div>
               </div>
             ))

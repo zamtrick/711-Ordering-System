@@ -75,8 +75,6 @@ const Register = () => {
         password,
       });
 
-      console.log("Register response:", response.data);
-
       Alert.alert("Registration Successful", "Your account has been created.", [
         {
           text: "Login",
@@ -84,8 +82,6 @@ const Register = () => {
         },
       ]);
     } catch (error: any) {
-      console.log("Register error:", error);
-
       const message =
         error?.response?.data?.message ||
         "Unable to create your account. Please try again.";

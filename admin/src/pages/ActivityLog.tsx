@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, LogIn, LogOut, Settings, Shield } from "lucide-react";
 import api from "@/api/axios";
@@ -98,11 +98,10 @@ function detailSummary(log: AuditLog): string {
 }
 
 function SkeletonRow() {
-  const { isDark } = useTheme();
   return (
-    <tr className={`animate-pulse border-b ${isDark ? "border-line" : "border-line"}`}>
+    <tr className={`animate-pulse border-b border-line`}>
       {Array.from({ length: 4 }).map((_, i) => (
-        <td key={i} className="px-4 py-3"><div className={`h-4 rounded ${isDark ? "bg-sunken" : "bg-sunken"}`} /></td>
+        <td key={i} className="px-4 py-3"><div className={`h-4 rounded bg-sunken`} /></td>
       ))}
     </tr>
   );
@@ -131,7 +130,9 @@ export default function ActivityLog() {
     queryFn: () => api.get<StatsResponse>("/superadmin/audit/stats").then((r) => r.data),
   });
 
-  if (error) toastError("Failed to load audit logs.");
+  useEffect(() => {
+    if (error) toastError("Failed to load audit logs.");
+  }, [error, toastError]);
 
   const logs = data?.logs ?? [];
   const pagination = data?.pagination ?? null;
@@ -189,7 +190,7 @@ export default function ActivityLog() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className={`border-b ${isDark ? "bg-sunken border-line" : "bg-sunken border-line"}`}>
+              <tr className={`border-b bg-sunken border-line`}>
                 {["Action", "User", "Details", "When"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-semibold text-muted whitespace-nowrap">{h}</th>
                 ))}
@@ -202,7 +203,7 @@ export default function ActivityLog() {
                 <tr><td colSpan={4} className="px-4 py-12 text-center text-muted">No activity recorded yet.</td></tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log._id} className={`border-b ${isDark ? "border-line hover:bg-sunken" : "border-line hover:bg-sunken"}`}>
+                  <tr key={log._id} className={`border-b border-line hover:bg-sunken`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <span className="w-8 h-8 rounded-lg bg-sunken flex items-center justify-center shrink-0">

@@ -98,6 +98,7 @@ export default function AppOpenAds() {
   const [editAd, setEditAd] = useState<Ad | null>(null);
   const [form, setForm] = useState<FormData>(defaultForm());
   const [submitting, setSubmitting] = useState(false);
+  const [removeImage, setRemoveImage] = useState(false);
 
   const [deleteAd, setDeleteAd] = useState<Ad | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -132,6 +133,7 @@ export default function AppOpenAds() {
     e.target.value = "";
     if (!file) return;
     revokePreview(form.imagePreview);
+    setRemoveImage(false);
     setForm((f) => ({ ...f, imageFile: file, imagePreview: URL.createObjectURL(file) }));
   };
 
@@ -144,6 +146,7 @@ export default function AppOpenAds() {
     revokePreview(form.imagePreview);
     setShowForm(false);
     setEditAd(null);
+    setRemoveImage(false);
     setForm(defaultForm());
   };
 
@@ -154,11 +157,13 @@ export default function AppOpenAds() {
   const openCreate = () => {
     setForm(defaultForm());
     setEditAd(null);
+    setRemoveImage(false);
     setShowForm(true);
   };
 
   const openEdit = (ad: Ad) => {
     setEditAd(ad);
+    setRemoveImage(false);
     setForm({
       title: ad.title,
       subtitle: ad.subtitle ?? "",
@@ -206,6 +211,11 @@ export default function AppOpenAds() {
         const fd = new FormData();
         fd.append("image", form.imageFile);
         await api.post(`/app-open-ad/${adId}/image`, fd);
+      }
+
+      // Clear the existing creative when the admin removed it without replacing.
+      if (removeImage && adId) {
+        await api.delete(`/app-open-ad/${adId}/image`);
       }
 
       success(editAd ? "Ad campaign updated." : "Ad campaign created.");
@@ -329,7 +339,7 @@ export default function AppOpenAds() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-bold text-ink truncate">{ad.title}</p>
                     {live && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success-soft text-success">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent-soft text-accent-ink">
                         LIVE
                       </span>
                     )}
@@ -422,7 +432,7 @@ export default function AppOpenAds() {
               <button
                 type="button"
                 onClick={closeForm}
-                className={`text-sm cursor-pointer ${isDark ? "text-muted" : "text-muted"}`}
+                className={`text-sm cursor-pointer text-muted`}
               >
                 <X size={18} />
               </button>
@@ -431,14 +441,14 @@ export default function AppOpenAds() {
             <div className="space-y-3">
               {/* Creative upload */}
               <div>
-                <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                <label className={`text-xs font-semibold text-muted`}>
                   Creative (portrait, JPG/PNG/WEBP, max 8MB)
                 </label>
                 <div className="mt-2 flex items-start gap-3">
                   <div className="w-24 h-36 rounded-xl bg-sunken border border-line overflow-hidden flex items-center justify-center">
                     {form.imagePreview ? (
                       <img src={form.imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                    ) : editAd?.imageUrl && !form.imageFile ? (
+                    ) : editAd?.imageUrl && !form.imageFile && !removeImage ? (
                       <img src={toAbsolute(editAd.imageUrl)} alt="Current" className="w-full h-full object-cover" />
                     ) : (
                       <Megaphone size={22} className="text-faint" />
@@ -447,31 +457,39 @@ export default function AppOpenAds() {
                   <div className="flex flex-col gap-2">
                     <label className="inline-flex items-center gap-2 px-3 h-9 rounded-xl border border-line text-sm font-semibold text-ink cursor-pointer hover:bg-sunken">
                       <Upload size={14} />
-                      {form.imageFile || editAd?.imageUrl ? "Replace" : "Upload"}
+                      {form.imageFile || (editAd?.imageUrl && !removeImage) ? "Replace" : "Upload"}
                       <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickImage} />
                     </label>
-                    {(form.imageFile || (editAd?.imageUrl && !form.imageFile)) && (
+                    {form.imageFile || (editAd?.imageUrl && !form.imageFile && !removeImage) ? (
                       <button
                         type="button"
                         onClick={() => {
-                          clearPickedImage();
-                          if (editAd) {
-                            // Mark existing image for removal server-side by uploading nothing;
-                            // the explicit remove button deletes it via the API after save.
+                          if (form.imageFile) {
+                            clearPickedImage();
+                          } else if (editAd?.imageUrl) {
+                            setRemoveImage(true);
                           }
                         }}
                         className="text-xs font-semibold text-danger cursor-pointer"
                       >
                         Remove image
                       </button>
-                    )}
+                    ) : removeImage ? (
+                      <button
+                        type="button"
+                        onClick={() => setRemoveImage(false)}
+                        className="text-xs font-semibold text-accent-ink cursor-pointer"
+                      >
+                        Undo remove
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
 
               {/* Title */}
               <div>
-                <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                <label className={`text-xs font-semibold text-muted`}>
                   Title *
                 </label>
                 <input
@@ -487,7 +505,7 @@ export default function AppOpenAds() {
 
               {/* Subtitle */}
               <div>
-                <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                <label className={`text-xs font-semibold text-muted`}>
                   Subtitle
                 </label>
                 <input
@@ -504,7 +522,7 @@ export default function AppOpenAds() {
               {/* CTA */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                  <label className={`text-xs font-semibold text-muted`}>
                     Button label
                   </label>
                   <input
@@ -518,7 +536,7 @@ export default function AppOpenAds() {
                   />
                 </div>
                 <div>
-                  <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                  <label className={`text-xs font-semibold text-muted`}>
                     Button link (URL or screen)
                   </label>
                   <input
@@ -536,7 +554,7 @@ export default function AppOpenAds() {
               {/* Schedule */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                  <label className={`text-xs font-semibold text-muted`}>
                     Starts (optional)
                   </label>
                   <input
@@ -549,7 +567,7 @@ export default function AppOpenAds() {
                   />
                 </div>
                 <div>
-                  <label className={`text-xs font-semibold ${isDark ? "text-muted" : "text-muted"}`}>
+                  <label className={`text-xs font-semibold text-muted`}>
                     Ends (optional)
                   </label>
                   <input

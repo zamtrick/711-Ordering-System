@@ -340,7 +340,6 @@ const Deliveries = () => {
         Alert.alert("Error", "Could not capture photo. Please try again.");
       }
     } catch (err: any) {
-      console.log("takePictureAsync error:", err?.message ?? err);
       Alert.alert("Error", "Could not capture photo. Please try again.");
     }
   };

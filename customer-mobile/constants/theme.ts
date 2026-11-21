@@ -1,4 +1,56 @@
-export const LightTheme = {
+// --------------------------------------------------
+// THEME TYPES
+// --------------------------------------------------
+
+export interface ThemeColors {
+  background: string;
+  surface: string;
+  primary: string;
+  primaryDark: string;
+  secondary: string;
+  orange: string;
+  red: string;
+  headline: string;
+  paragraph: string;
+  muted: string;
+  border: string;
+  success: string;
+  error: string;
+  tabBar: string;
+}
+
+export interface Theme {
+  colors: ThemeColors;
+  spacing: {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    xxl: number;
+  };
+  radius: {
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    full: number;
+  };
+  fontSize: {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    xxl: number;
+  };
+}
+
+// --------------------------------------------------
+// THEME INSTANCES
+// --------------------------------------------------
+
+export const LightTheme: Theme = {
   colors: {
     background: "#F8F5F2",
     primary: "#007A53",
@@ -50,7 +102,7 @@ export const LightTheme = {
   },
 };
 
-export const DarkTheme = {
+export const DarkTheme: Theme = {
   colors: {
     background: "#121212",
     surface: "#1E1E1E",
@@ -61,6 +113,7 @@ export const DarkTheme = {
     primaryDark: "#006B4A",
 
     secondary: "#F45D48",
+    orange: "#FF6720",
 
     headline: "#FFFFFF",
     paragraph: "#E5E5E5",
