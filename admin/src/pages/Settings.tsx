@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Truck, ShieldCheck, Bike, Save, Check, ScanLine, Camera, MapPin } from "lucide-react";
+import { Truck, ShieldCheck, Bike, Save, Check, ScanLine, Camera, MapPin, Wrench } from "lucide-react";
 import api from "@/api/axios";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
@@ -29,6 +29,10 @@ const PERMISSION_LABELS: { key: keyof AdminPermissions; label: string; hint: str
 
 const fetchDeliveryFee = () =>
   api.get("/settings/delivery-fee").then((res) => res.data?.data?.fee as number);
+
+type MaintenanceStatus = { enabled: boolean; message: string };
+const fetchMaintenance = () =>
+  api.get<{ data: MaintenanceStatus }>("/settings/maintenance").then((res) => res.data?.data);
 
 const fetchPermissions = () =>
   api
@@ -251,6 +255,46 @@ export default function Settings() {
     }
   };
 
+  // ── Maintenance mode ──────────────────────────
+  const { data: maintenanceData, error: maintenanceError } = useQuery({
+    queryKey: ["settings", "maintenance"],
+    queryFn: fetchMaintenance,
+  });
+  const [maintenanceEnabled, setMaintenanceEnabled] = useState<boolean | null>(null);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null);
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
+  const [maintenanceSaved, setMaintenanceSaved] = useState(false);
+
+  const maintenanceEnabledDraft = maintenanceEnabled ?? maintenanceData?.enabled ?? false;
+  const maintenanceMessageDraft = maintenanceMessage ?? maintenanceData?.message ?? "";
+
+  useEffect(() => {
+    if (maintenanceError) toastError("Failed to load maintenance status.");
+  }, [maintenanceError, toastError]);
+
+  const saveMaintenance = async () => {
+    setSavingMaintenance(true);
+    try {
+      const res = await api.put("/settings/maintenance", {
+        enabled: maintenanceEnabledDraft,
+        message: maintenanceMessageDraft,
+      });
+      success(`Maintenance mode ${maintenanceEnabledDraft ? "enabled" : "disabled"}.`);
+      queryClient.setQueryData(["settings", "maintenance"], res.data?.data);
+      setMaintenanceSaved(true);
+      setTimeout(() => setMaintenanceSaved(false), 1500);
+    } catch (err: unknown) {
+      toastError((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to update maintenance mode.");
+    } finally {
+      setSavingMaintenance(false);
+    }
+  };
+
+  const maintenanceDirty =
+    maintenanceData !== undefined &&
+    (maintenanceEnabledDraft !== maintenanceData?.enabled ||
+      maintenanceMessageDraft !== maintenanceData?.message);
+
   const feeDirty = fee !== undefined && Number(feeInput) !== fee;
   const permsDirty = perms !== null && permDraft !== null && JSON.stringify(permDraft) !== JSON.stringify(perms);
   const capacityDirty = capacity !== undefined && Number(capacityInput) !== capacity;
@@ -266,6 +310,71 @@ export default function Settings() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        {/* ── Maintenance mode ─────────────────────── */}
+        {isSuperAdmin && (
+          <div className={`rounded-2xl border overflow-hidden lg:col-span-2 ${maintenanceEnabledDraft ? "border-orange-400 bg-orange-50 dark:bg-orange-950/20" : "bg-surface border-line"}`}>
+            <div className="flex items-center gap-2 px-6 py-4 border-b border-line">
+              <Wrench size={16} className={maintenanceEnabledDraft ? "text-orange-500" : "text-accent"} />
+              <h3 className="text-sm font-bold text-ink">Maintenance Mode</h3>
+              {maintenanceEnabledDraft && (
+                <span className="ml-auto text-xs font-bold text-white bg-orange-500 px-2.5 py-0.5 rounded-full">
+                  ACTIVE
+                </span>
+              )}
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-muted mb-5">
+                When enabled, the customer app shows a maintenance screen and all API routes (except auth and rider delivery endpoints) return 503. Riders can still complete in-flight deliveries.
+              </p>
+              {maintenanceData === undefined ? (
+                <div className="space-y-3">
+                  <div className="h-9 w-full rounded-xl bg-sunken animate-pulse" />
+                  <div className="h-9 w-full rounded-xl bg-sunken animate-pulse" />
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">Enable maintenance mode</p>
+                      <p className="text-xs text-faint mt-0.5">Blocks customer access immediately</p>
+                    </div>
+                    <Toggle
+                      checked={maintenanceEnabledDraft}
+                      disabled={savingMaintenance}
+                      onChange={(v) => setMaintenanceEnabled(v)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted block mb-1.5">
+                      Message shown to customers
+                    </label>
+                    <input
+                      type="text"
+                      value={maintenanceMessageDraft}
+                      onChange={(e) => setMaintenanceMessage(e.target.value)}
+                      disabled={savingMaintenance}
+                      placeholder="We're down for maintenance. We'll be back shortly."
+                      className="w-full h-11 px-3 rounded-xl border border-line bg-surface text-sm text-ink outline-none disabled:opacity-60"
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={saveMaintenance}
+                      disabled={savingMaintenance || !maintenanceDirty}
+                      className={`inline-flex items-center gap-2 px-4 h-10 rounded-xl text-sm font-bold text-white transition-colors ${
+                        maintenanceDirty ? "bg-accent hover:bg-accent/90 cursor-pointer" : "bg-faint/40 cursor-not-allowed"
+                      } disabled:opacity-60`}
+                    >
+                      {maintenanceSaved ? <Check size={15} /> : <Save size={15} />}
+                      {savingMaintenance ? "Saving…" : maintenanceSaved ? "Saved" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Delivery fee ─────────────────────────── */}
         <div className="rounded-2xl border bg-surface border-line overflow-hidden">
           <div className="flex items-center gap-2 px-6 py-4 border-b border-line">

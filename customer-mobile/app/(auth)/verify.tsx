@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TextInput,
+  type TextInputInstance,
   Pressable,
   StyleSheet,
   TouchableWithoutFeedback,
@@ -47,7 +48,7 @@ const Verify = () => {
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_SECONDS);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   // Email can be omitted when the user has a session (post-register) —
   // fall back to the logged-in profile.
@@ -185,7 +186,7 @@ const Verify = () => {
               <TextInput
                 key={i}
                 ref={(el) => {
-                  inputRefs.current[i] = el;
+                  inputRefs.current[i] = el as TextInputInstance | null;
                 }}
                 value={d}
                 onChangeText={(t) => handleChange(t, i)}

@@ -554,3 +554,93 @@ export const updateLoyaltySettingsHandler = async (req, res) => {
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
+
+// --------------------------------------------------
+// MAINTENANCE MODE
+// --------------------------------------------------
+
+export const MAINTENANCE_KEY = "maintenanceMode";
+
+export const DEFAULT_MAINTENANCE = {
+  enabled: false,
+  message: "We're down for maintenance. We'll be back shortly.",
+};
+
+/**
+ * Shared helper — resolves the current maintenance state.
+ * Returns { enabled, message }. Never throws — always falls back to default.
+ */
+export const getMaintenanceStatus = async () => {
+  try {
+    const setting = await Setting.findOne({ key: MAINTENANCE_KEY });
+    if (!setting) return { ...DEFAULT_MAINTENANCE };
+    const parsed = JSON.parse(setting.value);
+    return {
+      enabled: typeof parsed.enabled === "boolean" ? parsed.enabled : false,
+      message:
+        typeof parsed.message === "string" && parsed.message.trim()
+          ? parsed.message.trim()
+          : DEFAULT_MAINTENANCE.message,
+    };
+  } catch {
+    return { ...DEFAULT_MAINTENANCE };
+  }
+};
+
+// GET /api/settings/maintenance  (public — apps poll this on launch)
+export const getMaintenanceHandler = async (req, res) => {
+  try {
+    const status = await getMaintenanceStatus();
+    return res.status(200).json({ success: true, data: status });
+  } catch (err) {
+    console.error("Get maintenance error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// PUT /api/settings/maintenance  (superadmin-only)
+// Body: { enabled: boolean, message?: string }
+export const updateMaintenanceHandler = async (req, res) => {
+  try {
+    const { enabled, message } = req.body ?? {};
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "enabled must be a boolean",
+      });
+    }
+
+    const current = await getMaintenanceStatus();
+    const next = {
+      enabled,
+      message:
+        typeof message === "string" && message.trim()
+          ? message.trim()
+          : current.message,
+    };
+
+    const setting = await Setting.findOneAndUpdate(
+      { key: MAINTENANCE_KEY },
+      { value: JSON.stringify(next), updatedBy: req.user?.userId ?? null },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+
+    logAction(
+      req.user?.userId,
+      enabled ? "maintenance_mode_enabled" : "maintenance_mode_disabled",
+      "setting",
+      setting._id,
+      next,
+    ).catch(() => {});
+
+    return res.status(200).json({
+      success: true,
+      message: `Maintenance mode ${enabled ? "enabled" : "disabled"}`,
+      data: next,
+    });
+  } catch (err) {
+    console.error("Update maintenance error:", err.message);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};

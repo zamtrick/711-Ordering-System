@@ -1,18 +1,21 @@
 import { DarkTheme, LightTheme } from "@/constants/Theme";
 import { Tabs, router } from "expo-router";
-import { useColorScheme } from "react-native";
+import { useColorScheme, View } from "react-native";
 import {
   Home,
   PackageCheck,
   ClipboardList,
   User,
 } from "lucide-react-native";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { SocketProvider } from "@/context/SocketContext";
+import MaintenanceBanner from "@/components/MaintenanceBanner";
+import api from "@/api/axios";
 
 const Layout = () => {
   const { user, loading } = useAuth();
+  const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string } | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -22,16 +25,27 @@ const Layout = () => {
     }
   }, [user, loading]);
 
+  // Best-effort maintenance check — riders are not blocked but see a banner
+  useEffect(() => {
+    api
+      .get("/settings/maintenance")
+      .then((res) => {
+        const status = res.data?.data;
+        if (status?.enabled) setMaintenance(status);
+        else setMaintenance(null);
+      })
+      .catch(() => {});
+  }, []);
+
   if (loading || !user) return null;
 
-  // Block non-rider users
-  if (user.role !== "rider") {
-    return null;
-  }
+  if (user.role !== "rider") return null;
 
-  // Auth confirmed — mount the socket inside so /auth/token succeeds
   return (
     <SocketProvider>
+      {maintenance?.enabled && (
+        <MaintenanceBanner message={maintenance.message} />
+      )}
       <RiderTabs />
     </SocketProvider>
   );

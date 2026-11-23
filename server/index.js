@@ -64,6 +64,8 @@ import manageAdminLoyalty from "./routes/admin/loyalty.routes.js";
 import manageCustomerLoyalty from "./routes/customer/loyalty.routes.js";
 import Conversation from "./models/Conversation.js";
 
+import { maintenanceGuard } from "./middlewares/maintenance.middleware.js";
+
 const app = express();
 const httpServer = createServer(app);
 const { PORT, DB_URI } = process.env;
@@ -167,6 +169,10 @@ app.use((req, res, next) => {
 
 // Broad rate limit for every API route (auth/OTP/promo add stricter limits).
 app.use("/api", apiLimiter);
+
+// Block non-exempt routes when maintenance mode is active.
+// Mounted after the rate limiter so abusive clients are still throttled.
+app.use(maintenanceGuard);
 
 //manage by superadmin
 app.use("/api/auth", authRoutes);

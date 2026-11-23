@@ -619,7 +619,7 @@ const Orders = () => {
                 {pagination.total} order{pagination.total === 1 ? "" : "s"} total
               </Text>
             </View>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

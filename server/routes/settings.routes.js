@@ -12,6 +12,8 @@ import {
   updateDeliveryRangeHandler,
   getLoyaltySettingsHandler,
   updateLoyaltySettingsHandler,
+  getMaintenanceHandler,
+  updateMaintenanceHandler,
 } from "../controllers/settings.controller.js";
 import auth from "../middlewares/auth.middleware.js";
 import { authorize } from "../middlewares/role.middleware.js";
@@ -102,3 +104,16 @@ router.put(
 );
 
 export default router;
+
+// Public: mobile apps poll this on launch to check if the app is in maintenance
+// GET /api/settings/maintenance
+router.get("/maintenance", getMaintenanceHandler);
+
+// Superadmin-only: enable/disable maintenance mode + set the message
+// PUT /api/settings/maintenance
+router.put(
+  "/maintenance",
+  auth,
+  authorize("superadmin"),
+  updateMaintenanceHandler,
+);

@@ -19,10 +19,13 @@ import {
   enablePushNotifications,
   initPushNotificationTaps,
 } from "@/utils/notifications";
+import MaintenanceScreen from "@/components/MaintenanceScreen";
 
 const CustomerLayout = () => {
   const { theme } = useTheme();
   const [checking, setChecking] = useState(true);
+  const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string } | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   // App Open Ad — one impression per app open. The modal fetches the active
   // campaign itself and auto-dismisses when none is scheduled; this flag
@@ -30,26 +33,53 @@ const CustomerLayout = () => {
   const [adVisible, setAdVisible] = useState(true);
   const closeAd = useCallback(() => setAdVisible(false), []);
 
+  const checkAuth = useCallback(async () => {
+    try {
+      // Check maintenance first — before any auth redirect
+      const maintenanceRes = await api.get("/settings/maintenance");
+      const status = maintenanceRes.data?.data;
+      if (status?.enabled) {
+        setMaintenance(status);
+        setChecking(false);
+        return;
+      }
+      setMaintenance(null);
+
+      const res = await api.get("/auth/me");
+      if (res.data?.data?.role !== "customer") {
+        router.replace("/(auth)/login");
+        return;
+      }
+      setChecking(false);
+    } catch {
+      router.replace("/(auth)/login");
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
-
-    api
-      .get("/auth/me")
-      .then((res) => {
-        if (!mounted) return;
-        if (res.data?.data?.role !== "customer") {
-          router.replace("/(auth)/login");
-          return;
-        }
-        setChecking(false);
-      })
-      .catch(() => {
-        if (!mounted) return;
-        router.replace("/(auth)/login");
-      });
-
+    checkAuth().finally(() => { if (!mounted) return; });
     return () => { mounted = false; };
-  }, []);
+  }, [checkAuth]);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      const res = await api.get("/settings/maintenance");
+      const status = res.data?.data;
+      if (status?.enabled) {
+        setMaintenance(status);
+      } else {
+        setMaintenance(null);
+        setChecking(true);
+        await checkAuth();
+      }
+    } catch {
+      // keep showing maintenance screen on network error
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   if (checking) {
     return (
@@ -59,6 +89,17 @@ const CustomerLayout = () => {
           Loading...
         </Text>
       </ThemedView>
+    );
+  }
+
+  if (maintenance?.enabled) {
+    return (
+      <MaintenanceScreen
+        message={maintenance.message}
+        onRetry={handleRetry}
+        retrying={retrying}
+        colors={theme.colors}
+      />
     );
   }
 
