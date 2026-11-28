@@ -7,7 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import MapView, { Marker, Circle, type Region } from "react-native-maps";
+import MapView, { Marker, Circle, UrlTile, type Region } from "react-native-maps";
 import * as Location from "expo-location";
 import {
   ChevronLeft,
@@ -297,7 +297,13 @@ const StoreLocator = () => {
           { borderColor: colors.border, backgroundColor: colors.background },
         ]}
       >
-        <MapView ref={mapRef} style={styles.map} initialRegion={initialRegion} showsUserLocation>
+        <MapView ref={mapRef} style={styles.map} initialRegion={initialRegion} showsUserLocation mapType="none">
+          {/* OpenStreetMap tiles — free, no API key needed */}
+          <UrlTile
+            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+          />
           {branches.map((b) => {
             const lat = b.coordinates?.lat;
             const lng = b.coordinates?.lng;

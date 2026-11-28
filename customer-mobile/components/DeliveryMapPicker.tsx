@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import MapView, {
   Marker,
+  UrlTile,
   type LatLng,
   type MapPressEvent,
   type Region,
@@ -229,7 +230,14 @@ const DeliveryMapPicker = ({
           showsUserLocation
           showsMyLocationButton={false}
           toolbarEnabled={false}
+          mapType="none"
         >
+          {/* OpenStreetMap tiles — free, no API key needed */}
+          <UrlTile
+            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+          />
           <Marker
             coordinate={marker as LatLng}
             draggable
